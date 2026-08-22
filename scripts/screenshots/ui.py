@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import sys
 import time
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 
 
 def _adb():

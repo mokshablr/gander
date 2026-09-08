@@ -26,6 +26,7 @@ Gander opens the file you hand it, through the system file picker, through "Open
 Built for reading on a phone
 
 - Find in document: search inside PDF, Word, Excel, PowerPoint, Markdown, text and code, with match navigation
+- Select and copy text in a PDF, and read one with a screen reader
 - Open password protected PDFs by entering the password
 - Night mode for PDFs: paper goes black and text goes white, colours keep their hue, and photographs are left exactly as they were printed
 - Deep zoom into large photos with tiled decoding, and correct rotation read from EXIF

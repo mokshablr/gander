@@ -1,5 +1,5 @@
 import sys, math, os; sys.path.insert(0,'.')
-from pano import build, phone, fragment, W, RAW
+from pano import build, phone, fragment, W, CW, RAW
 from drift import procession, cards, sweep
 
 PY_TOP, PH, PW = 700, 1400, 856
@@ -23,7 +23,7 @@ def P(i,a,b,k,src,patches=(),frag=None):
     if frag:
         fx,fy,fw,(cx0,cy0,cw,ch)=frag
         parts.append(fragment(i*W+fx, int(y)+fy, fw, src, cx0, cy0, cw, ch, rot=rot+1.6, z=16))
-    return {"cap":(a,b),"kick":k,"parts":parts}
+    return {"cap":(a,b),"kick":k,"parts":parts,"src":src}
 
 # the controls, lifted and magnified ~1.5x over their on-screen size
 FIND_BAR = (10, 286, 750, 139)     # query + live match count
@@ -37,20 +37,50 @@ panels=[
  P(3,"Every","sheet.","Multi-sheet workbooks, tabs and all.<br>xlsx, xls, xlsm, xlsb, csv, ods.","d-xlsx.png",
    frag=(90, 560, 900, SHEET_TABS)),
  P(4,"Any","deck.","PowerPoint slides, without<br>installing an office suite.","d-pptx.png"),
- P(5,"Reads","at 2am.","Follows your phone into dark mode,<br>everywhere in the app.","d-md.png"),
+ # 1.14 shot this slot on a Markdown file and claimed only that the app follows the
+ # system dark mode, which every Material app does. It was Markdown because it had to
+ # be: raw/d-pdf.png was captured for this same shoot and never used, being the dark
+ # app around a glaring white PDF page, which would have refuted the caption above it.
+ # 1.15 turned the paper over, so the slot can now carry the claim nothing else in the
+ # category makes. Shoot a page that holds a photograph, or the frame shows only black
+ # paper and white text and the half that is actually rare goes unsaid.
+ P(5,"Reads","at 2am.","PDF paper goes black, text goes white,<br>and photographs stay as printed.","d-pdf-night.png"),
 ]
 if os.path.exists(f"{RAW}/d-folder.png"):
     panels.append(P(6,"From your","folders.",
       "Grant one once. Gander still needs<br>no storage permission to read it.","d-folder.png"))
 
+# Every band spreads exactly n items across the whole canvas, so widening the canvas
+# without raising n stretches the field instead of extending it: at seven frames the
+# procession went from a tile every 368px to one every 425px, thinning all seven
+# backgrounds by 15% to fill the one that had been empty. These counts were tuned
+# against the six-frame canvas, so scale them with the width and the spacing holds.
+# `accents` stay index-based and land at slightly different points in the graduation,
+# which is the intended reading of "a few of them carry the palette".
+dens = lambda n: round(n * CW / 6480)
+
 bands=[
-  procession(seed=7, n=20, base=800, amp=130, period=3100,
+  procession(seed=7, n=dens(20), base=800, amp=130, period=3100,
              size_a=76, size_b=118, mute_a=.92, mute_b=.84, rot=9, z=1, blur=2.2, phase=0.7, jitter=44),
   sweep(base=1500, amp=118, period=5200, phase=0.35, z=4),
-  cards(seed=41, n=13, base=1560, amp=126, period=5200,
+  cards(seed=41, n=dens(13), base=1560, amp=126, period=5200,
         w_a=150, w_b=214, op_a=.30, op_b=.52, rot=8, z=6, blur=1.1, phase=0.35, accents=(3,9)),
-  cards(seed=88, n=9,  base=1700, amp=112, period=5200,
+  cards(seed=88, n=dens(9),  base=1700, amp=112, period=5200,
         w_a=236, w_b=316, op_a=.80, op_b=1.0, rot=9, z=9, phase=0.35, accents=(1,5,7)),
 ]
+# A caption promising black paper printed over a white page is worse than not
+# re-shooting at all, so a missing capture stops the render instead of quietly
+# falling back to whatever the slot held last time.
+missing=[s for s in sorted({p["src"] for p in panels}) if not os.path.exists(f"{RAW}/{s}")]
+if missing:
+    sys.exit(
+      "Missing captures under %s:\n  %s\n\n"
+      "d-pdf-night.png is the 1.15 re-shoot of panel 5. Open a PDF that carries a\n"
+      "photograph, turn night mode on from the viewer's overflow menu, and capture at\n"
+      "1080x1920 with the debug resource overlay moved aside, per\n"
+      "scripts/screenshots/README.md. A text-only page renders as black paper and white\n"
+      "text and says nothing a reader could not guess; the photograph left as printed is\n"
+      "the part the caption is selling." % (RAW, "\n  ".join(missing)))
+
 build(panels,bands,"c.html")
-print("panels:", len(panels))
+print("panels:", len(panels), "canvas:", W*len(panels), "x", 1920)

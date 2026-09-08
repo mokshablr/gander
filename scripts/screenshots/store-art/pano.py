@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Concept C - one 6480x1920 canvas, sliced into six 1080x1920 Play frames.
+"""Concept C - one canvas W*N wide, sliced into N 1080x1920 Play frames.
 
 Continuity is carried by three things that cross every seam: a single
 gradient across the whole canvas, an angled terracotta ribbon, and a band
@@ -11,6 +11,15 @@ RAW="/Users/arjun.maniyani/Desktop/Arjun/Projects/gander/docs/screenshots/v1.14/
 import os
 W,H,N = 1080,1920,(7 if os.path.exists('/Users/arjun.maniyani/Desktop/Arjun/Projects/gander/docs/screenshots/v1.14/raw/d-folder.png') else 6)
 CW = W*N
+
+# drift.py carries the tile/card/sweep vocabulary and still defaults to the 6480px
+# six-frame canvas it was written against. Repoint its constants the way tabpano.py
+# does, so the two sets keep one implementation and the bands run the full width.
+# Without this the seventh frame gets no ribbon, no procession and no cards: they
+# all stop dead at x=6480, which is exactly its left edge. Read at call time, so
+# mutating the module before the generators run is enough.
+import drift
+drift.CW, drift.H = CW, H
 
 BADGE=["#B3261E","#1565C0","#2E7D32","#B25000","#7B1FA2","#AD1457","#00838F","#455A64","#616161"]
 
@@ -69,7 +78,7 @@ body{{margin:0;background:#000}}
 /* warm light pooled under each capture, so a card sits in something rather than on nothing */
 .glow{{position:absolute;z-index:3;pointer-events:none;
   background:radial-gradient(closest-side, rgba(255,176,140,.17), transparent 72%)}}
-/* edges: a vignette stops the strip reading as six flat swatches */
+/* edges: a vignette stops the strip reading as a row of flat swatches */
 .vig{{position:absolute;left:0;top:0;width:{CW}px;height:{H}px;z-index:11;pointer-events:none;
   background:linear-gradient(to bottom, rgba(0,0,0,.34) 0%, transparent 16%, transparent 76%, rgba(0,0,0,.42) 100%)}}
 .band{{position:absolute;left:0;top:0;width:{CW}px;height:{H}px;transform-origin:0 0}}

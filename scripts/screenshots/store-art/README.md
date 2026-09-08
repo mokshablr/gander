@@ -11,7 +11,7 @@ lives under `docs/screenshots/v1.14/`, which is gitignored: `raw/` and
 `out/` the rendered assets. The shipped results are committed, in
 `fastlane/metadata/android/en-US/images/`.
 
-Two things to sort out before rendering from a fresh clone:
+Three things to sort out before rendering from a fresh clone:
 
 - `RAW` at the top of `pano.py` and `tabpano.py` is an **absolute path** into
   `docs/screenshots/v1.14/raw` and `v1.14-tab/raw`. Repoint both if the tree has moved.
@@ -19,6 +19,47 @@ Two things to sort out before rendering from a fresh clone:
   read it from beside this file, so recreate it as `store-art/pages/` with the five
   `magick` crops under "Crop each page to the document's own top edge" below before
   rendering the feature graphic.
+- **`final_c.py` will refuse to render until `raw/d-pdf-night.png` exists.** Panel 5 was
+  repointed at it for 1.15; see "Panel 5 is the night-mode slot" below. The capture was
+  taken on 2026-09-08 and `raw/` is gitignored, so a fresh clone must re-shoot it.
+
+## Panel 5 is the night-mode slot, and 1.14 could not fill it
+
+Panel 5 has always been the "Reads at 2am." frame. Through 1.14 it was shot on a
+**Markdown file** and claimed only that the app follows the system dark mode, which every
+Material app does. It was Markdown because it had to be: `raw/d-pdf.png` was captured for
+that same shoot and never used, being the dark app wrapped around a glaring white PDF
+page, which would have refuted the caption printed above it.
+
+1.15 turned the paper over, so the slot now carries the claim nothing else in the category
+makes, and the caption reads *"PDF paper goes black, text goes white, and photographs stay
+as printed."*
+
+**Shoot a page that carries a photograph.** A text-only page renders as black paper and
+white text, which is legible and says nothing a reader could not have guessed. The
+photograph left as printed beside inverted text is the half that is actually rare, it is
+what the caption is selling, and at Play's 166x296 browse size it is also the only bright
+thing in an otherwise black frame. Without it panel 5 is the flattest tile in the set,
+which is what the shipped 1.14 Markdown shot was.
+
+The document is `scripts/screenshots/make_survey.py`, written for this: a Willowmere
+condition survey with one photographic plate. Viewer screens need no debug-overlay dance
+(see below), so the capture is just: push the sample, open it, night mode on from the
+overflow, `screencap`.
+
+**THE TRAP, and it nearly shipped a screenshot that disproved its own caption.**
+`looksLikePaper()` in `pdf.html` turns an image over with the text when its mean
+saturation is under `PROBE_SATURATION` (0.15) **and** more than `PROBE_PAPER` (0.25) of it
+is near white. That is a scanned page's signature, and it is also a **snowy scene's**. The
+sample world's only photograph is a winter cityscape, and the obvious crop of it measures
+**0.090 saturation, 0.361 pale**: night mode inverts it, producing a negative photograph
+directly beneath "photographs stay as printed". `make_survey.py` picks a crop measuring
+0.119 / 0.086 and re-measures on every run, refusing to build if an edit walks it back over
+the line. **Any future re-shoot must check the same thing.** It is the NeRF failure case
+from the 2026-09-05 night-mode work, met again in a different place.
+
+The rendered sub-caption measures 754px against the 928px `.head` box, 81%, so there is
+room if the wording changes. The widest headline in the set is panel 1 at 797px.
 
 ## What renders what
 
@@ -162,6 +203,25 @@ disappear against the ground.
 Bands are drawn on the canvas and cross the seams - that is what stops four frames
 sharing one background - but each panel's caption and device live inside a clipped
 `.pan` div, because a slate crossing a seam puts half a tablet in the next Play frame.
+
+**`pano.py` now does the same repoint, and for a while it did not.** `drift.py` defaults
+to `CW,H = 6480,1920`, the six-frame canvas it was written against. The seventh phone
+frame was added later behind an `os.path.exists` check and nobody told `drift`, so all
+three bands stopped dead at x=6480, which is exactly frame 7's left edge: the shipped
+`phoneScreenshots/7.png` has no ribbon, no procession and no cards behind its device.
+`pano.py` sets `drift.CW, drift.H` right after computing `CW = W*N`, and the generators
+read those at call time, so mutating the module before they run is enough.
+
+**Widening the canvas thins the bands unless `n` goes up with it.** Every generator
+spreads exactly `n` items across the full width, so at seven frames the procession went
+from a tile every 368px to one every 425px: filling frame 7 by making all seven
+backgrounds 15% sparser. `final_c.py` wraps the counts in `dens()`, which scales them by
+`CW / 6480`, giving 20 -> 23, 13 -> 15 and 9 -> 10 and holding every spacing within 2.4%
+of the six-frame design. Add an eighth frame and it self-corrects.
+
+**Do not import `pano` and `tabpano` into one process.** Both mutate the same module
+globals, so the last import wins and the loser renders its bands at the other set's
+width, silently. No script does this today; the two sets are separate runs.
 
 ## Things that will bite you
 

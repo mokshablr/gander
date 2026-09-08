@@ -48,13 +48,13 @@ It cannot phone home because it does not even hold the INTERNET permission.
 
 ## Screenshots
 
-| Home: recents and folders | PDF | Photos |
+| Home: recents and folders | PDF | The same PDF, night mode |
 | :---: | :---: | :---: |
-| ![Recent files with thumbnail previews and granted folders](docs/screenshots/home.png) | ![PDF viewer rendering a tenancy agreement](docs/screenshots/pdf.png) | ![Full-size photo in the zoomable image viewer](docs/screenshots/photo.png) |
+| ![Recent files with thumbnail previews and granted folders](docs/screenshots/home.png) | ![PDF viewer rendering a site survey report with a photographic plate](docs/screenshots/pdf.png) | ![The same page with night mode on: the paper is black and the text white, the blue headings are still blue, and the photograph is left exactly as it was printed](docs/screenshots/pdf-night.png) |
 
-| Word (.docx) | PowerPoint (.pptx) | Excel (.xlsx) |
-| :---: | :---: | :---: |
-| ![Word document viewer](docs/screenshots/docx.png) | ![PowerPoint slides viewer](docs/screenshots/pptx.png) | ![Excel spreadsheet viewer with sheet tabs](docs/screenshots/xlsx.png) |
+| Photos | Word (.docx) | PowerPoint (.pptx) | Excel (.xlsx) |
+| :---: | :---: | :---: | :---: |
+| ![Full-size photo in the zoomable image viewer](docs/screenshots/photo.png) | ![Word document viewer](docs/screenshots/docx.png) | ![PowerPoint slides viewer](docs/screenshots/pptx.png) | ![Excel spreadsheet viewer with sheet tabs](docs/screenshots/xlsx.png) |
 
 ## Features
 

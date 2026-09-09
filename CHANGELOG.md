@@ -9,8 +9,12 @@
   warns to a console nobody is reading, returns nothing, and the image is simply left
   out, so a document arrives looking like its own layout with holes in it rather than
   like something that went wrong. Issue #24 was a fitness book whose 190 images were 186
-  JPEG 2000, so most of it came up blank. Scanned documents that use JBIG2 were failing
-  the same silent way and are fixed alongside it.
+  JPEG 2000, so most of it came up blank.
+
+  Scanned pages were failing the same silent way and are fixed with it. pdf.js keeps
+  JBIG2 and CCITT fax in one module, and CCITT is what a scanner or a fax reaches for
+  most of the time, so a black and white scan had been arriving as an empty frame since
+  the version of pdf.js that moved them out of the bundle. Nobody had reported that one.
 
 ## 1.16 (2026-09-08)
 

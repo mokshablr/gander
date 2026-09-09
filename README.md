@@ -199,7 +199,9 @@ jQuery 1.11 (MIT), D3 3.x + NVD3 (BSD/Apache), marked (MIT), DOMPurify
 ## Contributing
 
 Issues and small PRs are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
-If Gander is useful to you, a star helps other people find it.
+If Gander is useful to you, a star helps other people find it. There is a
+[sponsor page](https://github.com/sponsors/mokshablr) as well, though a good bug
+report is worth more.
 
 ## License
 

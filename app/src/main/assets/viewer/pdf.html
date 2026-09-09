@@ -2787,11 +2787,35 @@ function vwUnlockable(task) {
  *
  * Applied through a helper because both loaders below need it, and a document
  * that opened down the wrong branch would fail this way without saying so.
+ *
+ * Absolute, and that is load-bearing rather than tidy. pdf.js decides whether the
+ * worker fetches these itself or asks the main thread to, and it is not a switch
+ * anybody sets: `useWorkerFetch` is computed as cMapUrl && cMapPacked &&
+ * standardFontDataUrl && wasmUrl, all present and all valid fetch URLs. Three of
+ * those four are set here, so adding the fourth flips it, the worker starts
+ * fetching directly, and a relative path stops resolving against this page and
+ * starts resolving against lib/pdf.worker.min.mjs. Every URL here then gains a
+ * second lib/ and 404s.
+ *
+ * Which would be loud if it were the wasm and is not: it is the CMaps, and their
+ * failure is the silent one described above. Measured with the relative paths and
+ * standardFontDataUrl added: cmaps 404 at assets/viewer/lib/lib/cmaps/, and
+ * cjk.pdf rendered zero of its four characters. That is issue #21 back, with
+ * nothing anywhere to say so.
+ *
+ * document.baseURI rather than a constant because WebViewAssetLoader serves this
+ * page from https://appassets.androidplatform.net/assets/viewer/ in the app and
+ * the test server serves it from somewhere else, and neither should be written
+ * down here.
  */
+function vwAssetUrl(path) {
+  return new URL(path, document.baseURI).href;
+}
+
 function vwWithAssets(opts) {
-  opts.cMapUrl = "./lib/cmaps/";
+  opts.cMapUrl = vwAssetUrl("./lib/cmaps/");
   opts.cMapPacked = true;
-  opts.wasmUrl = "./lib/wasm/";
+  opts.wasmUrl = vwAssetUrl("./lib/wasm/");
   return opts;
 }
 

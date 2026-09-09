@@ -33,6 +33,20 @@ curl -sfL --retry 2 "https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-$PDFJS_V
   | tar xz -C "$CMAPS" --strip-components=2 package/cmaps
 echo "fetched cmaps/ ($(ls "$CMAPS" | wc -l | tr -d ' ') files)"
 
+# The image decoders pdf.js keeps in WebAssembly rather than in the bundle, which
+# the worker fetches the moment it meets an image needing one. openjpeg decodes
+# JPEG 2000 and jbig2 decodes the bitonal format scanners produce. Without them
+# the worker warns and returns nothing, so the image is left out of the page with
+# no error and no placeholder. Kept on the same version as the build above.
+# The pure-JS fallbacks are deliberately not fetched: openjpeg_nowasm_fallback.js
+# alone is 452 KB, larger than both binaries together.
+mkdir -p "$LIB/wasm"
+for w in openjpeg.wasm jbig2.wasm \
+         LICENSE_OPENJPEG LICENSE_JBIG2 \
+         LICENSE_PDFJS_OPENJPEG LICENSE_PDFJS_JBIG2; do
+  get "wasm/$w" "https://cdn.jsdelivr.net/npm/pdfjs-dist@$PDFJS_VER/wasm/$w"
+done
+
 get docx-preview.min.js "https://cdn.jsdelivr.net/npm/docx-preview/dist/docx-preview.min.js"
 get xlsx.full.min.js    "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"
 get marked.min.js       "https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"

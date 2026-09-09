@@ -2765,22 +2765,33 @@ function vwUnlockable(task) {
 }
 
 /*
- * Adobe's predefined CMap tables, which pdf.js reads from the assets on demand.
+ * The two sets of data pdf.js does not carry in its bundle and reads from the
+ * assets on demand. Both fail the same silent way when they are not there, which
+ * is why they are set in one place.
  *
- * A PDF that uses a CJK font without embedding it does not carry a glyph
- * mapping of its own; it names one of Adobe's encodings instead, UniGB-UCS2-H
- * and the like. pdf.js cannot turn character codes into glyphs without the
- * matching table, and the way it fails is the problem: the text is dropped
- * from the canvas and from the text layer both, so the page renders looking
- * complete while whole paragraphs are simply absent. Nothing throws, and there
- * are no fallback boxes to notice.
+ * Adobe's predefined CMap tables. A PDF that uses a CJK font without embedding
+ * it does not carry a glyph mapping of its own; it names one of Adobe's
+ * encodings instead, UniGB-UCS2-H and the like. pdf.js cannot turn character
+ * codes into glyphs without the matching table, and the way it fails is the
+ * problem: the text is dropped from the canvas and from the text layer both, so
+ * the page renders looking complete while whole paragraphs are simply absent.
+ * Nothing throws, and there are no fallback boxes to notice.
+ *
+ * The image decoders that live in WebAssembly rather than in JavaScript. Since
+ * pdf.js 4 the JPEG 2000 decoder (openjpeg) and the JBIG2 one have been wasm
+ * modules the worker fetches at the moment it meets an image needing one, and
+ * `wasmUrl` is the only way to say where they are. Without it the worker warns
+ * to the console and returns nothing, and the image is left out of the page:
+ * no error, no placeholder, no gap that looks deliberate. Issue #24 was a book
+ * whose 190 images were 186 JPEG 2000, so most of it arrived blank.
  *
  * Applied through a helper because both loaders below need it, and a document
  * that opened down the wrong branch would fail this way without saying so.
  */
-function vwWithCMaps(opts) {
+function vwWithAssets(opts) {
   opts.cMapUrl = "./lib/cmaps/";
   opts.cMapPacked = true;
+  opts.wasmUrl = "./lib/wasm/";
   return opts;
 }
 
@@ -2795,9 +2806,9 @@ function vwWithCMaps(opts) {
 function vwOpenDoc() {
   return vwParams.get("ranged") !== "1"
     ? vwFetchDoc("buffer").then(function (buf) {
-        return vwUnlockable(pdfjsLib.getDocument(vwWithCMaps({ data: buf })));
+        return vwUnlockable(pdfjsLib.getDocument(vwWithAssets({ data: buf })));
       })
-    : vwUnlockable(pdfjsLib.getDocument(vwWithCMaps({
+    : vwUnlockable(pdfjsLib.getDocument(vwWithAssets({
         url: vwDocUrl(),
         rangeChunkSize: 65536,
         // Both of these are needed, and they are not the same switch.

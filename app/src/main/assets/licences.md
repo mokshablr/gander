@@ -35,6 +35,8 @@ Released under the MIT Licence, the full text of which appears below.
 | jQuery | 1.11.3 | MIT |
 | D3 | 3.5.10 | BSD-3-Clause |
 | Adobe CMap resources (bundled with pdf.js) | 1990-2009, via pdf.js 5.7.284 | BSD-3-Clause |
+| OpenJPEG, the JPEG 2000 decoder (bundled with pdf.js) | via pdf.js 5.7.284 | BSD-2-Clause |
+| PDFium's JBIG2 decoder (bundled with pdf.js) | via pdf.js 5.7.284 | BSD-3-Clause and Apache-2.0 |
 
 The minified files are unmodified upstream distribution artifacts.
 `docs/VENDORED.md` in the repository records where each one came from, and
@@ -81,6 +83,46 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+## The BSD 2-Clause Licence
+
+Applies to the following bundled library:
+
+- The JPEG 2000 decoder in `viewer/lib/wasm/openjpeg.wasm`, which pdf.js compiles
+  from OpenJPEG and Gander bundles so that PDFs using JPEG 2000 images render,
+  Copyright (c) 2002-2014 Universite catholique de Louvain (UCL), Belgium;
+  Copyright (c) 2002-2014 Professor Benoit Macq; Copyright (c) 2003-2014 Antonin
+  Descampe; Copyright (c) 2003-2009 Francois-Olivier Devaux; Copyright (c) 2005
+  Herve Drolon, FreeImage Team; Copyright (c) 2002-2003 Yannick Verschueren;
+  Copyright (c) 2001-2003 David Janssens; Copyright (c) 2011-2012 Centre National
+  d'Etudes Spatiales (CNES), France; Copyright (c) 2012 CS Systemes
+  d'Information, France. All rights reserved.
+
+The copyright in this software is being made available under the 2-clause BSD
+licence, included below. This software may be subject to other third party and
+contributor rights, including patent rights, and no such rights are granted
+under this licence.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation and/or
+other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 ## The BSD 3-Clause Licence
 
 Applies to the following bundled libraries:
@@ -89,6 +131,9 @@ Applies to the following bundled libraries:
 - The Adobe CMap resources in `viewer/lib/cmaps/`, which pdf.js redistributes
   and Gander bundles for CJK text, Copyright 1990-2009 Adobe Systems
   Incorporated. All rights reserved.
+- The JBIG2 image decoder in `viewer/lib/wasm/jbig2.wasm`, which pdf.js compiles
+  from PDFium and Gander bundles for scanned documents, Copyright 2014 The PDFium
+  Authors. Its Apache-2.0 portion is reproduced below.
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -120,6 +165,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 Applies to the following bundled libraries:
 
 - pdf.js 5.7.284 and its worker, Copyright 2024 Mozilla Foundation
+- The wasm image decoders in `viewer/lib/wasm/`, as compiled and wrapped by
+  pdf.js, Copyright 2024-2026 Mozilla Foundation
 - docx-preview, Copyright Volodymyr Baydalka
 - SheetJS Community Edition 0.20.3, Copyright (C) 2012-present SheetJS LLC
 - DOMPurify 3.4.12, Copyright (c) Cure53 and other contributors

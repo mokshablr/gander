@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- A PDF whose images are JPEG 2000 shows them. Since pdf.js 4 the JPEG 2000 and JBIG2
+  decoders have lived in WebAssembly rather than in the bundle, fetched at the moment a
+  page meets an image needing one, and Gander shipped neither binary and never told
+  pdf.js where to look for them. The failure had nothing to notice it by: the worker
+  warns to a console nobody is reading, returns nothing, and the image is simply left
+  out, so a document arrives looking like its own layout with holes in it rather than
+  like something that went wrong. Issue #24 was a fitness book whose 190 images were 186
+  JPEG 2000, so most of it came up blank. Scanned documents that use JBIG2 were failing
+  the same silent way and are fixed alongside it.
+
 ## 1.16 (2026-09-08)
 
 - Dragging a text selection to the bottom of a PDF now scrolls the document, so a selection

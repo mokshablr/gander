@@ -18,6 +18,9 @@ commit.
 | `pdf.min.mjs` | pdf.js (legacy build) | 5.7.284 | Apache-2.0 | https://github.com/mozilla/pdf.js |
 | `pdf.worker.min.mjs` | pdf.js worker (legacy build) | 5.7.284 | Apache-2.0 | https://github.com/mozilla/pdf.js |
 | `cmaps/` (169 files) | Adobe CMap resources, redistributed by pdf.js | 1990-2009, via pdf.js 5.7.284 | BSD-3-Clause | https://github.com/adobe-type-tools/cmap-resources |
+| `wasm/openjpeg.wasm` | OpenJPEG, compiled and redistributed by pdf.js | via pdf.js 5.7.284 | BSD-2-Clause | https://github.com/uclouvain/openjpeg |
+| `wasm/jbig2.wasm` | PDFium's JBIG2 decoder, compiled and redistributed by pdf.js | via pdf.js 5.7.284 | BSD-3-Clause and Apache-2.0 | https://pdfium.googlesource.com/pdfium/ |
+| `wasm/LICENSE_*` (4 files) | licence texts for the two decoders above | via pdf.js 5.7.284 | see above | https://github.com/mozilla/pdf.js |
 | `jszip3.min.js` | JSZip | 3.10.1 | MIT or GPL-3.0 dual | https://github.com/Stuk/jszip |
 | `docx-preview.min.js` | docx-preview | 0.3.x (jsdelivr latest, fetched 2026-07-19) | Apache-2.0 | https://github.com/VolodymyrBaydalka/docxjs |
 | `xlsx.full.min.js` | SheetJS Community Edition | 0.20.3 | Apache-2.0 | https://git.sheetjs.com/sheetjs/sheetjs |
@@ -48,6 +51,38 @@ That was issue #21, reported against 1.13 as "all Chinese text is missing".
 Keep them on the same version as the build above. Dropping the directory to
 save space, or trimming it to the encodings that look current, re-opens the bug
 silently for whatever was trimmed.
+
+## The wasm image decoders
+
+`wasm/` holds the two image decoders pdf.js keeps in WebAssembly rather than in
+its bundle. Since pdf.js 4 the JPEG 2000 decoder (`openjpeg.wasm`, 252 KB) and
+the JBIG2 one (`jbig2.wasm`, 105 KB) are fetched by the worker at the moment it
+meets an image that needs one, and the `wasmUrl` option in `pdf.html` is the
+only way to say where they are.
+
+They fail exactly the way the CMaps do. The worker warns to the console, returns
+nothing, and the image is left out of the page: no error, no placeholder, and no
+gap that looks like anything other than the document's own layout. That was
+issue #24, reported against 1.15 as "some PDFs not showing images", where the
+sample was a book whose 190 images were 186 JPEG 2000.
+
+The pure-JS fallbacks upstream ships beside them are deliberately not vendored.
+They are the expensive route, not the cheap one: `openjpeg_nowasm_fallback.js`
+alone is 452 KB, larger than both binaries together.
+
+`qcms_bg.wasm`, which pdf.js uses for ICCBased colour spaces, is deliberately
+**not** here. It is gated on pdf.js's `useWorkerFetch`, which also requires
+`standardFontDataUrl` to be set, and neither is wired up; shipping the binary
+alone would add weight that nothing could reach. Wiring up ICC is its own job.
+
+**The licences.** Neither binary is copyleft. `openjpeg.wasm` is BSD-2-Clause
+(UCLouvain and contributors). `jbig2.wasm` is built from **PDFium's** decoder,
+not from Artifex's jbig2dec as the name suggests, and `LICENSE_JBIG2` carries
+PDFium's BSD-3-Clause notice followed by the Apache-2.0 text. Mozilla's own
+wrapper notices are the two `LICENSE_PDFJS_*` files. All four are attribution
+licences whose notices have to travel with the binaries, which is why they are
+fetched into `wasm/` beside them and repeated in
+`app/src/main/assets/licences.md`.
 
 ## Before upgrading pdf.js
 

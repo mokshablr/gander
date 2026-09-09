@@ -1,0 +1,83 @@
+{
+  "version": "v1.0.0",
+
+  "entity": {
+    "type": "individual",
+    "role": "owner",
+    "name": "Arjun Maniyani",
+    "email": "gander@arjun.maniyani.com",
+    "description": "I maintain Gander, an Android document viewer that requests no Android permissions and does not hold INTERNET. The property is enforced at build time by a Gradle task that fails the build if any permission reaches the merged manifest, and read back at runtime in the app's About screen. I am based in India and work on this alone.",
+    "webpageUrl": {
+      "url": "https://arjun.maniyani.com/gander/"
+    }
+  },
+
+  "projects": [
+    {
+      "guid": "gander",
+      "name": "Gander",
+      "description": "Gander opens PDF, Word, Excel, PowerPoint, images, video, audio, Markdown and code on Android, entirely on the device. It requests no Android permissions at all and does not hold INTERNET, so it cannot send a document anywhere. That is enforced rather than promised: a Gradle task fails the build if any permission reaches the merged manifest, and the About screen reads the live permission list back at runtime, so a user can check the claim on their own device. Documents are rendered by vendored JavaScript libraries inside a sandboxed WebView with no JavaScript bridge in either direction; files over 16 MB are served in ranges so only the pages being read are held in memory. Around 1,000 people run it, and it has been downloaded more than 8,000 times outside any app store.",
+      "webpageUrl": {
+        "url": "https://arjun.maniyani.com/gander/"
+      },
+      "repositoryUrl": {
+        "url": "https://github.com/mokshablr/gander",
+        "wellKnown": "https://github.com/mokshablr/gander/blob/main/.well-known/funding-manifest-urls"
+      },
+      "licenses": ["spdx:MIT"],
+      "tags": [
+        "android",
+        "pdf",
+        "document-viewer",
+        "privacy",
+        "offline",
+        "office-documents",
+        "no-permissions"
+      ]
+    }
+  ],
+
+  "funding": {
+    "channels": [
+      {
+        "guid": "github-sponsors",
+        "type": "payment-provider",
+        "address": "https://github.com/sponsors/mokshablr",
+        "description": "GitHub Sponsors. One-time and monthly, no rewards attached."
+      }
+    ],
+
+    "plans": [
+      {
+        "guid": "goodwill",
+        "status": "active",
+        "name": "Goodwill",
+        "description": "Any amount, one-time or monthly. Nothing is unlocked or withheld in return; the viewer is MIT and stays free.",
+        "amount": 0,
+        "currency": "USD",
+        "frequency": "one-time",
+        "channels": ["github-sponsors"]
+      },
+      {
+        "guid": "upkeep",
+        "status": "active",
+        "name": "Ongoing upkeep",
+        "description": "Covers the recurring cost of maintaining the app: issue triage, dependency and pdf.js updates, and testing releases across Android versions.",
+        "amount": 10,
+        "currency": "USD",
+        "frequency": "monthly",
+        "channels": ["github-sponsors"]
+      },
+      {
+        "guid": "supply-chain-and-fdroid",
+        "status": "active",
+        "name": "Reproducible builds, supply chain provenance and F-Droid inclusion",
+        "description": "Gander's vendored JavaScript renderers ship as minified upstream dist artifacts, which cannot be checked against the source they claim to come from. This is the on-record blocker to F-Droid inclusion. The work builds the currently vendored set from audited source, establishes a reproducible build, and leaves the fetch tooling in place so any library added later follows the same path. It also merges the existing test suite onto the main branch.",
+        "amount": 10000,
+        "currency": "USD",
+        "frequency": "yearly",
+        "channels": ["github-sponsors"]
+      }
+    ]
+  }
+}

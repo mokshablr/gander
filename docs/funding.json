@@ -16,7 +16,7 @@
     {
       "guid": "gander",
       "name": "Gander",
-      "description": "Gander opens PDF, Word, Excel, PowerPoint, images, video, audio, Markdown and code on Android, entirely on the device. It requests no Android permissions at all and does not hold INTERNET, so it cannot send a document anywhere. That is enforced rather than promised: a Gradle task fails the build if any permission reaches the merged manifest, and the About screen reads the live permission list back at runtime, so a user can check the claim on their own device. Documents are rendered by vendored JavaScript libraries inside a sandboxed WebView with no JavaScript bridge in either direction; files over 16 MB are served in ranges so only the pages being read are held in memory. Around 1,000 people run it, and it has been downloaded more than 8,000 times outside any app store.",
+      "description": "Gander opens PDF, Word, Excel, PowerPoint, images, video, audio, Markdown and code on Android, entirely on the device. It requests no Android permissions at all and does not hold INTERNET, so it cannot send a document anywhere. That is enforced rather than promised: a Gradle task fails the build if any permission reaches the merged manifest, and the About screen reads the live permission list back at runtime, so a user can check the claim on their own device. Documents are rendered by vendored JavaScript libraries inside a sandboxed WebView with no JavaScript bridge in either direction; files over 16 MB are served in ranges so only the pages being read are held in memory. It has been downloaded more than 10,000 times outside any app store.",
       "webpageUrl": {
         "url": "https://arjun.maniyani.com/gander/"
       },

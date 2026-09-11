@@ -102,7 +102,7 @@ still receiving WebView updates is well past that; if yours is not, Gander says 
 when you open a PDF rather than failing quietly.
 
 1. Download the latest APK from [Releases](../../releases/latest):
-   `Gander-x.y.apk` runs on every architecture, since the app ships no native code.
+   `Gander-x.y.apk` runs on every architecture, since the app ships no native libraries.
 2. Copy it to your phone, tap it, and allow "install unknown apps" when asked.
 3. Optional: Play Protect may warn about an unknown developer; that is what
    sideloaded open source looks like. Tap "Install anyway".
@@ -188,7 +188,7 @@ thumbnails generated off-thread and cached (`Thumbs.kt`).
 Vendored viewer libraries and their licenses: pdf.js (Apache-2.0), JSZip (MIT),
 docx-preview (Apache-2.0), SheetJS CE (Apache-2.0), PPTXjs + divs2slides (MIT),
 jQuery 1.11 (MIT), D3 3.x + NVD3 (BSD/Apache), marked (MIT), DOMPurify
-(Apache-2.0/MPL). The app ships no native code.
+(Apache-2.0/MPL). The app ships no native libraries.
 
 ## Roadmap
 

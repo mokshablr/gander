@@ -35,7 +35,7 @@ Built for reading on a phone
 
 Small, and one download for every phone
 
-About 5 MB, a single build that runs on every processor with no native code at all, on Android 8.0 and newer.
+About 5 MB, a single build that runs on every processor with no native libraries at all, on Android 8.0 and newer.
 
 Honest about what it is not
 

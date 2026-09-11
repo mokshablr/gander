@@ -16,6 +16,11 @@
   most of the time, so a black and white scan had been arriving as an empty frame since
   the version of pdf.js that moved them out of the bundle. Nobody had reported that one.
 
+- The home screen's menu has Rate and Share above About Gander. Rate opens Gander's page
+  in the Play Store and only appears on a copy Play installed, since Play takes ratings
+  from nobody else. Share sends a link to the site rather than the listing, so it works
+  for whoever receives it, however they install. Neither needs a permission.
+
 ## 1.16 (2026-09-08)
 
 - Dragging a text selection to the bottom of a PDF now scrolls the document, so a selection

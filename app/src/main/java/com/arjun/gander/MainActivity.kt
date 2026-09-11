@@ -1,10 +1,12 @@
 package com.arjun.gander
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -21,6 +23,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat
@@ -156,12 +159,15 @@ class MainActivity : AppCompatActivity() {
         // every folder change, but never touches the menu, so inflating once here
         // survives all of it.
         toolbar.inflateMenu(R.menu.main_menu)
+        // Set once, like the inflate: the installer cannot change while this process
+        // lives, because any reinstall or update kills the process first.
+        toolbar.menu.findItem(R.id.action_rate).isVisible = installedFromPlay()
         toolbar.setOnMenuItemClickListener { item ->
-            if (item.itemId == R.id.action_about) {
-                showAbout()
-                true
-            } else {
-                false
+            when (item.itemId) {
+                R.id.action_rate -> { openPlayListing(); true }
+                R.id.action_share_app -> { shareGander(); true }
+                R.id.action_about -> { showAbout(); true }
+                else -> false
             }
         }
         progress = findViewById(R.id.loadProgress)
@@ -351,6 +357,48 @@ class MainActivity : AppCompatActivity() {
     private fun openUrl(url: String) {
         runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
             .onFailure { Toast.makeText(this, R.string.no_browser, Toast.LENGTH_SHORT).show() }
+    }
+
+    /**
+     * Whether Google Play is this install's installer of record, the only case where Rate
+     * can go anywhere: Play takes ratings from nobody else, so on a copy from GitHub or
+     * F-Droid it would open a listing that cannot be rated. Asking about our own package
+     * needs no permission and no <queries> entry.
+     */
+    private fun installedFromPlay(): Boolean = runCatching {
+        val installer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            packageManager.getInstallSourceInfo(packageName).installingPackageName
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getInstallerPackageName(packageName)
+        }
+        installer == PLAY_STORE
+    }.getOrDefault(false)
+
+    /**
+     * Gander's listing, sent to the Play Store app by name so another store that also
+     * answers market:// links cannot catch it, and to the browser if Play will not take it.
+     */
+    private fun openPlayListing() {
+        val market = Intent(Intent.ACTION_VIEW, "market://details?id=$packageName".toUri())
+            .setPackage(PLAY_STORE)
+        runCatching { startActivity(market) }
+            .onFailure { openUrl(getString(R.string.url_play_listing, packageName)) }
+    }
+
+    /**
+     * A line and a link through the system share sheet, as the viewer shares a file.
+     * Gander leaves itself out of the sheet: it accepts shared text, and opening its own
+     * link as a document helps nobody.
+     */
+    private fun shareGander() {
+        val send = Intent(Intent.ACTION_SEND)
+            .setType("text/plain")
+            .putExtra(Intent.EXTRA_SUBJECT, getString(R.string.app_name))
+            .putExtra(Intent.EXTRA_TEXT, getString(R.string.share_app_text, getString(R.string.url_site)))
+        val chooser = Intent.createChooser(send, getString(R.string.share_app))
+            .putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(ComponentName(this, ViewerActivity::class.java)))
+        runCatching { startActivity(chooser) }
     }
 
     /**
@@ -719,6 +767,9 @@ class MainActivity : AppCompatActivity() {
          */
         val ADD_COLOR = 0xFFAF2D18.toInt()
         const val LICENCES_ASSET = "licences.md"
+
+        /** Google Play's package: the installer Rate depends on, and the app it opens. */
+        const val PLAY_STORE = "com.android.vending"
 
         /** How long a folder may take to read before the screen says anything about it. */
         const val RENDER_PROGRESS_DELAY_MS = 150L

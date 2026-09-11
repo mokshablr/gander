@@ -62,6 +62,13 @@
     <string name="open_with_hint">Tip: in your file manager, tap any file and choose Open with &gt; Gander.</string>
     <string name="back">Back</string>
     <string name="about_gander">About Gander</string>
+    <!-- The two home menu items above About Gander. That one already names the app, so
+         these stay a bare verb each. Rate only appears where Google Play installed it. -->
+    <string name="rate_app">Rate</string>
+    <string name="share_app">Share</string>
+    <!-- What Share hands over. The link is the site rather than the Play listing, so it
+         works for whoever receives it, however they install. -->
+    <string name="share_app_text">Gander, an offline file viewer for Android: %1$s</string>
     <string name="about_version">Version %1$s</string>
     <string name="about_permissions_label">Permissions this app requests</string>
     <string name="about_permissions_none">None</string>
@@ -93,4 +100,7 @@
     <string name="save_copy_failed">The copy could not be saved</string>
     <string name="url_author" translatable="false">https://arjun.maniyani.com/</string>
     <string name="url_source" translatable="false">https://github.com/mokshablr/gander</string>
+    <string name="url_site" translatable="false">https://arjun.maniyani.com/gander/</string>
+    <!-- Only reached when the Play Store app will not open the listing itself -->
+    <string name="url_play_listing" translatable="false">https://play.google.com/store/apps/details?id=%1$s</string>
 </resources>

@@ -21,6 +21,10 @@
   from nobody else. Share sends a link to the site rather than the listing, so it works
   for whoever receives it, however they install. Neither needs a permission.
 
+- Credits missed when the fixes shipped: @RostislavArts asked for search in PDFs (#10, in
+  1.14), and @celsoazevedo reported the blurry large pages that 1.15 fixed (#20). Thank you
+  both.
+
 ## 1.16 (2026-09-08)
 
 - Dragging a text selection to the bottom of a PDF now scrolls the document, so a selection

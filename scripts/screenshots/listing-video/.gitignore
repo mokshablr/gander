@@ -1,0 +1,17 @@
+# Rendered frames, strips and contact sheets. Regenerable and large, same reason
+# store-art gitignores its canvases. The generators here are the source.
+out/
+
+# The three raw screenrecord takes live in `dist/listing-video-footage/`, outside this tree
+# and outside git. They cannot be regenerated without the phone, but committing them would
+# break this repo's convention of generators in and captures out: the root .gitignore already
+# excludes docs/screenshots/v1.14/ and demo-build/ for that reason, and no .mp4 has ever been
+# committed here. See that directory's README.
+#
+# **proof.png IS committed**, and is the one capture that should be. It is 17 KB, the same
+# order as store-art's lockup.png, and it is a required asset rather than working footage:
+# without it layers.py falls back to the press kit's 720 px stand-in, which renders at 1200
+# and is a 1.67x upscale of the film's most important element. audit.py --gate catches that
+# and compose.py refuses to build, so a fresh clone could not produce a deliverable at all.
+
+__pycache__/

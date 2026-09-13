@@ -42,6 +42,7 @@ enum class FileKind(val page: String) {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         private const val MIME_PPTX =
             "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        private const val MIME_ODS = "application/vnd.oasis.opendocument.spreadsheet"
 
         fun isAudioExt(ext: String) = ext in audioExt
 
@@ -60,7 +61,8 @@ enum class FileKind(val page: String) {
             mime == "application/pdf" -> PDF
             mime?.startsWith("video/") == true || mime?.startsWith("audio/") == true -> PLAYER
             mime == MIME_DOCX -> DOCX
-            mime == MIME_XLSX || mime == "application/vnd.ms-excel" || mime == "text/csv" -> XLSX
+            mime == MIME_XLSX || mime == "application/vnd.ms-excel" ||
+                mime == "text/csv" || mime == MIME_ODS -> XLSX
             mime == MIME_PPTX -> PPTX
             mime?.startsWith("image/") == true -> IMAGE_WEB
             mime?.startsWith("text/") == true -> TEXT

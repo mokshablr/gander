@@ -16,6 +16,12 @@
   most of the time, so a black and white scan had been arriving as an empty frame since
   the version of pdf.js that moved them out of the bundle. Nobody had reported that one.
 
+- OpenDocument spreadsheets shared without a filename open instead of being refused. Gander
+  has offered to open `.ods` since 1.7 and lists it everywhere it lists formats, but it
+  recognised one by its extension only. A file shared straight from a mail client or a chat
+  app often arrives with a content type and no name on it, and those were being shown the
+  "cannot open this" card by the very app that had just offered to open them.
+
 - The home screen's menu has Rate and Share above About Gander. Rate opens Gander's page
   in the Play Store and only appears on a copy Play installed, since Play takes ratings
   from nobody else. Share sends a link to the site rather than the listing, so it works

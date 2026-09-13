@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.17 (2026-09-13)
 
 - A PDF whose images are JPEG 2000 shows them. Since pdf.js 4 the JPEG 2000 and JBIG2
   decoders have lived in WebAssembly rather than in the bundle, fetched at the moment a

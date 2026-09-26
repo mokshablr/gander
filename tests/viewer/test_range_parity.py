@@ -4,7 +4,7 @@ The harness answers ranges the way the app does.
 server.py stands in for ViewerActivity.docResponse, and a stand-in that
 behaves differently from the thing it replaces makes every test above it a
 test of the wrong software. Both parsers read the same table of cases:
-DocRangeTest for the Kotlin one, this for the Python one.
+RangeParityTest for the Kotlin one, this for the Python one.
 """
 
 import json

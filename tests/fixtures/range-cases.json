@@ -2,7 +2,7 @@
   "_comment": [
     "Range header cases, read by both sides of the suite.",
     "",
-    "DocRangeTest reads this to check ViewerActivity's parser, and",
+    "RangeParityTest reads this to check ViewerActivity's parser, and",
     "tests/viewer/test_range_parity.py reads it to check that the Python",
     "server standing in for ViewerActivity answers the same way. The harness",
     "is only worth anything if it behaves like the app it imitates, and two",

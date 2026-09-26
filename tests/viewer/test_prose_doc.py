@@ -332,16 +332,26 @@ def test_a_long_document_is_read_in_time_that_grows_with_its_length(viewer, page
     pages again, so the time went as the square of the length: this file took twenty
     seconds, and takes well under one. The last paragraph's bold words, furthest into
     the pages, must still be bold.
+
+    Measured against a shorter copy of itself rather than against a clock, so the
+    answer is the same on a laptop and on a loaded runner. Six times the paragraphs
+    is under six times the time when the time grows with the length, and less once
+    the page's own start-up is counted in both; read the old way it is thirty-six.
     """
-    doc = Word97()
-    for n in range(1, 12001):
-        doc.add(f"Paragraph {n} of the long report, ", ("with a bold phrase", BOLD), " and plain words after it.\r")
-    data = doc.build()
-    started = time.monotonic()
-    viewer("prose.html", made("long.doc", data))
-    wait_for_text(page, "Paragraph 12000 of the long report", timeout=60000)
-    took = time.monotonic() - started
-    assert took < 5, f"twelve thousand paragraphs took {took:.1f} s"
+    def opened(paragraphs):
+        doc = Word97()
+        for n in range(1, paragraphs + 1):
+            doc.add(f"Paragraph {n} of the long report, ", ("with a bold phrase", BOLD), " and plain words after it.\r")
+        data = doc.build()
+        started = time.monotonic()
+        viewer("prose.html", made(f"long-{paragraphs}.doc", data))
+        wait_for_text(page, f"Paragraph {paragraphs} of the long report", timeout=60000)
+        return time.monotonic() - started
+
+    short = opened(2000)
+    long = opened(12000)
+    assert long < 12 * short, \
+        f"twelve thousand paragraphs took {long:.2f} s against {short:.2f} s for two thousand"
     last = page.evaluate(
         "() => { const ps = document.querySelectorAll('.vw-paper p');"
         "  const out = { count: ps.length };"

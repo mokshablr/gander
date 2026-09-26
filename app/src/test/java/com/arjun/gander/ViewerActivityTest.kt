@@ -1232,8 +1232,13 @@ class ViewerActivityTest {
             z.closeEntry()
         }
         val archive = FixtureProvider.install().add("models.zip", file)
+        // Robolectric's pipe is a file, and would give as its length whatever the inflating
+        // thread had written by then. Held until the URL is read, the compressed one says
+        // nothing, as a real pipe does.
+        val held = mutableListOf<Runnable>()
         Robolectric.buildContentProvider(ArchiveProvider::class.java)
             .create(ArchiveProvider.authority(context))
+            .get().writers = java.util.concurrent.Executor { held += it }
         val raf = java.io.RandomAccessFile(file, "r")
         val entries = ZipSource(raf.channel, 0, raf.length(), raf).use {
             ZipReader.entries(it, java.util.Locale.US)
@@ -1248,6 +1253,7 @@ class ViewerActivityTest {
         assertThat(urlOf("stored.stl")).contains("&length=${stl.size}&")
         assertThat(urlOf("deflated.stl")).contains("viewer/model.html")
         assertThat(urlOf("deflated.stl")).doesNotContain("length=")
+        held.forEach { it.run() }
     }
 
     @Test

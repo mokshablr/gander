@@ -15,6 +15,7 @@ import android.provider.OpenableColumns
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
+import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
 /** A file inside an archive, as one of [ArchiveProvider]'s URIs names it. */
@@ -109,8 +110,12 @@ class ArchiveProvider : ContentProvider() {
     /**
      * Where the compressed files are inflated. One thread per file being read, which is
      * usually one; each ends when its reader closes the pipe or reaches the end.
+     *
+     * A test can hold them back. Robolectric makes a pipe out of a file, so a reader there
+     * sees whatever a writer has already put in it as the pipe's length, which a real pipe
+     * never reports, and a test of that length would race the writer.
      */
-    private val writers = Executors.newCachedThreadPool()
+    internal var writers: Executor = Executors.newCachedThreadPool()
 
     override fun onCreate() = true
 

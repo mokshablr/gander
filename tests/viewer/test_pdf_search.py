@@ -9,13 +9,18 @@ six-pages.pdf contains "tenancy" exactly three times, in three different
 cases, and nothing else in it matches.
 """
 
-from helpers import highlight_count, wait_for_pdf, wait_for_text_layer
+from helpers import highlight_count, wait_for_band, wait_for_page, wait_for_pdf
 
 
 def open_and_attach(viewer, page, port, fixture="six-pages.pdf"):
+    """
+    The document open, its first page finished with its words in place, and the port
+    attached. paint() puts a hit's highlight on before report() sends its count, so a
+    count arriving means the highlights on the pages drawn by then are on as well.
+    """
     viewer("pdf.html", fixture)
     wait_for_pdf(page)
-    wait_for_text_layer(page)
+    wait_for_page(page, 0)
     return port()
 
 
@@ -120,7 +125,6 @@ def test_the_hits_on_screen_are_highlighted(viewer, page, port):
     p = open_and_attach(viewer, page, port)
     p.query("tenancy")
     p.wait_for_count(1, 3)
-    page.wait_for_timeout(300)
 
     shown = highlight_count(page, "vw-find")
     assert 1 <= shown <= 3, f"{shown} highlights for three hits over three pages"
@@ -131,12 +135,10 @@ def test_clearing_takes_the_highlights_with_it(viewer, page, port):
     p = open_and_attach(viewer, page, port)
     p.query("tenancy")
     p.wait_for_count(1, 3)
-    page.wait_for_timeout(300)
     assert highlight_count(page) >= 1
 
     p.clear()
     p.wait_for_count(0, 0)
-    page.wait_for_timeout(300)
     assert highlight_count(page, "vw-find") == 0
     assert highlight_count(page, "vw-find-active") == 0
 
@@ -154,7 +156,6 @@ def test_exactly_one_hit_is_ever_the_active_one(viewer, page, port):
     for expected in (2, 3, 1):
         p.next()
         p.wait_for_count(expected, 3)
-        page.wait_for_timeout(300)
         assert highlight_count(page, "vw-find-active") == 1
 
 
@@ -170,7 +171,7 @@ def test_stepping_to_a_hit_brings_its_page_into_view(viewer, page, port):
     p.next()
     p.next()
     p.wait_for_count(3, 3)
-    page.wait_for_timeout(800)
+    wait_for_band(page)
 
     # the third hit is on page 3, which must now carry a bitmap
     assert canvas_widths(page)[2] > 300
@@ -201,7 +202,10 @@ def test_scrolling_to_the_end_reports_the_last_page(viewer, page, port):
 def test_a_one_page_document_never_reports_a_page(viewer, page, port):
     """Nothing to indicate, so the pill and the go-to-page control stay away."""
     p = open_and_attach(viewer, page, port, fixture="embedded-font.pdf")
-    page.wait_for_timeout(1000)
+    # The page reports on the port the moment it arrives, ahead of any command, so a
+    # report would be in the inbox before this count is.
+    p.query("wombat")
+    p.wait_for_count(0, 0)
     assert p.pages() == []
 
 
@@ -240,7 +244,7 @@ def test_going_to_a_page_draws_it(viewer, page, port):
     from helpers import canvas_widths
     p = open_and_attach(viewer, page, port, fixture="forty-pages.pdf")
     p.go_to_page(25)
-    page.wait_for_timeout(1200)
+    wait_for_band(page)
     assert canvas_widths(page)[24] > 300
 
 
@@ -257,9 +261,9 @@ def test_a_page_number_that_does_not_exist_is_ignored(viewer, page, port):
     p.go_to_page(0)
     p.go_to_page(41)
     p.go_to_page(-1)
-    page.wait_for_timeout(500)
 
-    # and the channel is still alive afterwards
+    # and the channel is still alive afterwards: commands are handled in order, so
+    # these three have been by the time the next is answered
     p.go_to_page(10)
     assert p.wait_for(r"page 10 40")
 
@@ -269,7 +273,6 @@ def test_a_command_that_is_nonsense_does_not_kill_the_channel(viewer, page, port
     p.send("")
     p.send("z")
     p.send("gnot-a-number")
-    page.wait_for_timeout(300)
 
     p.query("tenancy")
     assert p.wait_for_count(1, 3)

@@ -1,5 +1,7 @@
 """Small readers over the pdf.html DOM, so the tests read as prose."""
 
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
 # A canvas that has never been drawn is 300x150, because that is the HTML
 # default for the element and pdf.html leaves it alone until draw() sizes it.
 # blank() zeroes it on release. So the three states are told apart by size:
@@ -17,10 +19,24 @@ RELEASED = (
 )
 SLOTS = "() => document.querySelectorAll('#pages .pg').length"
 
+# A canvas wider than the default says only that a render has begun: pdf.mjs sizes
+# it before it asks pdf.js to draw into it. When the render ended is on the slot
+# pdf.mjs hangs on each .pg as _slot. Its state goes to "drawn" after the bitmap,
+# the night recolour and the text layer have all landed, and its mode is the night
+# setting that bitmap was drawn in, which draw() compares against the current one
+# and redraws when they differ. So "drawn, in the mode the page is in now" is the
+# one condition under which a page is finished, and the waits below are on that
+# rather than on a duration.
+SETTLED = (
+    "(pg) => { const s = pg && pg._slot; return !!s && s.state === 'drawn'"
+    " && s.mode === document.documentElement.classList.contains('vw-night'); }"
+)
+PAGES = "[...document.querySelectorAll('#pages .pg')]"
+
 
 def wait_for_pdf(page, pages=None, timeout=30000):
-    """Waits until the first page carries a real bitmap and the spinner has gone."""
-    page.wait_for_function(f"{DRAWN} >= 1", timeout=timeout)
+    """Waits until one page is finished and the spinner has gone."""
+    page.wait_for_function(f"() => {PAGES}.some({SETTLED})", timeout=timeout)
     page.wait_for_function(
         "() => { const e = document.getElementById('vw-status');"
         "return !e || getComputedStyle(e).display === 'none'"
@@ -31,6 +47,65 @@ def wait_for_pdf(page, pages=None, timeout=30000):
         assert page.evaluate(SLOTS) == pages, (
             f"expected {pages} page slots, saw {page.evaluate(SLOTS)}"
         )
+    return page
+
+
+def wait_for_page(page, index=0, timeout=20000):
+    """Waits until page [index] is finished: drawn, turned over if night mode is on, words laid."""
+    page.wait_for_function(
+        f"(i) => ({SETTLED})(document.querySelectorAll('#pages .pg')[i])",
+        arg=index, timeout=timeout,
+    )
+    return page
+
+
+def scroll_to_page(page, index, timeout=20000):
+    """Scrolls page [index] to the top of the screen and waits for it to be finished there."""
+    page.evaluate("(i) => document.querySelectorAll('#pages .pg')[i].scrollIntoView()", index)
+    return wait_for_page(page, index, timeout)
+
+
+def slot_states(page):
+    """Each page's state as pdf.mjs has it, for saying what a wait was left looking at."""
+    return page.evaluate(
+        f"() => {PAGES}.map(pg => pg._slot"
+        " ? pg._slot.state + (pg._slot.mode ? ' night' : '') : '?')"
+    )
+
+
+def wait_for_band(page, timeout=20000):
+    """
+    Waits until nothing is queued or drawing: every page is either untouched or
+    finished in the current mode, and at least one is finished.
+
+    After a toggle this is the far side of the redraw. setNight() gives up every page
+    drawn in the other mode and asks for it again, and a page that lands in a mode the
+    reader has since left is given up once more by draw(), so the pages are settled
+    only when the last of those has come back.
+    """
+    try:
+        page.wait_for_function(
+            f"() => {{ const pgs = {PAGES}; const settled = {SETTLED};"
+            " return pgs.length > 0 && pgs.some(settled) && pgs.every(pg =>"
+            " pg._slot && (pg._slot.state === 'blank' || settled(pg))); }",
+            timeout=timeout,
+        )
+    except PlaywrightTimeoutError:
+        raise AssertionError(f"the pages never settled: {slot_states(page)}") from None
+    return page
+
+
+def after_frames(page, n=2):
+    """
+    Waits for [n] animation frames, for work the page does on the frame after an event
+    rather than in the event: the observers that draw and release pages report after
+    the frame a scroll landed in, and only then does the band move.
+    """
+    page.evaluate(
+        "(n) => new Promise(done => { const step = () =>"
+        " n-- > 0 ? requestAnimationFrame(step) : done(); step(); })",
+        n,
+    )
     return page
 
 
@@ -105,7 +180,8 @@ def highlight_count(page, name="vw-find"):
 # Tiles: the sharp patch drawn over the part of a page the reader is looking at
 # ---------------------------------------------------------------------------
 
-TILES = "() => document.querySelectorAll('#pages .pg canvas.tile').length"
+TILE_COUNT = "document.querySelectorAll('#pages .pg canvas.tile').length"
+TILES = f"() => {TILE_COUNT}"
 
 
 def set_page_scale(page, factor):
@@ -313,19 +389,16 @@ def text_layer_geometry(page):
     )
 
 
-def wait_for_redraw(page, timeout=20000):
-    """
-    Toggling night mode gives every drawn page up and asks for it again, so the
-    bitmaps go and come back. Waits for the far side of that.
-    """
-    page.wait_for_function(f"{DRAWN} >= 1", timeout=timeout)
-    page.wait_for_timeout(700)
-    return page
-
-
 def wait_for_tile(page, timeout=15000):
-    """A tile is debounced by 150 ms and then has to render, so it is waited for."""
-    page.wait_for_function(f"{TILES} >= 1", timeout=timeout)
+    """
+    A tile is asked for 150 ms after the reader stops and then has to render, so it is
+    waited for. One on the page and none on its way: a tile goes into the document
+    only once it is drawn and turned over, so a tile in the document is a finished one.
+    """
+    page.wait_for_function(
+        f"() => {TILE_COUNT} >= 1 && {PAGES}.every(pg => !pg._slot || !pg._slot.pending)",
+        timeout=timeout,
+    )
     return page
 
 

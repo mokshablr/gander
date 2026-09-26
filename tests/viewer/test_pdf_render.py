@@ -9,8 +9,9 @@ this existed.
 import pytest
 
 from helpers import (
-    canvas_widths, drawn_count, page_colours, released_count, slot_count,
-    status_text, status_visible, text_layer, wait_for_pdf, wait_for_text_layer,
+    after_frames, canvas_widths, drawn_count, page_colours, released_count,
+    status_text, status_visible, text_layer, wait_for_band, wait_for_page,
+    wait_for_pdf, wait_for_text_layer,
 )
 
 
@@ -130,8 +131,8 @@ def test_the_cmap_tables_are_actually_fetched_and_found(viewer, page, server):
     deleted, which is the exact regression it exists to catch.
     """
     viewer("pdf.html", "cjk.pdf")
+    # A page cannot be finished before the table its font needed has been answered
     wait_for_pdf(page)
-    page.wait_for_timeout(500)
 
     asked = [r for r in server.state.requests if "/cmaps/" in r["path"]]
     assert asked, "no CMap table was requested; the CJK font was drawn some other way"
@@ -177,7 +178,6 @@ def test_the_cmap_tables_are_actually_fetched_and_found(viewer, page, server):
 def test_an_image_needing_a_wasm_decoder_is_drawn(viewer, page, fixture, name):
     viewer("pdf.html", fixture)
     wait_for_pdf(page, pages=1)
-    page.wait_for_timeout(1200)
 
     colours = page_colours(page, floor=0)
     assert colours, f"nothing was drawn for {fixture}"
@@ -197,7 +197,6 @@ def test_the_wasm_decoders_are_actually_fetched_and_found(viewer, page, server):
     """
     viewer("pdf.html", "jpx.pdf")
     wait_for_pdf(page)
-    page.wait_for_timeout(800)
 
     asked = [r for r in server.state.requests if "/wasm/" in r["path"]]
     assert asked, "no decoder was requested; the image was drawn some other way"
@@ -232,7 +231,8 @@ def test_pages_of_different_paper_sizes_render_to_one_width(viewer, page):
     viewer("pdf.html", "mixed-width.pdf")
     wait_for_pdf(page, pages=2)
     page.evaluate("() => window.scrollTo(0, document.body.scrollHeight)")
-    page.wait_for_timeout(1500)
+    # A box takes its own page's shape as that page is drawn
+    wait_for_page(page, 1)
     widths = page.evaluate(
         "() => [...document.querySelectorAll('#pages .pg')]"
         ".map(p => Math.round(p.getBoundingClientRect().width))"
@@ -252,7 +252,6 @@ def test_a_ranged_document_is_pulled_in_pieces(viewer, page, server, big_pdf):
     """
     viewer("pdf.html", big_pdf, ranged=True)
     wait_for_pdf(page)
-    page.wait_for_timeout(1500)
 
     assert server.ranged_requests(), "nothing was fetched by range"
 
@@ -265,7 +264,6 @@ def test_a_ranged_document_reads_far_less_than_all_of_itself(viewer, page, serve
     """
     viewer("pdf.html", big_pdf, ranged=True)
     wait_for_pdf(page)
-    page.wait_for_timeout(1500)
 
     ranged = len(server.ranged_requests())
     whole = len(server.full_requests())
@@ -421,7 +419,7 @@ def test_only_a_band_of_pages_is_ever_drawn(viewer, page):
     """
     viewer("pdf.html", "forty-pages.pdf")
     wait_for_pdf(page, pages=40)
-    page.wait_for_timeout(1500)
+    wait_for_band(page)
 
     drawn = drawn_count(page)
     assert drawn >= 1
@@ -436,7 +434,7 @@ def test_scrolling_away_releases_the_pages_left_behind(viewer, page):
     """
     viewer("pdf.html", "forty-pages.pdf")
     wait_for_pdf(page, pages=40)
-    page.wait_for_timeout(1000)
+    wait_for_band(page)
     assert released_count(page) == 0
 
     page.evaluate("() => window.scrollTo(0, document.body.scrollHeight)")
@@ -458,11 +456,13 @@ def test_the_band_keeps_a_page_you_scroll_back_over(viewer, page):
     """
     viewer("pdf.html", "forty-pages.pdf")
     wait_for_pdf(page, pages=40)
-    page.wait_for_timeout(1000)
+    wait_for_band(page)
 
+    # The observers that move the band report on the frame after a scroll lands, so
+    # each move is given the frames it would take for a page to be let go.
     page.evaluate("() => window.scrollBy(0, window.innerHeight)")
-    page.wait_for_timeout(400)
+    after_frames(page, 3)
     page.evaluate("() => window.scrollBy(0, -window.innerHeight)")
-    page.wait_for_timeout(400)
+    after_frames(page, 3)
 
     assert canvas_widths(page)[0] > 300, "the first page was thrown away and rebuilt"

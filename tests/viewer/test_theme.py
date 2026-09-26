@@ -64,6 +64,15 @@ def ground(page, selector=None):
     return page.evaluate(LUMINANCE, selector)
 
 
+def loaded(page):
+    """
+    A page's ground is a stylesheet rule, and nothing in any page's script touches
+    it, so it is final once the page has loaded.
+    """
+    page.wait_for_load_state("load")
+    return page
+
+
 def readability(page, selector):
     """
     The contrast between the words in [selector] and whatever is actually
@@ -109,7 +118,7 @@ def contrast(a, b):
 def test_a_reading_page_goes_dark_when_asked(viewer, page, html, fixture):
     page.emulate_media(color_scheme="dark")
     viewer(html, fixture)
-    page.wait_for_timeout(700)
+    loaded(page)
     assert ground(page) < 0.2, f"{html} stayed light under a dark colour scheme"
 
 
@@ -117,7 +126,7 @@ def test_a_reading_page_goes_dark_when_asked(viewer, page, html, fixture):
 def test_a_reading_page_is_light_by_default(viewer, page, html, fixture):
     page.emulate_media(color_scheme="light")
     viewer(html, fixture)
-    page.wait_for_timeout(700)
+    loaded(page)
     assert ground(page) > 0.5, f"{html} was dark under a light colour scheme"
 
 
@@ -125,12 +134,12 @@ def test_a_reading_page_is_light_by_default(viewer, page, html, fixture):
 def test_a_reading_page_really_changes_between_the_two(viewer, page, html, fixture):
     page.emulate_media(color_scheme="light")
     viewer(html, fixture)
-    page.wait_for_timeout(500)
+    loaded(page)
     light = ground(page)
 
     page.emulate_media(color_scheme="dark")
     page.reload()
-    page.wait_for_timeout(700)
+    loaded(page)
 
     assert light - ground(page) > 0.4, f"{html} barely changed between the two schemes"
 
@@ -147,7 +156,7 @@ def test_prose_stays_readable_in_both_schemes(
     """
     page.emulate_media(color_scheme=scheme)
     viewer(html, fixture)
-    page.wait_for_timeout(700)
+    loaded(page)
     ratio = readability(page, selector)
     assert ratio is not None, f"{selector} is not on {html}"
     assert ratio >= 4.5, \
@@ -163,7 +172,7 @@ def test_a_document_ground_is_dark_in_both_schemes(viewer, page, html, fixture):
     for scheme in ("light", "dark"):
         page.emulate_media(color_scheme=scheme)
         viewer(html, fixture)
-        page.wait_for_timeout(700)
+        loaded(page)
         assert ground(page) < 0.25, \
             f"{html} ground went light under {scheme}; the paper would vanish into it"
 
@@ -172,12 +181,12 @@ def test_a_document_ground_is_dark_in_both_schemes(viewer, page, html, fixture):
 def test_a_document_ground_does_not_move_with_the_scheme(viewer, page, html, fixture):
     page.emulate_media(color_scheme="light")
     viewer(html, fixture)
-    page.wait_for_timeout(600)
+    loaded(page)
     light = ground(page)
 
     page.emulate_media(color_scheme="dark")
     page.reload()
-    page.wait_for_timeout(600)
+    loaded(page)
 
     assert abs(light - ground(page)) < 0.02, \
         f"{html} ground shifted with the scheme; it is meant to be fixed"
@@ -197,7 +206,6 @@ def test_the_system_scheme_does_not_turn_a_pdf_page_over(viewer, page):
     page.emulate_media(color_scheme="dark")
     viewer("pdf.html", "colours.pdf")
     wait_for_pdf(page)
-    page.wait_for_timeout(500)
     assert "255,255,255" in page_colours(page), \
         "the phone's dark mode turned a PDF page over on its own"
 
@@ -232,7 +240,7 @@ def test_every_page_paints_its_own_ground(viewer, page, html, fixture):
     """
     page.emulate_media(color_scheme="dark")
     viewer(html, fixture)
-    page.wait_for_timeout(400)
+    loaded(page)
     painted = page.evaluate("() => getComputedStyle(document.body).backgroundColor")
     assert painted not in ("rgba(0, 0, 0, 0)", "transparent"), \
         f"{html} left its background transparent"

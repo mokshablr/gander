@@ -16,13 +16,11 @@ inversion flips it: the cheap version of this feature would bring the heading
 below back orange.
 """
 
-import pytest
-
 from helpers import (
     body_ground, page_colours, pan, paper_ground, region_colours,
-    region_fingerprint, set_page_scale,
-    text_layer_geometry, tile_colours, tiles, wait_for_pdf, wait_for_redraw,
-    wait_for_text_layer, wait_for_tile, wait_for_tile_away_from_the_top,
+    region_fingerprint, scroll_to_page, set_page_scale,
+    text_layer_geometry, tile_colours, tiles, wait_for_band, wait_for_page,
+    wait_for_pdf, wait_for_tile, wait_for_tile_away_from_the_top,
 )
 
 # What colours.pdf is painted in, and what each one must become.
@@ -70,10 +68,13 @@ OVER_COLOUR = "28,82,196"
 
 
 def night(viewer, page, on=True, fixture="colours.pdf"):
-    """Opens colours.pdf the way ViewerActivity would, with the mode already set."""
+    """
+    Opens colours.pdf the way ViewerActivity would, with the mode already set, and
+    waits for its first page to be finished in that mode.
+    """
     viewer("pdf.html", fixture, night="1" if on else "0")
     wait_for_pdf(page)
-    page.wait_for_timeout(500)
+    wait_for_page(page, 0)
     return page
 
 
@@ -153,8 +154,7 @@ def test_a_scanned_page_turns_over_even_though_it_is_an_image(viewer, page):
     full-page photograph inside out. Excluding every image left this white.
     """
     night(viewer, page)
-    page.evaluate("() => document.querySelectorAll('#pages .pg')[1].scrollIntoView()")
-    page.wait_for_timeout(1400)
+    scroll_to_page(page, 1)
     colours = page_colours(page, index=1)
     assert PAPER_OVER in colours, f"the scan did not turn over; saw {list(colours)[:6]}"
     assert INK_OVER in colours
@@ -172,8 +172,7 @@ def test_a_figure_with_a_white_background_does_not_stay_white(viewer, page):
     KOReader shipped exactly that and had it reported as their issue #4986.
     """
     night(viewer, page)
-    page.evaluate("() => document.querySelectorAll('#pages .pg')[2].scrollIntoView()")
-    page.wait_for_timeout(1400)
+    scroll_to_page(page, 2)
     colours = region_colours(page, 2, *CHART_AT)
     assert CHART_PAPER not in colours, \
         f"the figure was left as a white rectangle; saw {list(colours)[:6]}"
@@ -191,8 +190,7 @@ def test_a_photograph_with_no_colour_in_it_is_still_a_photograph(viewer, page):
     """
     def photo(on):
         night(viewer, page, on=on)
-        page.evaluate("() => document.querySelectorAll('#pages .pg')[2].scrollIntoView()")
-        page.wait_for_timeout(1400)
+        scroll_to_page(page, 2)
         return region_colours(page, 2, *MONO_PHOTO_AT)
 
     daylight = photo(False)
@@ -208,8 +206,7 @@ def test_a_colour_photograph_is_left_alone_beside_a_figure_that_is_not(viewer, p
     """
     def look(on):
         night(viewer, page, on=on)
-        page.evaluate("() => document.querySelectorAll('#pages .pg')[2].scrollIntoView()")
-        page.wait_for_timeout(1400)
+        scroll_to_page(page, 2)
         return (region_fingerprint(page, 2, *COLOUR_PHOTO_AT),
                 region_fingerprint(page, 2, *CHART_AT))
 
@@ -230,8 +227,7 @@ def test_a_photograph_on_a_white_background_is_still_a_photograph(viewer, page):
     """
     def shot(on):
         night(viewer, page, on=on)
-        page.evaluate("() => document.querySelectorAll('#pages .pg')[2].scrollIntoView()")
-        page.wait_for_timeout(1400)
+        scroll_to_page(page, 2)
         return region_fingerprint(page, 2, *PRODUCT_AT)
 
     assert shot(True) == shot(False), \
@@ -249,8 +245,7 @@ def test_a_figure_far_from_the_page_corner_still_turns_over(viewer, page):
     mapping measures nothing at all and leaves it white.
     """
     night(viewer, page)
-    page.evaluate("() => document.querySelectorAll('#pages .pg')[2].scrollIntoView()")
-    page.wait_for_timeout(1400)
+    scroll_to_page(page, 2)
     colours = region_colours(page, 2, *RIGHT_FIGURE_AT)
     assert CHART_PAPER not in colours, \
         f"the figure on the right stayed white; saw {list(colours)[:6]}"
@@ -274,8 +269,7 @@ def test_two_photographs_that_overlap_are_both_kept_whole(viewer, page):
     this shape.
     """
     night(viewer, page)
-    page.evaluate("() => document.querySelectorAll('#pages .pg')[3].scrollIntoView()")
-    page.wait_for_timeout(1400)
+    scroll_to_page(page, 3)
 
     under = region_colours(page, 3, *UNDER_ONLY_AT)
     over = region_colours(page, 3, *OVER_ONLY_AT)
@@ -299,15 +293,13 @@ def test_the_text_layer_is_not_moved(viewer, page):
     """
     viewer("pdf.html", "colours.pdf", night="0")
     wait_for_pdf(page)
-    wait_for_text_layer(page)
-    page.wait_for_timeout(400)
+    wait_for_band(page)
     before = text_layer_geometry(page)
     assert before, "no text layer to compare"
 
     viewer("pdf.html", "colours.pdf", night="1")
     wait_for_pdf(page)
-    wait_for_text_layer(page)
-    page.wait_for_timeout(400)
+    wait_for_band(page)
     assert text_layer_geometry(page) == before
 
 
@@ -340,11 +332,11 @@ def test_the_port_turns_it_on_and_off(viewer, page, port):
     before = page_colours(page)
 
     p.night_mode(True)
-    wait_for_redraw(page)
+    wait_for_band(page)
     assert PAPER_OVER in page_colours(page)
 
     p.night_mode(False)
-    wait_for_redraw(page)
+    wait_for_band(page)
     assert page_colours(page) == before, \
         "turning it off did not put the page back exactly as it was"
 
@@ -360,8 +352,7 @@ def test_the_last_of_several_quick_toggles_wins(viewer, page, port):
     p.night_mode(True)
     p.night_mode(False)
     p.night_mode(True)
-    wait_for_redraw(page)
-    page.wait_for_timeout(800)
+    wait_for_band(page)
     colours = page_colours(page)
     assert PAPER_OVER in colours and PAPER not in colours
     assert PHOTO in colours, "the photograph was lost somewhere in the toggling"
@@ -387,8 +378,7 @@ def test_a_toggle_during_a_redraw_is_not_left_on_screen(viewer, page, port):
     # No wait: draw() has already captured "on" for everything in flight by the
     # time the first message is handled, so the second lands inside the window.
     p.night_mode(False)
-    wait_for_redraw(page)
-    page.wait_for_timeout(900)
+    wait_for_band(page)
 
     colours = page_colours(page)
     assert PAPER in colours, \
@@ -406,7 +396,6 @@ def test_a_zoom_tile_is_turned_over_too(viewer, page):
     night(viewer, page)
     set_page_scale(page, 4)
     wait_for_tile(page)
-    page.wait_for_timeout(600)
     colours = tile_colours(page)
     assert colours, "no tile to read"
     assert PAPER_OVER in colours, f"the tile was not turned over; saw {list(colours)[:6]}"
@@ -426,7 +415,6 @@ def test_a_zoom_tile_leaves_a_photograph_alone(viewer, page):
         night(viewer, page, on=on)
         set_page_scale(page, 4)
         wait_for_tile(page)
-        page.wait_for_timeout(600)
         colours = tile_colours(page)
         assert colours, "no tile to read"
         return colours.get(CORNER_PHOTO, 0)
@@ -488,12 +476,9 @@ def test_a_zoom_tile_turns_a_figure_over_like_the_page_under_it(viewer, page):
     same screen, which is the kind of thing that looks like a rendering fault.
     """
     night(viewer, page)
-    page.evaluate(
-        "() => document.querySelectorAll('#pages .pg')[2].scrollIntoView({block:'start'})")
-    page.wait_for_timeout(1200)
+    scroll_to_page(page, 2)
     set_page_scale(page, 4)
     wait_for_tile(page)
-    page.wait_for_timeout(900)
     colours = tile_colours(page)
     assert colours, "no tile to read"
     assert CHART_PAPER not in colours, \
@@ -504,6 +489,5 @@ def test_a_zoom_tile_is_not_turned_over_in_daylight(viewer, page):
     night(viewer, page, on=False)
     set_page_scale(page, 4)
     wait_for_tile(page)
-    page.wait_for_timeout(600)
     colours = tile_colours(page)
     assert PAPER in colours and PAPER_OVER not in colours

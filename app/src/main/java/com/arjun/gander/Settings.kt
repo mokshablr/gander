@@ -18,6 +18,14 @@ object Settings {
 
     private const val PREFS = "viewer"
     private const val KEY_NIGHT = "night"
+    private const val KEY_SORT_TYPE = "folder_sort_type"
+    private const val KEY_SORT_ASCENDING = "folder_sort_ascending"
+
+    enum class SortType {
+        NAME,
+        DATE,
+        SIZE
+    }
 
     /** Whether PDF pages are drawn turned over. See issue #19 and `pdf.html`. */
     fun night(context: Context): Boolean =
@@ -27,5 +35,26 @@ object Settings {
     fun setNight(context: Context, on: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit { putBoolean(KEY_NIGHT, on) }
+    }
+
+    fun sortType(context: Context): SortType {
+        val name = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_SORT_TYPE, SortType.NAME.name)
+        return runCatching { SortType.valueOf(name ?: SortType.NAME.name) }
+            .getOrDefault(SortType.NAME)
+    }
+
+    fun setSortType(context: Context, type: SortType) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit { putString(KEY_SORT_TYPE, type.name) }
+    }
+
+    fun sortAscending(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_SORT_ASCENDING, true)
+
+    fun setSortAscending(context: Context, ascending: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit { putBoolean(KEY_SORT_ASCENDING, ascending) }
     }
 }

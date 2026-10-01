@@ -152,4 +152,26 @@
     <string name="url_site" translatable="false">https://arjun.maniyani.com/gander/</string>
     <!-- Only reached when the Play Store app will not open the listing itself -->
     <string name="url_play_listing" translatable="false">https://play.google.com/store/apps/details?id=%1$s</string>
+    <!-- Folder sort and filter -->
+    <string name="sort_by">Sort by</string>
+    <string name="filter">Filter</string>
+    <string name="sort_name">Name</string>
+    <string name="sort_date">Date</string>
+    <string name="sort_size">Size</string>
+    <string name="sort_direction">Sort direction</string>
+    <string name="sort_ascending">Ascending</string>
+    <string name="sort_descending">Descending</string>
+    <string name="reset_filter">Reset filter</string>
+    <string name="ok">OK</string>
+    <string name="filter_pdf">PDF</string>
+    <string name="filter_doc">Word documents</string>
+    <string name="filter_xls">Excel spreadsheets</string>
+    <string name="filter_ppt">PowerPoint slides</string>
+    <string name="filter_img">Images</string>
+    <string name="filter_vid">Video</string>
+    <string name="filter_aud">Audio</string>
+    <string name="filter_md">Markdown</string>
+    <string name="filter_txt">Text and code</string>
+    <string name="filter_model">3D models</string>
+    <string name="filter_archive">Archives</string>
 </resources>

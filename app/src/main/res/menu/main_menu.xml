@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
+    <!-- Folder actions: visible only when browsing inside a folder -->
+    <item
+        android:id="@+id/action_sort"
+        android:title="@string/sort_by"
+        android:visible="false"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_filter"
+        android:title="@string/filter"
+        android:visible="false"
+        app:showAsAction="never" />
+
     <!-- Rate on a copy Google Play installed, the only install a rating can come from.
          Any other copy gets Switch to Google Play here instead: a copy from GitHub is
          signed with the same key as Play's, so its listing offers Update and moves it

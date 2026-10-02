@@ -15,7 +15,11 @@ import android.text.format.DateUtils
 import android.text.format.Formatter
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
+import android.widget.RadioButton
 import android.widget.TextView
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.checkbox.MaterialCheckBox
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -51,6 +55,7 @@ class MainActivity : AppCompatActivity() {
     private data class Crumb(val treeUri: Uri, val docId: String, val label: String)
 
     private val stack = ArrayDeque<Crumb>()
+    private val activeFilters = mutableSetOf<String>()
     private val adapter = RowAdapter()
     private lateinit var toolbar: MaterialToolbar
     private lateinit var lockup: View
@@ -156,6 +161,8 @@ class MainActivity : AppCompatActivity() {
         if (installedFromPlay()) toolbar.menu.findItem(R.id.action_play).setTitle(R.string.rate_app)
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                R.id.action_sort -> { showSortDialog(); true }
+                R.id.action_filter -> { showFilterDialog(); true }
                 R.id.action_play -> { openPlayListing(); true }
                 R.id.action_share_app -> { shareGander(); true }
                 R.id.action_about -> { showAbout(); true }
@@ -449,6 +456,13 @@ class MainActivity : AppCompatActivity() {
             else androidx.appcompat.content.res.AppCompatResources.getDrawable(this, R.drawable.ic_back)
         toolbar.navigationContentDescription = getString(R.string.back)
 
+        val inFolder = here != null
+        toolbar.menu.findItem(R.id.action_sort)?.isVisible = inFolder
+        toolbar.menu.findItem(R.id.action_filter)?.isVisible = inFolder
+        toolbar.menu.findItem(R.id.action_play)?.isVisible = !inFolder
+        toolbar.menu.findItem(R.id.action_share_app)?.isVisible = !inFolder
+        toolbar.menu.findItem(R.id.action_about)?.isVisible = !inFolder
+
         val token = ++renderToken
         // Delayed rather than shown at once. Most folders come back in a few
         // milliseconds, and a bar that appears and vanishes inside one frame reads as a
@@ -673,7 +687,18 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val (dirs, files) = orderChildren(children)
+        val sortType = Settings.sortType(this)
+        val ascending = Settings.sortAscending(this)
+        val (dirs, files) = orderChildren(children, sortType, ascending)
+
+        val filteredFiles = if (activeFilters.isEmpty()) {
+            files
+        } else {
+            files.filter { f ->
+                val (badge, _) = badgeFor(f.name, f.mime)
+                badge in activeFilters
+            }
+        }
 
         val rows = mutableListOf<Row>()
         dirs.forEach { d ->
@@ -682,7 +707,7 @@ class MainActivity : AppCompatActivity() {
                 render()
             })
         }
-        files.forEach { f ->
+        filteredFiles.forEach { f ->
             val (badge, color) = badgeFor(f.name, f.mime)
             val ext = f.name.substringAfterLast('.', "").lowercase()
             val fileUri = DocumentsContract.buildDocumentUriUsingTree(crumb.treeUri, f.docId)
@@ -743,6 +768,105 @@ class MainActivity : AppCompatActivity() {
         // single stop rather than a container TalkBack walks into.
         grid.contentDescription = getString(R.string.welcome_formats_spoken)
         ViewCompat.setScreenReaderFocusable(grid, true)
+    }
+
+    private fun showSortDialog() {
+        val view = layoutInflater.inflate(R.layout.dialog_sort, null)
+        val directionButton = view.findViewById<MaterialButton>(R.id.sortDirectionButton)
+        val radioName = view.findViewById<RadioButton>(R.id.radioName)
+        val radioDate = view.findViewById<RadioButton>(R.id.radioDate)
+        val radioSize = view.findViewById<RadioButton>(R.id.radioSize)
+
+        var isAscending = Settings.sortAscending(this)
+        var currentSort = Settings.sortType(this)
+
+        fun updateArrow() {
+            directionButton.setIconResource(if (isAscending) R.drawable.ic_arrow_up else R.drawable.ic_arrow_down)
+            directionButton.contentDescription = getString(
+                if (isAscending) R.string.sort_ascending else R.string.sort_descending
+            )
+        }
+
+        updateArrow()
+        directionButton.setOnClickListener {
+            isAscending = !isAscending
+            updateArrow()
+        }
+
+        fun updateSelection(type: Settings.SortType) {
+            currentSort = type
+            radioName.isChecked = type == Settings.SortType.NAME
+            radioDate.isChecked = type == Settings.SortType.DATE
+            radioSize.isChecked = type == Settings.SortType.SIZE
+        }
+
+        updateSelection(currentSort)
+
+        view.findViewById<View>(R.id.sortRowName).setOnClickListener {
+            updateSelection(Settings.SortType.NAME)
+        }
+        view.findViewById<View>(R.id.sortRowDate).setOnClickListener {
+            updateSelection(Settings.SortType.DATE)
+        }
+        view.findViewById<View>(R.id.sortRowSize).setOnClickListener {
+            updateSelection(Settings.SortType.SIZE)
+        }
+
+        MaterialAlertDialogBuilder(this)
+            .setView(view)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                Settings.setSortType(this, currentSort)
+                Settings.setSortAscending(this, isAscending)
+                render()
+            }
+            .show()
+    }
+
+    private fun showFilterDialog() {
+        val view = layoutInflater.inflate(R.layout.dialog_filter, null)
+        val container = view.findViewById<ViewGroup>(R.id.filterItemsContainer)
+        val resetBtn = view.findViewById<View>(R.id.resetFilterButton)
+
+        val tempSelected = activeFilters.toMutableSet()
+        val checkBoxes = mutableListOf<MaterialCheckBox>()
+
+        SUPPORTED_FILTER_TYPES.forEach { item ->
+            val row = layoutInflater.inflate(R.layout.dialog_filter_item, container, false)
+            val badge = row.findViewById<TextView>(R.id.filterBadge)
+            val title = row.findViewById<TextView>(R.id.filterTitle)
+            val checkbox = row.findViewById<MaterialCheckBox>(R.id.filterCheckbox)
+
+            badge.text = item.badge
+            badge.background.mutate().setTint(item.color)
+            title.setText(item.labelRes)
+            checkbox.isChecked = item.badge in tempSelected
+            checkBoxes += checkbox
+
+            row.setOnClickListener {
+                checkbox.isChecked = !checkbox.isChecked
+                if (checkbox.isChecked) {
+                    tempSelected += item.badge
+                } else {
+                    tempSelected -= item.badge
+                }
+            }
+
+            container.addView(row)
+        }
+
+        resetBtn.setOnClickListener {
+            tempSelected.clear()
+            checkBoxes.forEach { it.isChecked = false }
+        }
+
+        MaterialAlertDialogBuilder(this)
+            .setView(view)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                activeFilters.clear()
+                activeFilters.addAll(tempSelected)
+                render()
+            }
+            .show()
     }
 
     override fun onDestroy() {

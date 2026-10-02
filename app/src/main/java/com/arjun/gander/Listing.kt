@@ -144,9 +144,75 @@ internal const val MIME_DIR = "vnd.android.document/directory"
  * on every comparison, so lowercase() there allocated some sixteen thousand
  * strings on a folder of fifteen hundred files rather than none.
  */
-internal fun orderChildren(children: List<ChildDoc>): Pair<List<ChildDoc>, List<ChildDoc>> {
-    val byName = compareBy(String.CASE_INSENSITIVE_ORDER) { c: ChildDoc -> c.name }
+internal fun orderChildren(
+    children: List<ChildDoc>,
+    sortType: Settings.SortType = Settings.SortType.NAME,
+    ascending: Boolean = true
+): Pair<List<ChildDoc>, List<ChildDoc>> {
     val visible = children.filterNot { it.name.startsWith(".") }
-    return visible.filter { it.mime == MIME_DIR }.sortedWith(byName) to
-        visible.filterNot { it.mime == MIME_DIR }.sortedWith(byName)
+    val (dirs, files) = visible.partition { it.mime == MIME_DIR }
+
+    val dirComparator = when (sortType) {
+        Settings.SortType.DATE -> {
+            if (ascending) {
+                compareBy<ChildDoc> { it.modified }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+            } else {
+                compareByDescending<ChildDoc> { it.modified }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+            }
+        }
+        else -> {
+            val cmp = compareBy(String.CASE_INSENSITIVE_ORDER) { c: ChildDoc -> c.name }
+            if (ascending) cmp else cmp.reversed()
+        }
+    }
+
+    val fileComparator = when (sortType) {
+        Settings.SortType.NAME -> {
+            val cmp = compareBy(String.CASE_INSENSITIVE_ORDER) { c: ChildDoc -> c.name }
+            if (ascending) cmp else cmp.reversed()
+        }
+        Settings.SortType.DATE -> {
+            if (ascending) {
+                compareBy<ChildDoc> { it.modified }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+            } else {
+                compareByDescending<ChildDoc> { it.modified }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+            }
+        }
+        Settings.SortType.SIZE -> {
+            if (ascending) {
+                compareBy<ChildDoc> { it.size }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+            } else {
+                compareByDescending<ChildDoc> { it.size }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+            }
+        }
+    }
+
+    return dirs.sortedWith(dirComparator) to files.sortedWith(fileComparator)
 }
+
+internal data class SupportedFilterType(
+    val badge: String,
+    val color: Int,
+    val labelRes: Int
+)
+
+internal val SUPPORTED_FILTER_TYPES = listOf(
+    SupportedFilterType(PDF_BADGE.first, PDF_BADGE.second, R.string.filter_pdf),
+    SupportedFilterType(DOC_BADGE.first, DOC_BADGE.second, R.string.filter_doc),
+    SupportedFilterType(XLS_BADGE.first, XLS_BADGE.second, R.string.filter_xls),
+    SupportedFilterType(PPT_BADGE.first, PPT_BADGE.second, R.string.filter_ppt),
+    SupportedFilterType(IMG_BADGE.first, IMG_BADGE.second, R.string.filter_img),
+    SupportedFilterType(VID_BADGE.first, VID_BADGE.second, R.string.filter_vid),
+    SupportedFilterType(AUD_BADGE.first, AUD_BADGE.second, R.string.filter_aud),
+    SupportedFilterType(MD_BADGE.first, MD_BADGE.second, R.string.filter_md),
+    SupportedFilterType(TXT_BADGE.first, TXT_BADGE.second, R.string.filter_txt),
+    SupportedFilterType(MODEL_BADGE.first, MODEL_BADGE.second, R.string.filter_model),
+    SupportedFilterType(ZIP_BADGE.first, ZIP_BADGE.second, R.string.filter_archive),
+)
+

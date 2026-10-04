@@ -155,14 +155,15 @@
     <!-- Folder sort and filter -->
     <string name="sort_by">Sort by</string>
     <string name="filter">Filter</string>
-    <string name="sort_name">Name</string>
-    <string name="sort_date">Date</string>
-    <string name="sort_size">Size</string>
-    <string name="sort_direction">Sort direction</string>
-    <string name="sort_ascending">Ascending</string>
-    <string name="sort_descending">Descending</string>
+    <string name="sort_name_az">Name (A to Z)</string>
+    <string name="sort_name_za">Name (Z to A)</string>
+    <string name="sort_newest">Newest first</string>
+    <string name="sort_oldest">Oldest first</string>
+    <string name="sort_largest">Largest first</string>
+    <string name="sort_smallest">Smallest first</string>
     <string name="reset_filter">Reset filter</string>
-    <string name="ok">OK</string>
+    <string name="filter_subtitle">Filtered: %1$s</string>
+    <string name="filter_empty">No files match the active filter.</string>
     <string name="filter_pdf">PDF</string>
     <string name="filter_doc">Word documents</string>
     <string name="filter_xls">Excel spreadsheets</string>

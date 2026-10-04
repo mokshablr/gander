@@ -134,11 +134,14 @@ internal data class ChildDoc(
 internal const val MIME_DIR = "vnd.android.document/directory"
 
 /**
- * A folder listing split into directories and files, each sorted by name.
+ * A folder listing split into directories and files, sorted according to [sortOrder].
  *
  * Directories first, because that is where a reader looking for somewhere else
  * to go will look. Dotfiles are dropped from both: nothing Gander opens is
  * hidden by convention, and a folder full of them reads as noise.
+ *
+ * Folders have no file size reported by the document provider, so size orders
+ * keep directories alphabetically (A to Z).
  *
  * sortedWith and not sortedBy, for the reason homeRows gives: the selector runs
  * on every comparison, so lowercase() there allocated some sixteen thousand
@@ -146,51 +149,31 @@ internal const val MIME_DIR = "vnd.android.document/directory"
  */
 internal fun orderChildren(
     children: List<ChildDoc>,
-    sortType: Settings.SortType = Settings.SortType.NAME,
-    ascending: Boolean = true
+    sortOrder: Settings.SortOrder = Settings.SortOrder.NAME_AZ
 ): Pair<List<ChildDoc>, List<ChildDoc>> {
     val visible = children.filterNot { it.name.startsWith(".") }
     val (dirs, files) = visible.partition { it.mime == MIME_DIR }
 
-    val dirComparator = when (sortType) {
-        Settings.SortType.DATE -> {
-            if (ascending) {
-                compareBy<ChildDoc> { it.modified }
-                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
-            } else {
-                compareByDescending<ChildDoc> { it.modified }
-                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
-            }
-        }
-        else -> {
-            val cmp = compareBy(String.CASE_INSENSITIVE_ORDER) { c: ChildDoc -> c.name }
-            if (ascending) cmp else cmp.reversed()
-        }
+    val nameCmp = compareBy(String.CASE_INSENSITIVE_ORDER) { c: ChildDoc -> c.name }
+    val dateCmp = compareBy<ChildDoc> { it.modified }
+        .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+    val sizeCmp = compareBy<ChildDoc> { it.size }
+        .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+
+    val dirComparator = when (sortOrder) {
+        Settings.SortOrder.NAME_ZA -> nameCmp.reversed()
+        Settings.SortOrder.NEWEST -> dateCmp.reversed()
+        Settings.SortOrder.OLDEST -> dateCmp
+        else -> nameCmp
     }
 
-    val fileComparator = when (sortType) {
-        Settings.SortType.NAME -> {
-            val cmp = compareBy(String.CASE_INSENSITIVE_ORDER) { c: ChildDoc -> c.name }
-            if (ascending) cmp else cmp.reversed()
-        }
-        Settings.SortType.DATE -> {
-            if (ascending) {
-                compareBy<ChildDoc> { it.modified }
-                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
-            } else {
-                compareByDescending<ChildDoc> { it.modified }
-                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
-            }
-        }
-        Settings.SortType.SIZE -> {
-            if (ascending) {
-                compareBy<ChildDoc> { it.size }
-                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
-            } else {
-                compareByDescending<ChildDoc> { it.size }
-                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
-            }
-        }
+    val fileComparator = when (sortOrder) {
+        Settings.SortOrder.NAME_AZ -> nameCmp
+        Settings.SortOrder.NAME_ZA -> nameCmp.reversed()
+        Settings.SortOrder.NEWEST -> dateCmp.reversed()
+        Settings.SortOrder.OLDEST -> dateCmp
+        Settings.SortOrder.LARGEST -> sizeCmp.reversed()
+        Settings.SortOrder.SMALLEST -> sizeCmp
     }
 
     return dirs.sortedWith(dirComparator) to files.sortedWith(fileComparator)

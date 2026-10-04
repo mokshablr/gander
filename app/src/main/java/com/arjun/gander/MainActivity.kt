@@ -15,10 +15,7 @@ import android.text.format.DateUtils
 import android.text.format.Formatter
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageButton
-import android.widget.RadioButton
 import android.widget.TextView
-import com.google.android.material.button.MaterialButton
 import com.google.android.material.checkbox.MaterialCheckBox
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -115,6 +112,9 @@ class MainActivity : AppCompatActivity() {
     private val backCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
             stack.removeLast()
+            if (stack.isEmpty()) {
+                activeFilters.clear()
+            }
             render()
         }
     }
@@ -207,6 +207,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.addFolderButton).setOnClickListener { openTree.launch(null) }
 
         restoreStack(savedInstanceState)
+        restoreFilters(savedInstanceState)
         onBackPressedDispatcher.addCallback(this, backCallback)
     }
 
@@ -232,6 +233,13 @@ class MainActivity : AppCompatActivity() {
         outState.putStringArrayList(STATE_TREE_URIS, ArrayList(stack.map { it.treeUri.toString() }))
         outState.putStringArrayList(STATE_DOC_IDS, ArrayList(stack.map { it.docId }))
         outState.putStringArrayList(STATE_LABELS, ArrayList(stack.map { it.label }))
+        outState.putStringArrayList(STATE_ACTIVE_FILTERS, ArrayList(activeFilters))
+    }
+
+    private fun restoreFilters(state: Bundle?) {
+        val saved = state?.getStringArrayList(STATE_ACTIVE_FILTERS) ?: return
+        activeFilters.clear()
+        activeFilters.addAll(saved)
     }
 
     private fun restoreStack(state: Bundle?) {
@@ -457,11 +465,24 @@ class MainActivity : AppCompatActivity() {
         toolbar.navigationContentDescription = getString(R.string.back)
 
         val inFolder = here != null
+        if (!inFolder) {
+            activeFilters.clear()
+        }
         toolbar.menu.findItem(R.id.action_sort)?.isVisible = inFolder
         toolbar.menu.findItem(R.id.action_filter)?.isVisible = inFolder
         toolbar.menu.findItem(R.id.action_play)?.isVisible = !inFolder
         toolbar.menu.findItem(R.id.action_share_app)?.isVisible = !inFolder
         toolbar.menu.findItem(R.id.action_about)?.isVisible = !inFolder
+
+        val filterSummary = if (inFolder && activeFilters.isNotEmpty()) {
+            SUPPORTED_FILTER_TYPES
+                .map { it.badge }
+                .filter { it in activeFilters }
+                .joinToString(", ")
+        } else {
+            null
+        }
+        toolbar.subtitle = if (filterSummary != null) getString(R.string.filter_subtitle, filterSummary) else null
 
         val token = ++renderToken
         // Delayed rather than shown at once. Most folders come back in a few
@@ -473,6 +494,7 @@ class MainActivity : AppCompatActivity() {
         main.postDelayed(announce, RENDER_PROGRESS_DELAY_MS)
         // Read here, on the main thread, which is the only one that changes it
         val hidden = pending?.uri
+        val filters = activeFilters.toSet()
 
         loader.execute {
             // Checked here as well as after, because loader is a single thread: without
@@ -480,7 +502,7 @@ class MainActivity : AppCompatActivity() {
             // wait for the whole of the first, which on the slow provider this exists
             // for is the wait it was meant to remove.
             if (token != renderToken) return@execute
-            val screen = if (here == null) homeRows(hidden) else folderRows(here)
+            val screen = if (here == null) homeRows(hidden) else folderRows(here, filters)
             main.post {
                 main.removeCallbacks(announce)
                 if (token != renderToken || isDestroyed) return@post
@@ -661,7 +683,7 @@ class MainActivity : AppCompatActivity() {
         return Screen(rows)
     }
 
-    private fun folderRows(crumb: Crumb): Screen {
+    private fun folderRows(crumb: Crumb, filters: Set<String>): Screen {
         val children = mutableListOf<ChildDoc>()
         val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
             crumb.treeUri, crumb.docId
@@ -687,16 +709,15 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val sortType = Settings.sortType(this)
-        val ascending = Settings.sortAscending(this)
-        val (dirs, files) = orderChildren(children, sortType, ascending)
+        val sortOrder = Settings.sortOrder(this)
+        val (dirs, files) = orderChildren(children, sortOrder)
 
-        val filteredFiles = if (activeFilters.isEmpty()) {
+        val filteredFiles = if (filters.isEmpty()) {
             files
         } else {
             files.filter { f ->
                 val (badge, _) = badgeFor(f.name, f.mime)
-                badge in activeFilters
+                badge in filters
             }
         }
 
@@ -725,7 +746,14 @@ class MainActivity : AppCompatActivity() {
                 thumbExt = ext
             )
         }
-        if (rows.isEmpty()) rows += Row.Hint(getString(R.string.empty_folder))
+        if (rows.isEmpty()) {
+            val emptyMsg = if (filters.isNotEmpty()) {
+                getString(R.string.filter_empty)
+            } else {
+                getString(R.string.empty_folder)
+            }
+            rows += Row.Hint(emptyMsg)
+        }
         return Screen(rows)
     }
 
@@ -771,53 +799,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSortDialog() {
-        val view = layoutInflater.inflate(R.layout.dialog_sort, null)
-        val directionButton = view.findViewById<MaterialButton>(R.id.sortDirectionButton)
-        val radioName = view.findViewById<RadioButton>(R.id.radioName)
-        val radioDate = view.findViewById<RadioButton>(R.id.radioDate)
-        val radioSize = view.findViewById<RadioButton>(R.id.radioSize)
-
-        var isAscending = Settings.sortAscending(this)
-        var currentSort = Settings.sortType(this)
-
-        fun updateArrow() {
-            directionButton.setIconResource(if (isAscending) R.drawable.ic_arrow_up else R.drawable.ic_arrow_down)
-            directionButton.contentDescription = getString(
-                if (isAscending) R.string.sort_ascending else R.string.sort_descending
-            )
-        }
-
-        updateArrow()
-        directionButton.setOnClickListener {
-            isAscending = !isAscending
-            updateArrow()
-        }
-
-        fun updateSelection(type: Settings.SortType) {
-            currentSort = type
-            radioName.isChecked = type == Settings.SortType.NAME
-            radioDate.isChecked = type == Settings.SortType.DATE
-            radioSize.isChecked = type == Settings.SortType.SIZE
-        }
-
-        updateSelection(currentSort)
-
-        view.findViewById<View>(R.id.sortRowName).setOnClickListener {
-            updateSelection(Settings.SortType.NAME)
-        }
-        view.findViewById<View>(R.id.sortRowDate).setOnClickListener {
-            updateSelection(Settings.SortType.DATE)
-        }
-        view.findViewById<View>(R.id.sortRowSize).setOnClickListener {
-            updateSelection(Settings.SortType.SIZE)
-        }
+        val orders = Settings.SortOrder.values()
+        val current = Settings.sortOrder(this)
+        val items = orders.map { getString(it.labelRes) }.toTypedArray()
+        val checkedItem = orders.indexOf(current).coerceAtLeast(0)
 
         MaterialAlertDialogBuilder(this)
-            .setView(view)
-            .setPositiveButton(R.string.ok) { _, _ ->
-                Settings.setSortType(this, currentSort)
-                Settings.setSortAscending(this, isAscending)
+            .setTitle(R.string.sort_by)
+            .setSingleChoiceItems(items, checkedItem) { dialog, which ->
+                Settings.setSortOrder(this, orders[which])
                 render()
+                dialog.dismiss()
             }
             .show()
     }
@@ -861,7 +853,7 @@ class MainActivity : AppCompatActivity() {
 
         MaterialAlertDialogBuilder(this)
             .setView(view)
-            .setPositiveButton(R.string.ok) { _, _ ->
+            .setPositiveButton(android.R.string.ok) { _, _ ->
                 activeFilters.clear()
                 activeFilters.addAll(tempSelected)
                 render()
@@ -889,5 +881,6 @@ class MainActivity : AppCompatActivity() {
         const val STATE_TREE_URIS = "stack.treeUris"
         const val STATE_DOC_IDS = "stack.docIds"
         const val STATE_LABELS = "stack.labels"
+        const val STATE_ACTIVE_FILTERS = "active_filters"
     }
 }

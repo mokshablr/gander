@@ -19,7 +19,8 @@
         android:gravity="center"
         android:textColor="#FFFFFF"
         android:textSize="11sp"
-        android:textStyle="bold" />
+        android:textStyle="bold"
+        android:importantForAccessibility="no" />
 
     <TextView
         android:id="@+id/filterTitle"

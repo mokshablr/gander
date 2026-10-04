@@ -261,53 +261,59 @@ class ListingTest {
     fun sortByNameDescending() {
         val (_, files) = orderChildren(
             listOf(file("Apple.pdf"), file("cherry.pdf"), file("banana.pdf")),
-            sortType = Settings.SortType.NAME,
-            ascending = false
+            sortOrder = Settings.SortOrder.NAME_ZA
         )
         assertThat(files.map { it.name })
             .containsExactly("cherry.pdf", "banana.pdf", "Apple.pdf").inOrder()
     }
 
     @Test
-    fun sortByDateAscendingAndDescending() {
+    fun sortByDateNewestAndOldest() {
         val f1 = fileWith("old.pdf", 100, 1000L)
         val f2 = fileWith("mid.pdf", 200, 2000L)
         val f3 = fileWith("new.pdf", 300, 3000L)
 
-        val (_, asc) = orderChildren(
+        val (_, newest) = orderChildren(
             listOf(f2, f3, f1),
-            sortType = Settings.SortType.DATE,
-            ascending = true
+            sortOrder = Settings.SortOrder.NEWEST
         )
-        assertThat(asc.map { it.name }).containsExactly("old.pdf", "mid.pdf", "new.pdf").inOrder()
+        assertThat(newest.map { it.name }).containsExactly("new.pdf", "mid.pdf", "old.pdf").inOrder()
 
-        val (_, desc) = orderChildren(
+        val (_, oldest) = orderChildren(
             listOf(f2, f3, f1),
-            sortType = Settings.SortType.DATE,
-            ascending = false
+            sortOrder = Settings.SortOrder.OLDEST
         )
-        assertThat(desc.map { it.name }).containsExactly("new.pdf", "mid.pdf", "old.pdf").inOrder()
+        assertThat(oldest.map { it.name }).containsExactly("old.pdf", "mid.pdf", "new.pdf").inOrder()
     }
 
     @Test
-    fun sortBySizeAscendingAndDescending() {
+    fun sortBySizeLargestAndSmallest() {
         val f1 = fileWith("small.pdf", 100, 1000L)
         val f2 = fileWith("medium.pdf", 500, 1000L)
         val f3 = fileWith("large.pdf", 1000, 1000L)
 
-        val (_, asc) = orderChildren(
+        val (_, largest) = orderChildren(
             listOf(f2, f3, f1),
-            sortType = Settings.SortType.SIZE,
-            ascending = true
+            sortOrder = Settings.SortOrder.LARGEST
         )
-        assertThat(asc.map { it.name }).containsExactly("small.pdf", "medium.pdf", "large.pdf").inOrder()
+        assertThat(largest.map { it.name }).containsExactly("large.pdf", "medium.pdf", "small.pdf").inOrder()
 
-        val (_, desc) = orderChildren(
+        val (_, smallest) = orderChildren(
             listOf(f2, f3, f1),
-            sortType = Settings.SortType.SIZE,
-            ascending = false
+            sortOrder = Settings.SortOrder.SMALLEST
         )
-        assertThat(desc.map { it.name }).containsExactly("large.pdf", "medium.pdf", "small.pdf").inOrder()
+        assertThat(smallest.map { it.name }).containsExactly("small.pdf", "medium.pdf", "large.pdf").inOrder()
+    }
+
+    @Test
+    fun directoriesRemainAlphabeticalUnderSizeOrders() {
+        val d1 = dir("Zeta")
+        val d2 = dir("Alpha")
+        val (dirsLargest, _) = orderChildren(listOf(d1, d2), sortOrder = Settings.SortOrder.LARGEST)
+        assertThat(dirsLargest.map { it.name }).containsExactly("Alpha", "Zeta").inOrder()
+
+        val (dirsSmallest, _) = orderChildren(listOf(d1, d2), sortOrder = Settings.SortOrder.SMALLEST)
+        assertThat(dirsSmallest.map { it.name }).containsExactly("Alpha", "Zeta").inOrder()
     }
 
     @Test

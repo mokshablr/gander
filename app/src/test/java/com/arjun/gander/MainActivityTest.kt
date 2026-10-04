@@ -796,20 +796,13 @@ class MainActivityTest {
         val dialog = ShadowDialog.getLatestDialog() as AlertDialog
         assertThat(dialog).isNotNull()
 
-        // Flip arrow to descending
-        val directionBtn = dialog.findViewById<View>(R.id.sortDirectionButton)!!
-        directionBtn.performClick()
-
-        // Select SIZE
-        dialog.findViewById<View>(R.id.sortRowSize)!!.performClick()
-
-        // Click OK
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        // Select LARGEST (index 4)
+        val which = Settings.SortOrder.LARGEST.ordinal
+        dialog.listView.performItemClick(null, which, which.toLong())
         shadowOf(context.mainLooper).idle()
 
         // Check persistence
-        assertThat(Settings.sortType(context)).isEqualTo(Settings.SortType.SIZE)
-        assertThat(Settings.sortAscending(context)).isFalse()
+        assertThat(Settings.sortOrder(context)).isEqualTo(Settings.SortOrder.LARGEST)
 
         // Zeta (2048) comes before alpha (1024) when sorted by size descending
         val titles = controller.rowTitles()
@@ -817,7 +810,7 @@ class MainActivityTest {
     }
 
     @Test
-    fun filterDialogFiltersFilesAndResetRestores() {
+    fun filterDialogFiltersFilesShowsSubtitleAndClearsOnHome() {
         FakeDocumentsProvider.install()
             .folder(
                 "root", "Documents",
@@ -852,21 +845,35 @@ class MainActivityTest {
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         shadowOf(context.mainLooper).idle()
 
-        // Only PDF file should be shown
+        // Only PDF file should be shown and subtitle indicates active filter
         assertThat(controller.rowTitles()).contains("doc1.pdf")
         assertThat(controller.rowTitles()).doesNotContain("notes.txt")
         assertThat(controller.rowTitles()).doesNotContain("sheet.xlsx")
+        assertThat(toolbar.subtitle?.toString()).isEqualTo("Filtered: PDF")
 
-        // Open filter dialog again and click Reset Filter
-        toolbar.menu.performIdentifierAction(R.id.action_filter, 0)
+        // Going back to home screen clears the filter and subtitle
+        controller.get().onBackPressedDispatcher.onBackPressed()
         shadowOf(context.mainLooper).idle()
 
+        assertThat(toolbar.subtitle).isNull()
+
+        // Re-entering folder has filter cleared
+        controller.clickRow("Documents")
+        shadowOf(context.mainLooper).idle()
+        assertThat(toolbar.subtitle).isNull()
+        assertThat(controller.rowTitles()).containsAtLeast("doc1.pdf", "notes.txt", "sheet.xlsx")
+
+        // Set filter again and test saving instance state across rotation
+        toolbar.menu.performIdentifierAction(R.id.action_filter, 0)
+        shadowOf(context.mainLooper).idle()
         val dialog2 = ShadowDialog.getLatestDialog() as AlertDialog
-        dialog2.findViewById<View>(R.id.resetFilterButton)!!.performClick()
+        val container2 = dialog2.findViewById<ViewGroup>(R.id.filterItemsContainer)!!
+        container2.getChildAt(0).performClick()
         dialog2.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         shadowOf(context.mainLooper).idle()
 
-        // All files are shown again
-        assertThat(controller.rowTitles()).containsAtLeast("doc1.pdf", "notes.txt", "sheet.xlsx")
+        val state = Bundle()
+        controller.saveInstanceState(state)
+        assertThat(state.getStringArrayList("active_filters")).containsExactly("PDF")
     }
 }

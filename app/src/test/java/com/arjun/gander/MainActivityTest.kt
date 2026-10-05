@@ -875,5 +875,12 @@ class MainActivityTest {
         val state = Bundle()
         controller.saveInstanceState(state)
         assertThat(state.getStringArrayList("active_filters")).containsExactly("PDF")
+
+        val second = home(state)
+        val secondToolbar = second.get().findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
+        assertThat(secondToolbar.subtitle?.toString()).isEqualTo("Filtered: PDF")
+        assertThat(second.rowTitles()).contains("doc1.pdf")
+        assertThat(second.rowTitles()).doesNotContain("notes.txt")
+        assertThat(second.rowTitles()).doesNotContain("sheet.xlsx")
     }
 }

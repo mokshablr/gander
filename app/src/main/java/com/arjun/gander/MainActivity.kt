@@ -465,9 +465,6 @@ class MainActivity : AppCompatActivity() {
         toolbar.navigationContentDescription = getString(R.string.back)
 
         val inFolder = here != null
-        if (!inFolder) {
-            activeFilters.clear()
-        }
         toolbar.menu.findItem(R.id.action_sort)?.isVisible = inFolder
         toolbar.menu.findItem(R.id.action_filter)?.isVisible = inFolder
         toolbar.menu.findItem(R.id.action_play)?.isVisible = !inFolder

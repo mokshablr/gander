@@ -349,11 +349,16 @@ function vwProseLabel(prose, para, text, bag, hang) {
  * which the slides share.
  */
 
-/* Whether a font name is one of the two, and which. */
+/*
+ * Which of the fonts in symbol-fonts.js a font name is, by its name there, or null. Each has
+ * a table of its own, and the same code is a different symbol in each.
+ */
 function vwProseSymbolFont(name) {
-  if (/wingdings|webdings/i.test(name || "")) return "wingdings";
-  if (/^symbol$/i.test(String(name || "").trim())) return "symbol";
-  return null;
+  var face = String(name || "").trim().toLowerCase();
+  if (/webdings/.test(face)) return "webdings";
+  var wingdings = /wingdings[\s-]*([23]\b)?/.exec(face);
+  if (wingdings) return wingdings[1] ? "wingdings " + wingdings[1] : "wingdings";
+  return face === "symbol" ? "symbol" : null;
 }
 
 /*
@@ -363,12 +368,14 @@ function vwProseSymbolFont(name) {
  * own bullet lives.
  */
 function vwProseSymbols(text, which) {
+  var dense = VW_DINGBATS[which];
   var table = which === "wingdings" ? VW_WINGDINGS : VW_SYMBOL;
   var out = "";
   for (var i = 0; i < text.length; i++) {
     var c = text.charCodeAt(i);
     var code = (c >= 0xF020 && c <= 0xF0FF) ? c - 0xF000 : (which && c <= 0xFF ? c : -1);
-    if (code < 0) out += text.charAt(i);
+    if (code < 0x20) out += text.charAt(i);
+    else if (dense) out += dense.charAt(code - 0x20) || "\u2022";
     else if (table[code]) out += table[code];
     else if (which === "wingdings" && code > 0x20) out += "\u2022";
     else out += String.fromCharCode(code);

@@ -3,8 +3,8 @@
 /*
  * Symbol, Wingdings and its kin are not on a phone, and are not Unicode: a document names the
  * font, so on a phone their characters come out as boxes or as the letters they are stored as.
- * Each table gives the Unicode character a phone can draw in their place, the first two for
- * the prose reader's text and all of them for the slides' bullets.
+ * Each table gives the Unicode character a phone can draw in their place, for the prose
+ * reader's text and the slides' bullets.
  */
 
 /*

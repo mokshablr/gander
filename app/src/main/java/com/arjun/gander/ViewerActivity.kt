@@ -354,7 +354,7 @@ open class ViewerActivity : AppCompatActivity() {
         // format it is offering to search actually has anything findable in it
         val kind = detect(ext, mime)
         when (kind) {
-            FileKind.IMAGE -> showImage(container, uri, name, ext)
+            FileKind.IMAGE -> showPicture(container, uri, name, ext)
             FileKind.PLAYER -> showPlayer(container, uri, name, ext)
             FileKind.ARCHIVE -> showArchive(container, uri, name, savedInstanceState)
             else -> showWeb(container, uri, kind, name, ext)
@@ -606,8 +606,8 @@ open class ViewerActivity : AppCompatActivity() {
 
     /**
      * Where a document's length and a PDF's page are looked up before the page loads, which
-     * means asking its provider and, for the page, reading the start of the file. Tests swap
-     * in one that runs inline.
+     * means asking its provider and, for the page, reading the start of the file, and where a
+     * WebP or PNG is read for whether it moves. Tests swap in one that runs inline.
      */
     @androidx.annotation.VisibleForTesting
     internal var documentLoader: java.util.concurrent.Executor? = null
@@ -1357,6 +1357,28 @@ open class ViewerActivity : AppCompatActivity() {
             }
         }
         return uri.lastPathSegment?.substringAfterLast('/') ?: "file"
+    }
+
+    /**
+     * A photo, or a WebP or PNG that moves, which goes to the page that plays GIFs, since the
+     * photo view draws one frame. Issue #49. Whether it moves is read off the main thread, as a
+     * document's length is, since a provider can be slow to hand over even the first bytes.
+     */
+    private fun showPicture(container: FrameLayout, uri: Uri, name: String, ext: String) {
+        if (ext != "webp" && ext != "png") return showImage(container, uri, name, ext)
+        val app = applicationContext
+        val main = Handler(Looper.getMainLooper())
+        val worker = documentLoader ?: Executors.newSingleThreadExecutor()
+        worker.execute {
+            val moves = runCatching { app.contentResolver.openInputStream(uri)?.use(::isAnimated) }
+                .getOrNull() == true
+            main.post {
+                if (isDestroyed) return@post
+                if (moves) showWeb(container, uri, FileKind.IMAGE_WEB, name, ext)
+                else showImage(container, uri, name, ext)
+            }
+        }
+        (worker as? java.util.concurrent.ExecutorService)?.shutdown()
     }
 
     private fun showImage(container: FrameLayout, uri: Uri, name: String, ext: String) {

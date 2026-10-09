@@ -1823,6 +1823,15 @@ def images() -> None:
     )
     written(OUT / "anim.gif")
 
+    # One picture that moves, as an animated WebP and as an animated PNG, a whole colour to a
+    # frame so a test can see it change, and a WebP that keeps still (#49)
+    moving = [Image.new("RGB", (48, 48), c) for c in ((178, 45, 24), (40, 140, 70), (40, 70, 190))]
+    for path in (OUT / "moving.webp", OUT / "moving.png"):
+        moving[0].save(path, save_all=True, append_images=moving[1:], duration=300, loop=0, lossless=True)
+        written(path)
+    asymmetric(64, 64).save(OUT / "still.webp", "WEBP", lossless=True)
+    written(OUT / "still.webp")
+
     (OUT / "icon.svg").write_text(
         '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" '
         'viewBox="0 0 120 80" role="img" aria-label="A red square in a frame">\n'

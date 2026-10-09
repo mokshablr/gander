@@ -237,6 +237,20 @@ class ViewerActivityTest {
             .hasSize(1)
     }
 
+    /** The tiling view draws one frame, so a WebP or PNG that moves gets the page that plays GIFs. #49 */
+    @Test
+    fun aMovingWebpOrPngGetsThePageThatPlaysIt() {
+        assertThat(open("moving.webp").pageName()).isEqualTo("imgweb.html")
+        assertThat(open("moving.png").pageName()).isEqualTo("imgweb.html")
+
+        for (still in listOf("still.webp", "tiny.png")) {
+            val controller = open(still)
+            assertThat(controller.webView()).isNull()
+            assertThat(controller.container().children().filterIsInstance<SubsamplingScaleImageView>())
+                .hasSize(1)
+        }
+    }
+
     @Test
     fun audioGetsThePlayerRatherThanAPage() {
         val controller = open("tone.wav")

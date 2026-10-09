@@ -183,6 +183,10 @@ open class ViewerActivity : AppCompatActivity() {
     /** How the screen was held for a video in full screen, before the viewer was made again. */
     private var playerHeld: Int? = null
 
+    /** The title bar over a document, which slides away as it is read. See [DocumentChrome]. Read by tests. */
+    internal var documentChrome: DocumentChrome? = null
+        private set
+
     /**
      * ACTION_CREATE_DOCUMENT with the type set per file. The stock contract fixes
      * it at construction, and the viewer does not know what it is showing until an
@@ -920,6 +924,10 @@ open class ViewerActivity : AppCompatActivity() {
         // Rotation does not rebuild this activity, so there is no onCreate to measure
         // from again; a layout change is the only word we get that the screen turned.
         web.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> syncFastScroll() }
+        // And the track's own, which starts lower when the title bar floats over the document
+        track.addOnLayoutChangeListener { _, _, t, _, b, _, oldT, _, oldB ->
+            if (b - t != oldB - oldT) syncFastScroll()
+        }
 
         track.setOnTouchListener { _, event ->
             val probe = webView
@@ -936,6 +944,8 @@ open class ViewerActivity : AppCompatActivity() {
                         false
                     } else {
                         dragging = true
+                        // A drag down the thumb is the reader scrolling, and moves the title bar
+                        documentChrome?.touched(event)
                         grabOffset = event.y - top
                         thumb.isPressed = true
                         track.parent.requestDisallowInterceptTouchEvent(true)
@@ -958,6 +968,7 @@ open class ViewerActivity : AppCompatActivity() {
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     if (!dragging) false else {
                         dragging = false
+                        documentChrome?.touched(event)
                         thumb.isPressed = false
                         // Where the finger left it is where the back gesture has to be
                         // kept off; dragTo does not pay for this on every move.
@@ -1165,6 +1176,7 @@ open class ViewerActivity : AppCompatActivity() {
             bar.visibility = LinearLayout.VISIBLE
             searchBackCallback.isEnabled = true
             searchBarOpen = true
+            documentChrome?.searching(true)
             pageFader.hideNow()
             input.requestFocus()
             imm.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
@@ -1198,6 +1210,7 @@ open class ViewerActivity : AppCompatActivity() {
             bar.visibility = LinearLayout.GONE
             searchBackCallback.isEnabled = false
             searchBarOpen = false
+            documentChrome?.searching(false)
         }
         findViewById<ImageButton>(R.id.searchClose).setOnClickListener { closeSearchBar() }
     }
@@ -1214,19 +1227,21 @@ open class ViewerActivity : AppCompatActivity() {
 
     /** One letter of command, then the payload. Read by onCommand() in pdf.mjs and find.js. */
     private inner class PortFinder : Finder {
-        private fun send(s: String) {
-            searchPort?.postMessage(WebMessageCompat(s))
-        }
         override fun query(q: String) {
             pendingQuery = q
-            send(PortCommand.query(q))
+            tellPage(PortCommand.query(q))
         }
-        override fun next() = send(PortCommand.next())
-        override fun prev() = send(PortCommand.prev())
+        override fun next() = tellPage(PortCommand.next())
+        override fun prev() = tellPage(PortCommand.prev())
         override fun clear() {
             pendingQuery = ""
-            send(PortCommand.clear())
+            tellPage(PortCommand.clear())
         }
+    }
+
+    /** Down the channel, once the page has one: a search, and the title bar over a document. */
+    private fun tellPage(command: String) {
+        searchPort?.postMessage(WebMessageCompat(command))
     }
 
     private fun canPortSearch(): Boolean =
@@ -1296,6 +1311,8 @@ open class ViewerActivity : AppCompatActivity() {
             loadedNight = Settings.night(this)
             mine.postMessage(WebMessageCompat(PortCommand.nightMode(loadedNight)))
         }
+        // And the title bar as it is now, which may not be as the URL had it
+        documentChrome?.replay()
     }
 
     private fun closeSearchChannel() {
@@ -1563,7 +1580,7 @@ open class ViewerActivity : AppCompatActivity() {
         browser.attach(container)
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
+    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     private fun showWeb(container: FrameLayout, uri: Uri, kind: FileKind, name: String, ext: String) {
         val web = ScrollProbeWebView(this)
         webView = web
@@ -1701,11 +1718,23 @@ open class ViewerActivity : AppCompatActivity() {
             ): Boolean = !isViewerPage(request.url)
         }
 
+        // A document gets its title bar out of the way while it is read. Only a document's page
+        // is given the channel, which is how it is told what room to leave the bar at its top, so
+        // a picture, a model and a card keep the bar above them.
+        val floor = webViewFloorParamsFor(kind, web.settings.userAgentString)
+        if (pageGetsChannel(kind) && floor.isEmpty()) {
+            documentChrome = DocumentChrome(this, ::touchExplorationOn, ::tellPage, ::keepThumbBelowBar)
+                .apply { float() }
+            // Not consumed: the document still takes every touch
+            web.setOnTouchListener { _, event -> documentChrome?.touched(event); false }
+        }
+
         // Any scroll at all is what brings the readout up; the number in it comes from
         // the port. See showPageIndicator for why the two are separate.
-        web.setOnScrollChangeListener { _, _, _, _, _ ->
+        web.setOnScrollChangeListener { _, _, y, _, oldY ->
             showPageIndicator()
             syncFastScroll()
+            documentChrome?.scrolled(y, oldY)
         }
         setUpFastScroll(web, kind)
 
@@ -1757,7 +1786,9 @@ open class ViewerActivity : AppCompatActivity() {
                         (if (total > 0) "&length=$total" else "") +
                         "&night=$night" +
                         (if (resumeAt > 1) "&resume=$resumeAt" else "") +
-                        webViewFloorParamsFor(kind, web.settings.userAgentString)
+                        // The room to leave at the top for the title bar floating over it
+                        (documentChrome?.let { "&top=${it.heightDp()}" } ?: "") +
+                        floor
                 )
             }
         }
@@ -1794,6 +1825,9 @@ open class ViewerActivity : AppCompatActivity() {
         // And Print, which has no document to print until Reload brings it back
         goneMenu.findItem(R.id.action_print)?.isVisible = false
         closeSearchChannel()
+        // Back above the card, which has nothing to scroll that would bring a bar back that has slid away
+        documentChrome?.land()
+        documentChrome = null
 
         // The card is the app's rather than the document's, so the parts around it go back to
         // the phone's colours along with the page that was dark
@@ -1939,6 +1973,16 @@ open class ViewerActivity : AppCompatActivity() {
         ViewGroup.LayoutParams.MATCH_PARENT
     )
 
+    /** The scroll thumb runs below the [px] of title bar floating over the document, wherever the bar is. */
+    private fun keepThumbBelowBar(px: Int) {
+        for (view in listOf(fastScrollTrack, fastScrollThumb)) {
+            val params = view.layoutParams as ViewGroup.MarginLayoutParams
+            if (params.topMargin == px) continue
+            params.topMargin = px
+            view.layoutParams = params
+        }
+    }
+
     /**
      * The tap highlight goes as the viewer leaves, for the reason MainActivity.onPause gives: a
      * back swipe shows the frame drawn on the way out, and a zip's list, drawn with the home
@@ -1953,6 +1997,7 @@ open class ViewerActivity : AppCompatActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         videoChrome?.focusChanged(hasFocus)
+        documentChrome?.focusChanged(hasFocus)
     }
 
     override fun onStart() {

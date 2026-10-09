@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- The title bar slides away as you scroll down a document, and comes back as you scroll up or
+  reach the top (#40, asked for in a Play review). It slides over the page rather than resizing
+  it, so the text doesn't jump, and the clock above it stays. It stays put while you search, and
+  with TalkBack on. This is in PDFs, Word and other text documents, spreadsheets, presentations,
+  Markdown and text files.
+
 ## 2.3 (2026-10-09)
 
 - A Word file shows its pages where Word ended them, rather than as one long page (thanks

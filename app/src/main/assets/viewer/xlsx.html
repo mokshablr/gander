@@ -14,9 +14,13 @@
   :root { --vw-zoom: 2.75; }
 
   body { background: #ffffff; }
+  /* Held under the title bar floating over the sheet, and up to the top, in the bar's own time,
+     while it has slid away */
   #tabs {
     position: sticky;
     top: 0;
+    top: var(--vw-top, 0px);
+    transition: top 200ms ease-in-out;
     z-index: 5;
     display: flex;
     flex-wrap: nowrap;
@@ -40,6 +44,7 @@
     border-color: var(--vw-accent);
     color: var(--vw-accent-ink);
   }
+  html.vw-bar-away #tabs { top: 0; }
   #sheet { padding: 8px; overflow: auto; }
   #sheet table { border-collapse: collapse; font-size: 13px; }
   #sheet td, #sheet th {

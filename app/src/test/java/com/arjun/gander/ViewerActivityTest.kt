@@ -225,7 +225,9 @@ class ViewerActivityTest {
         val menu = word.get().findViewById<MaterialToolbar>(R.id.toolbar).menu
         assertThat(menu.findItem(R.id.action_night_mode).isVisible).isTrue()
         menu.performIdentifierAction(R.id.action_night_mode, 0)
-        assertThat(channels[0][0].outgoingMessages).containsExactly("i1")
+        // After the title bar's height, which the channel carries as it opens
+        val bar = PortCommand.barHeight(word.get().documentChrome!!.heightDp())
+        assertThat(channels[0][0].outgoingMessages).containsExactly(bar, "i1").inOrder()
     }
 
     /** A photo gets the tiling view, not a WebView. */

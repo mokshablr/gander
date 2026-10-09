@@ -28,13 +28,16 @@ class PortMessageTest {
         assertThat(PortCommand.goToPage(25)).isEqualTo("g25")
         assertThat(PortCommand.nightMode(true)).isEqualTo("i1")
         assertThat(PortCommand.nightMode(false)).isEqualTo("i0")
+        assertThat(PortCommand.barHeight("64")).isEqualTo("t64")
+        assertThat(PortCommand.barShown(true)).isEqualTo("b1")
+        assertThat(PortCommand.barShown(false)).isEqualTo("b0")
     }
 
     /**
      * Every verb is one character, and no two of them are the same character.
      * The page reads msg.charAt(0) and branches on it, so a duplicate would not
      * fail here or there: one of the two commands would simply do the other's
-     * job. Written as a set so that adding a seventh verb has to come past it.
+     * job. Written as a set so that a verb added later has to come past it.
      */
     @Test
     fun noTwoCommandsShareAVerb() {
@@ -45,9 +48,11 @@ class PortMessageTest {
             PortCommand.clear(),
             PortCommand.goToPage(1),
             PortCommand.nightMode(true),
+            PortCommand.barHeight("64"),
+            PortCommand.barShown(true),
         ).map { it.take(1) }
         assertThat(verbs).containsNoDuplicates()
-        assertThat(verbs).containsExactly("q", "n", "p", "c", "g", "i")
+        assertThat(verbs).containsExactly("q", "n", "p", "c", "g", "i", "t", "b")
     }
 
     /**

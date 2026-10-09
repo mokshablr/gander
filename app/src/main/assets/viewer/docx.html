@@ -41,7 +41,8 @@
     background: var(--vw-ground) !important;
     padding: 16px 8px !important;
     box-sizing: border-box;
-    min-height: var(--vw-fit, 100vh);
+    /* Less the room kept for the title bar above, as pdf.html does */
+    min-height: calc(var(--vw-fit, 100vh) - var(--vw-top, 0px));
     justify-content: center;
   }
   /*

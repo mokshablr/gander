@@ -51,6 +51,15 @@ html, body {
 }
 
 /*
+ * Room at the top of a document for the title bar floating over it, set by vwPlaceTop() in
+ * app.js and nought on a page given none. A page that centres a short document takes it off
+ * the height it centres in. scroll-padding brings a page or a search hit into view below the
+ * bar rather than under it.
+ */
+html { scroll-padding-top: var(--vw-top, 0px); }
+body { padding-top: var(--vw-top, 0px); }
+
+/*
  * Deliberately on body and not on html. The root element's background paints the
  * whole viewport, so while html carried this grey, any viewer that recoloured
  * only body left this showing below a document shorter than the screen. Set on
@@ -217,8 +226,9 @@ body {
   background-color: rgba(255, 145, 0, 0.62);
 }
 
-/* Print: no ground behind the paper, and no marks left by a search. */
+/* Print: no ground behind the paper, no room for a bar that is not there, and no marks left by a search. */
 @media print {
-  body { background: none; }
+  html { scroll-padding-top: 0; }
+  body { background: none; padding-top: 0; }
   ::highlight(vw-find), ::highlight(vw-find-active) { background-color: transparent; }
 }

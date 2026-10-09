@@ -39,6 +39,15 @@ internal object PortCommand {
      * because search is what it was opened for, not because that is all it says.
      */
     fun nightMode(on: Boolean) = if (on) "i1" else "i0"
+
+    /**
+     * How tall the title bar over a document is, in dp, which the page keeps clear at its
+     * top. See [DocumentChrome].
+     */
+    fun barHeight(dp: String) = "t$dp"
+
+    /** Whether the title bar over a document is on screen or has slid away. */
+    fun barShown(shown: Boolean) = if (shown) "b1" else "b0"
 }
 
 /** What pdf.html sends back, once it has been read and found sound. */

@@ -202,6 +202,7 @@ class Word97:
         self.ahead = bytearray()        # WordDocument bytes between the FIB and the text
         self.table = {1: EMPTY_STSH, 15: ONE_FONT}
         self.data = None
+        self.template = False           # fDot, which makes it a .dot
 
     def add(self, *runs, pap=b"", istd=0):
         """A paragraph of runs, each text or (text, character sprms), ending in its mark."""
@@ -256,6 +257,8 @@ class Word97:
             table += blob
 
         word[0:0x400] = fib(fc_text, fc_end, len(text), len(word), places)
+        if self.template:
+            word[0x0A] |= 0x01
         streams = {"WordDocument": bytes(word), "1Table": bytes(table)}
         if self.data is not None:
             streams["Data"] = self.data
@@ -323,6 +326,19 @@ def test_a_floating_picture_is_drawn_from_the_drawing(viewer, page, made):
         timeout=10000,
     )
     assert page.evaluate("() => document.querySelector('.vw-paper img').style.width") == "144pt"
+
+
+def test_a_template_opens_as_the_document_it_would_make(viewer, page, made):
+    """
+    A .dot is a .doc whose FIB sets fDot, the lowest of the flags beside the ones that
+    name the table stream and say there is a password. Only the password turns a file away.
+    """
+    doc = Word97()
+    doc.template = True
+    doc.add("Minutes of the meeting\r")
+    viewer("prose.html", made("minutes.dot", doc.build()))
+    wait_for_text(page, "Minutes of the meeting")
+    assert not page.query_selector(".vw-error")
 
 
 def test_a_long_document_is_read_in_time_that_grows_with_its_length(viewer, page, made):

@@ -2,6 +2,8 @@
 
 import base64
 
+import pytest
+
 from helpers import ROW_DRAWN, big_sheet, bring_row, wait_until_done
 
 
@@ -87,6 +89,39 @@ def test_a_template_opens_as_a_workbook_does(viewer, page, main_part):
     wait_until_done(page)
     assert "Surveying" in page.text_content("#sheet")
     assert len(page.query_selector_all("#tabs button")) == 3
+
+
+def test_a_macro_enabled_workbook_opens_as_a_workbook_does(viewer, page, main_part):
+    """budget.xlsx declared as an .xlsm, which carries no macros: no viewer here runs them."""
+    assert main_part("budget.xlsm") == ["application/vnd.ms-excel.sheet.macroEnabled.main+xml"]
+    viewer("xlsx.html", "budget.xlsm")
+    wait_for_sheet(page)
+    wait_until_done(page)
+    assert "Surveying" in page.text_content("#sheet")
+    assert len(page.query_selector_all("#tabs button")) == 3
+
+
+@pytest.mark.parametrize("name", ["budget.xls", "budget.xlsb", "budget.ods"])
+def test_a_workbook_in_another_format_opens_with_every_sheet(viewer, page, name):
+    """
+    The same three sheets in Excel 97-2003's format, Excel's binary format and
+    OpenDocument, each read by a different SheetJS parser. The last sheet's second line
+    needs UTF-16, which BIFF8 switches to for that string alone.
+    """
+    viewer("xlsx.html", name)
+    wait_for_sheet(page)
+    wait_until_done(page)
+    first = page.text_content("#sheet")
+    assert "Surveying" in first and "4200" in first
+    tabs = page.query_selector_all("#tabs button")
+    assert [t.text_content() for t in tabs] == ["Summary", "Detail", "Notes"]
+
+    tabs[2].click()
+    page.wait_for_function(
+        "() => document.querySelector('#sheet').textContent.indexOf('Third sheet marker') >= 0",
+        timeout=10000,
+    )
+    assert "Grüße aus Zürich, 東京" in page.text_content("#sheet")
 
 
 # ---------------------------------------------------------------------------

@@ -11,7 +11,7 @@ Output is byte-stable, so an unchanged fixture produces no diff. If a
 regeneration does change bytes, something in the generator or a library
 version changed and the diff is worth reading.
 
-Needs `reportlab python-docx openpyxl python-pptx pillow cryptography`.
+Needs `reportlab python-docx openpyxl python-pptx pillow pillow-heif cryptography`.
 
 ## Why they are committed rather than generated on demand
 
@@ -71,6 +71,8 @@ should stay obviously so.
 | `undrawn.pptx` | Issue #48. A Windows metafile, which LibreOffice draws and a browser does not, a PNG that draws, a PNG cut short after its header, and a doughnut chart, a type PPTXjs does not draw. Nothing throws; a box marks each but the PNG that draws. |
 | `report.docm`, `report.dotx` | Word's relatives: `report.docx` with its main part declared as a macro-enabled document's and as a template's, which is all that tells them apart. There are no macros in it. |
 | `budget.xltx` | `budget.xlsx` declared as an Excel template. |
+| `budget.xlsm` | `budget.xlsx` declared as a macro-enabled workbook, with no macros in it. |
+| `budget.xls`, `budget.xlsb`, `budget.ods` | `budget.xlsx`'s three sheets as Excel 97-2003, Excel's binary format and LibreOffice save them, each built by hand from its specification, since openpyxl writes none of them. The third sheet adds a line in German and Japanese, which BIFF8 stores in UTF-16 for that string alone. LibreOffice reads all three as SheetJS does. |
 | `deck.ppsx`, `deck.pptm`, `deck.potx` | `deck.pptx` declared as a slide show, a macro-enabled presentation and a template. |
 | `notes.md` | Markdown rendering and DOMPurify: contains a `<script>` and an `onerror` that must not survive. |
 | `plain.txt` | Text viewer, UTF-8. |
@@ -88,6 +90,7 @@ should stay obviously so.
 | `tiny.png` | A small image with no EXIF. |
 | `anim.gif`, `icon.svg` | The WebView image path, which is what GIF and SVG take. |
 | `tone.wav` | The audio screen. One second, quiet, so a device test that plays it is bearable. |
+| `photo.webp`, `photo.bmp`, `photo.heic` | One 160 by 96 photo in the formats the tiling view leaves to Android's own decoders, a size no other picture has so a device test can tell from the decoded size that this file was read. The WebP is lossy, as cameras and websites save one; the HEIC needs `pillow-heif`. |
 | `archive.zip` | Issue #30. The zip as people have it: a compressed PDF, a stored photo, a file whose sizes trail its data, a folder with no entry of its own, macOS's `__MACOSX` and a dotfile (both hidden), a zip stored inside and one compressed inside, a file under a password (ZipCrypto, password `gander`) and an LZMA one (listed, not opened), and a comment after the end record. |
 | `odd-names.zip` | Names that climb out (`../`), start at a root, use Windows' backslash, repeat, or carry a right-to-left override that would make `.apk` read as `.jpg`. |
 | `zip64.zip` | The same two files behind ZIP64 records, which every archive over 4 GB or 65,535 files has. |

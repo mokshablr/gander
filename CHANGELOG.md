@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- A slide's bullets show as the arrows, squares and ticks they are, where some were empty boxes
+  or the letter l. PowerPoint sets many bullets in fonts no phone has, such as Wingdings, so
+  Gander now draws each as the nearest character the phone has, PowerPoint's own arrow bullet
+  and the triangles of designs such as Circuit among them.
+
 ## 2.3 (2026-10-09)
 
 - A Word file shows its pages where Word ended them, rather than as one long page (thanks

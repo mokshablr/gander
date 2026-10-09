@@ -34,7 +34,7 @@ JSZip.prototype.load = function () {
   if (sized && sized !== presentation.asText()) zip.file("ppt/presentation.xml", sized);
   zip.file(/^ppt\/(slides|slideLayouts|slideMasters)\/[^/]+\.xml$/).forEach(function (part) {
     var xml = part.asText();
-    var drawable = breaksPptxjsKeeps(pathsPptxjsDraws(xml));
+    var drawable = bulletsAPhoneDraws(breaksPptxjsKeeps(pathsPptxjsDraws(xml)));
     if (drawable !== xml) zip.file(part.name, drawable);
   });
   var designs = {};
@@ -162,6 +162,40 @@ function breaksPptxjsKeeps(xml) {
     var breaks = childrenNamed(paragraphs[i], "br");
     if (breaks.length > 1 && childrenNamed(paragraphs[i], "r").length) {
       paragraphs[i].insertBefore(breaks[0].cloneNode(true), breaks[0]);
+      changed = true;
+    }
+  }
+  return changed ? new XMLSerializer().serializeToString(doc) : xml;
+}
+
+/*
+ * A bullet set in Wingdings, Symbol or their kin, which no phone has, drew as an empty box or
+ * as the letter it is stored as, such as an "l" for a round one: PPTXjs maps only a few, and
+ * looks for the font only in the paragraph, where a design's master usually sets it. Each is
+ * given the character it stands for, one a phone can draw (symbol-fonts.js), and loses the
+ * font, which would send PPTXjs to its own table again.
+ */
+var SYMBOL_BULLETS = /<a:buFont\b[^>]*\stypeface="(wingdings|webdings|symbol)\b|<a:buChar\b[^>]*\schar="(&#|[\uE000-\uF8FF])/i;
+
+function bulletsAPhoneDraws(xml) {
+  if (!SYMBOL_BULLETS.test(xml)) return xml;
+  var doc = new DOMParser().parseFromString(xml, "application/xml");
+  if (doc.getElementsByTagName("parsererror").length) return xml;
+  var changed = false;
+  var chars = doc.getElementsByTagNameNS(DRAWINGML, "buChar");
+  for (var i = 0; i < chars.length; i++) {
+    var font = childrenNamed(chars[i].parentNode, "buFont")[0];
+    var was = chars[i].getAttribute("char");
+    var now = vwSymbolBullet(font && font.getAttribute("typeface"), was);
+    if (now !== was) {
+      chars[i].setAttribute("char", now);
+      changed = true;
+    }
+  }
+  var fonts = [].slice.call(doc.getElementsByTagNameNS(DRAWINGML, "buFont"));
+  for (var j = 0; j < fonts.length; j++) {
+    if (vwIsSymbolFont(fonts[j].getAttribute("typeface"))) {
+      fonts[j].parentNode.removeChild(fonts[j]);
       changed = true;
     }
   }

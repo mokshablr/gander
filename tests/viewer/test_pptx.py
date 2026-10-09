@@ -330,16 +330,73 @@ def test_a_box_set_not_to_wrap_keeps_its_lines_whole(viewer, page):
 
 
 # ---------------------------------------------------------------------------
-# Symbol bullets: see dingbat.js in pptx.html
+# Symbol bullets: see bulletsAPhoneDraws in pptx.js, and symbol-fonts.js
 # ---------------------------------------------------------------------------
 
-def test_a_bullet_in_wingdings_2_or_3_is_drawn_as_its_unicode(viewer, page):
-    """PPTXjs maps them from a table Gander did not ship, and threw on the first (#48)."""
+def bullets(page, name):
+    """Each paragraph of the shape called [name], as its bullet and its text."""
+    return page.evaluate(
+        """(n) => [...document.querySelectorAll(`#result div.block[_name="${n}"] .slide-prgrph`)]
+             .map(p => { const b = p.firstElementChild.textContent; return [b, p.textContent.slice(b.length)]; })""",
+        name,
+    )
+
+
+def test_a_symbol_font_bullet_is_drawn_as_a_character_a_phone_has(viewer, page):
+    """
+    No phone has Wingdings, Symbol or their kin. PPTXjs drew the Circuit design's arrowhead
+    from Wingdings 3 (#48) and PowerPoint's own arrow as characters Android has no glyph for,
+    a bullet given in the private use area as an empty box, whatever its font, and a
+    Webdings one as the digit it is stored as.
+    """
     viewer("pptx.html", "symbol-bullets.pptx")
-    wait_for_deck(page, 1)
-    said = page.text_content('#result div[_name="Bullets"]')
-    assert "●" in said, said
-    assert "\U0001f782" in said, said
+    wait_for_deck(page, 2)
+    assert bullets(page, "Bullets") == [
+        ["●", "A circle from Wingdings 2"],
+        ["▶", "An arrowhead from Wingdings 3"],
+        ["➢", "The arrow PowerPoint offers"],
+        ["●", "A round bullet from Wingdings"],
+        ["•", "A bullet from Symbol"],
+        ["▶", "A triangle from Webdings"],
+        ["•", "A printer from Wingdings 2"],
+        ["•", "A private use bullet from StarSymbol"],
+    ]
+
+
+def test_a_bullet_the_design_sets_in_wingdings_is_not_drawn_as_a_letter(viewer, page):
+    """PPTXjs looked for a bullet's font only in the paragraph, so the master's round one came out an l."""
+    viewer("pptx.html", "symbol-bullets.pptx")
+    wait_for_deck(page, 2)
+    assert bullets(page, "Designed") == [["●", "A round bullet from the master"]]
+
+
+# What a bullet in Wingdings 2, Wingdings 3 or Webdings can become, every one found in a plain
+# font of both Android 9 and Android 16, from their font files on 9 Oct 2026. A character
+# joins this list only once a phone's fonts have it too.
+ANDROID_DRAWS = (
+    "&+•※‽⁂←↑→↓↔↕↖↗↘↙↨↯↰↱↲↳↵↶↹↺↻⇆⇇⇈⇉⇊"
+    "⇞⇟⇠⇡⇢⇣⇤⇥⇦⇧⇨⇪⇱⇲⇵⊖⊗⊘⊙⋅⌃⌤⌥⍽⎋⏐⏭⏮␣①②③"
+    "④⑤⑥⑦⑧⑨⑩Ⓟ⓪⓿■□▣▪▲△▴▵▶▷▸▹▼▽▾▿◀◁◂◃◆◇"
+    "◈◊○●◒◓◖◗◢◣◤◥★☉☑☒☜☞☟☽☾⛷✂✄✎✓✔✕✖✗✚✝"
+    "✦✯✱✳✶✷✹❖❧❶❷❸❹❺❻❼❽❾❿➡➤⤒⤓⤴⤵⤶⤷⦁⦸⦿⬅⬆"
+    "⬇⬈⬉⬊⬋⬎⬏⬐⬑⬟⬢⬣⬤⬥⬧⬩⬪⭘⸿"
+)
+
+
+def test_every_wingdings_2_3_and_webdings_bullet_is_one_android_draws(viewer, page):
+    viewer("pptx.html", "symbol-bullets.pptx")
+    wait_for_deck(page, 2)
+    drawn = page.evaluate(
+        """() => { const out = new Set();
+             for (const face of ["Wingdings 2", "Wingdings 3", "Webdings"])
+               for (let code = 0x21; code <= 0xFF; code++) {
+                 out.add(vwSymbolBullet(face, String.fromCharCode(code)));
+                 out.add(vwSymbolBullet(face, String.fromCharCode(0xF000 + code)));
+               }
+             return [...out].join(""); }"""
+    )
+    assert len(drawn) > 150, drawn
+    assert set(drawn) - set(ANDROID_DRAWS) == set()
 
 
 # ---------------------------------------------------------------------------

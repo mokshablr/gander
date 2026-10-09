@@ -1229,23 +1229,32 @@ def unwrapped() -> None:
 
 def symbol_bullets() -> None:
     """
-    Bullets in Wingdings 2 and Wingdings 3, as the Circuit design sets them (#48). PPTXjs
-    maps their characters to Unicode from a table in a file of its own, which Gander did not
-    ship, so the first such bullet stopped the deck.
+    Bullets in the symbol fonts no phone has, set as PowerPoint and its designs set them: by
+    the font's own code, or by that code in the private use area. The Circuit design's
+    Wingdings 3 arrowhead (#48), PowerPoint's own arrow, one each from Wingdings, Wingdings 2,
+    Symbol and Webdings, and LibreOffice's StarSymbol in the private use area, which it has no
+    glyph for either. A second slide's body text takes a round Wingdings bullet from the
+    master, as a design gives one.
     """
     from pptx import Presentation
     from pptx.oxml import parse_xml
-    from pptx.oxml.ns import nsdecls
+    from pptx.oxml.ns import nsdecls, qn
     from pptx.util import Inches, Pt
 
     prs = Presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
-    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(8), Inches(2))
+    box = slide.shapes.add_textbox(Inches(1), Inches(0.5), Inches(8), Inches(6))
     box.name = "Bullets"
     frame = box.text_frame
     for n, (font, char, text) in enumerate((
         ("Wingdings 2", chr(0xF098), "A circle from Wingdings 2"),
         ("Wingdings 3", chr(0xF07D), "An arrowhead from Wingdings 3"),
+        ("Wingdings", "\u00d8", "The arrow PowerPoint offers"),
+        ("Wingdings", chr(0xF06C), "A round bullet from Wingdings"),
+        ("Symbol", chr(0xF0B7), "A bullet from Symbol"),
+        ("Webdings", "4", "A triangle from Webdings"),
+        ("Wingdings 2", chr(0xF036), "A printer from Wingdings 2"),
+        ("StarSymbol", chr(0xF06C), "A private use bullet from StarSymbol"),
     )):
         paragraph = frame.paragraphs[0] if n == 0 else frame.add_paragraph()
         run = paragraph.add_run()
@@ -1256,6 +1265,15 @@ def symbol_bullets() -> None:
         props.set("indent", "-457200")
         props.append(parse_xml(f'<a:buFont {nsdecls("a")} typeface="{font}"/>'))
         props.append(parse_xml(f'<a:buChar {nsdecls("a")} char="{char}"/>'))
+
+    level = prs.slide_master.element.find(qn("p:txStyles")).find(qn("p:bodyStyle")).find(qn("a:lvl1pPr"))
+    level.find(qn("a:buFont")).set("typeface", "Wingdings")
+    level.find(qn("a:buChar")).set("char", "l")
+    designed = prs.slides.add_slide(prs.slide_layouts[1])
+    designed.shapes.title.text = "From the design"
+    body = designed.placeholders[1]
+    body.name = "Designed"
+    body.text = "A round bullet from the master"
     fix_core_properties(prs)
     prs.save(str(OUT / "symbol-bullets.pptx"))
     normalize_zip(OUT / "symbol-bullets.pptx")

@@ -37,6 +37,12 @@ JSZip.prototype.load = function () {
     var drawable = bulletsAPhoneDraws(breaksPptxjsKeeps(pathsPptxjsDraws(xml)));
     if (drawable !== xml) zip.file(part.name, drawable);
   });
+  // SmartArt is drawn from parts of its own, which carry bullets of their own
+  zip.file(/^ppt\/diagrams\/[^/]+\.xml$/).forEach(function (part) {
+    var xml = part.asText();
+    var drawable = bulletsAPhoneDraws(xml);
+    if (drawable !== xml) zip.file(part.name, drawable);
+  });
   var designs = {};
   zip.file(/^ppt\/slides\/[^/]+\.xml$/).forEach(function (part) {
     var xml = part.asText();
@@ -201,6 +207,19 @@ function bulletsAPhoneDraws(xml) {
   }
   return changed ? new XMLSerializer().serializeToString(doc) : xml;
 }
+
+/*
+ * PPTXjs looks a Wingdings 2 or 3 bullet up in a table of its own, upstream's dingbat.js, and
+ * throws without one. Only a part DOMParser cannot read still sends a bullet there, so the
+ * table is made from symbol-fonts.js, under the name and in the form PPTXjs reads, and such a
+ * bullet gets a character a phone has like any other.
+ */
+var dingbat_unicode = [];
+[["Wingdings 2", VW_WINGDINGS_2], ["Wingdings 3", VW_WINGDINGS_3]].forEach(function (font) {
+  for (var i = 0; i < font[1].length; i++) {
+    dingbat_unicode.push({ f: font[0], code: 0x20 + i, unicode: font[1].charCodeAt(i) });
+  }
+});
 
 /*
  * PPTXjs makes a run bold or italic only when the run itself says so (getFontBold,

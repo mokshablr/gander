@@ -65,10 +65,11 @@ var VW_SYMBOL = {
 };
 
 /*
- * One character for each code from 0x20, sixteen to a row. Each is PPTXjs's own
- * (lib/pptx/dingbat.js) where Android 9 and 16 both have it in a plain font, or else the
- * nearest shape or arrow they have, since they lack most of these fonts' newer Unicode. A
- * plain bullet stands where nothing comes close, which is most of Webdings' pictures.
+ * One character for each code from 0x20, sixteen to a row. Each is the one PPTXjs's own
+ * table gives (upstream's dingbat.js) where Android 9 and 16 both have it in a plain font, or
+ * else the nearest shape or arrow they have, since they lack most of these fonts' newer
+ * Unicode. A plain bullet stands where nothing comes close, which is most of Webdings'
+ * pictures. pptx.js hands PPTXjs the first two in place of its table.
  */
 var VW_WINGDINGS_2 =
   " ✎✎✎✎✄✂•••••••••" + // 0x20

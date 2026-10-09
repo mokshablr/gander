@@ -370,6 +370,43 @@ def test_a_bullet_the_design_sets_in_wingdings_is_not_drawn_as_a_letter(viewer, 
     assert bullets(page, "Designed") == [["●", "A round bullet from the master"]]
 
 
+def test_a_bullet_in_smartart_is_drawn_as_a_character_a_phone_has(viewer, page):
+    """SmartArt is drawn from a part of its own, where bullets were not put right, so its round one came out an l."""
+    viewer("pptx.html", "symbol-bullets.pptx")
+    wait_for_deck(page, 3)
+    assert bullets(page, "Round in SmartArt") == [["●", "A round bullet in SmartArt"]]
+    assert bullets(page, "Arrowhead in SmartArt") == [["▶", "An arrowhead in SmartArt"]]
+
+
+def test_a_bullet_in_a_part_domparser_cannot_read_is_still_one_a_phone_draws(viewer, page, made, fixture_path):
+    """
+    pptx.js puts bullets right only in a part DOMParser can read, and PPTXjs reads more than
+    that, such as an attribute whose prefix nothing declares. There PPTXjs looks a Wingdings 2
+    or 3 bullet up in a table of its own, and without one it threw and the shape was left out.
+    pptx.js gives it that table, made of characters a phone has.
+    """
+    with zipfile.ZipFile(fixture_path("symbol-bullets.pptx")) as z:
+        parts = {name: z.read(name) for name in z.namelist()}
+    slide = parts["ppt/slides/slide1.xml"].decode()
+    unread = slide.replace("<p:sld ", '<p:sld vw:unread="1" ', 1)
+    assert unread != slide
+    assert page.evaluate(
+        "x => new DOMParser().parseFromString(x, 'application/xml').getElementsByTagName('parsererror').length",
+        unread,
+    )
+    parts["ppt/slides/slide1.xml"] = unread.encode()
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, data in parts.items():
+            z.writestr(name, data)
+    viewer("pptx.html", made("unread.pptx", out.getvalue()))
+    wait_for_deck(page, 3)
+    assert bullets(page, "Bullets")[:2] == [
+        ["●", "A circle from Wingdings 2"],
+        ["▶", "An arrowhead from Wingdings 3"],
+    ]
+
+
 # What a bullet in Wingdings 2, Wingdings 3 or Webdings can become, every one found in a plain
 # font of both Android 9 and Android 16, from their font files on 9 Oct 2026. A character
 # joins this list only once a phone's fonts have it too.

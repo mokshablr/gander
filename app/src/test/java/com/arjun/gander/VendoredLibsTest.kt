@@ -82,7 +82,7 @@ class VendoredLibsTest {
             "pdf.min.mjs", "pdf.worker.min.mjs", "jszip3.min.js",
             "docx-preview.min.js", "xlsx.full.min.js", "marked.min.js",
             "purify.min.js",
-            "pptx/pptxjs.js", "pptx/dingbat.js", "pptx/divs2slides.js", "pptx/filereader.js",
+            "pptx/pptxjs.js", "pptx/divs2slides.js", "pptx/filereader.js",
             "pptx/jquery.min.js", "pptx/jszip2.min.js", "pptx/d3.min.js",
             "pptx/nv.d3.min.js", "pptx/pptxjs.css", "pptx/nv.d3.min.css",
         )

@@ -27,7 +27,6 @@ commit.
 | `marked.min.js` | marked | 15.0.12 | MIT | https://github.com/markedjs/marked |
 | `purify.min.js` | DOMPurify | 3.4.12 | Apache-2.0 or MPL-2.0 dual | https://github.com/cure53/DOMPurify |
 | `pptx/pptxjs.js` | PPTXjs | 1.21.1, with one change (below) | MIT | https://github.com/meshesha/PPTXjs |
-| `pptx/dingbat.js` | PPTXjs (its table of symbol-font characters) | 1.21.1 | MIT | https://github.com/meshesha/PPTXjs |
 | `pptx/divs2slides.js` | divs2slides (PPTXjs) | 1.3.2 | MIT | https://github.com/meshesha/PPTXjs |
 | `pptx/filereader.js` | FileReader.js (PPTXjs bundle) | 0.99 | MIT | https://github.com/meshesha/PPTXjs |
 | `pptx/jquery.min.js` | jQuery | 1.11.3 | MIT | https://github.com/jquery/jquery |
@@ -152,6 +151,12 @@ box, so that `pptx.js` can put a box there saying what is missing. The change is
 `scripts/pptxjs.patch`, which `fetch-viewer-libs.sh` applies after each fetch, stopping if
 upstream's file has moved under it. Everything else is still put right from outside, in
 `pptx.js`, as the package opens. `test_pptx.py` fails if either catch goes, or either mark.
+
+Upstream's `js/dingbat.js` is not shipped. PPTXjs looks a Wingdings 2 or 3 bullet up in its
+global `dingbat_unicode` and throws when there is none, and many of the characters upstream's
+table gives are ones a phone has no glyph for. `pptx.js` makes that table from
+`symbol-fonts.js` instead, and since it rewrites such bullets as the package opens, only a
+part DOMParser cannot read still reaches it.
 
 The file keeps upstream's Windows line endings, and so does the patch. A script that writes
 it back with Unix ones, as Python's text mode does, leaves git showing every line changed.

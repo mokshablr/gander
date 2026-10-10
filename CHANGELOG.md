@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- An animated WebP or PNG plays, as a GIF does (#49, reported in a Play review). Gander showed
+  only its first frame.
+
 ## 2.3 (2026-10-09)
 
 - A Word file shows its pages where Word ended them, rather than as one long page (thanks

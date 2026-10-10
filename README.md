@@ -73,7 +73,7 @@ It cannot phone home because it does not even hold the INTERNET permission.
 | Spreadsheets | `.xlsx` `.xls` `.xlsm` `.xlsb` `.xltx` `.csv` `.ods` | SheetJS, offline |
 | Slides | PowerPoint `.pptx` `.ppsx` `.pptm` `.potx` | PPTXjs, offline |
 | Photos | JPG, PNG, WebP, HEIC/HEIF | Tiled deep-zoom image view, EXIF aware |
-| | GIF (animated), SVG, AVIF, ICO, BMP | WebView |
+| | GIF (animated), animated WebP and PNG, SVG, AVIF, ICO, BMP | WebView |
 | Video | MP4, M4V, MOV, MKV, WebM, 3GP, AVI, FLV, MPEG-TS | Media3 ExoPlayer |
 | Audio | MP3, M4A, AAC, FLAC, WAV, OGG, Opus, AMR | Media3 ExoPlayer |
 | Markdown | `.md` rendered as formatted HTML | marked + DOMPurify, offline |

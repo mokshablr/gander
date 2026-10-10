@@ -131,7 +131,8 @@ ODT_NS = (
 )
 
 
-def odt(body, automatic="", styles="", layouts="", masters='<style:master-page style:name="Standard"/>'):
+def odt(body, automatic="", styles="", layouts="", masters='<style:master-page style:name="Standard"/>',
+        mimetype="application/vnd.oasis.opendocument.text"):
     """
     An .odt whose text is body. automatic is content.xml's automatic styles; styles,
     layouts and masters are styles.xml's named styles, page layouts and master pages.
@@ -154,7 +155,7 @@ def odt(body, automatic="", styles="", layouts="", masters='<style:master-page s
     )
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w") as z:
-        z.writestr(zipfile.ZipInfo("mimetype"), "application/vnd.oasis.opendocument.text")
+        z.writestr(zipfile.ZipInfo("mimetype"), mimetype)
         z.writestr("content.xml", content, zipfile.ZIP_DEFLATED)
         z.writestr("styles.xml", named, zipfile.ZIP_DEFLATED)
     return out.getvalue()
@@ -211,6 +212,67 @@ def test_an_opendocument_superscript_with_a_size_of_its_own_is_drawn_at_its_shar
                        ' style:text-position="super 58%" fo:font-size="12pt"/></style:style>')
     share = font_size(page, "2") / font_size(page, "Area in m2")
     assert abs(share - 0.58) < 0.01
+
+
+# ------------------------------------------------------------------------------------
+# The rest of the family: a template, and a whole document in one XML file
+# ------------------------------------------------------------------------------------
+
+def test_a_template_opens_as_the_document_it_would_make(viewer, page, made):
+    """
+    An .ott is an .odt whose mimetype entry says template. The reader goes by what is in
+    the zip, so a check of that entry, to turn away a spreadsheet sent as an .odt, must
+    leave a template through.
+    """
+    viewer("prose.html", made("t.ott", odt(
+        "<text:p>Minutes of the meeting</text:p>",
+        mimetype="application/vnd.oasis.opendocument.text-template",
+    )))
+    drawn(page)
+    assert not page.query_selector(".vw-error"), status_text(page)
+    assert paper_text(page).strip() == "Minutes of the meeting"
+
+
+FLAT_ODT = (
+    '<?xml version="1.0" encoding="UTF-8"?>'
+    f'<office:document {ODT_NS} office:mimetype="application/vnd.oasis.opendocument.text">'
+    '<office:styles>'
+    '<style:default-style style:family="paragraph"><style:text-properties fo:font-size="12pt"/>'
+    '</style:default-style>'
+    '<style:style style:name="Standard" style:family="paragraph"/>'
+    '<style:style style:name="Loud" style:family="paragraph" style:parent-style-name="Standard">'
+    '<style:text-properties fo:font-size="18pt" fo:font-weight="bold"/></style:style>'
+    '</office:styles>'
+    '<office:automatic-styles>'
+    '<style:style style:name="P1" style:family="paragraph" style:parent-style-name="Standard">'
+    '<style:text-properties fo:font-style="italic"/></style:style>'
+    '</office:automatic-styles>'
+    '<office:master-styles><style:master-page style:name="Standard"/></office:master-styles>'
+    '<office:body><office:text>'
+    '<text:p text:style-name="Loud">Flat heading</text:p>'
+    '<text:p text:style-name="P1">Flat aside</text:p>'
+    '<text:p text:style-name="Standard">Flat body</text:p>'
+    '</office:text></office:body></office:document>'
+)
+
+
+def test_a_flat_document_takes_its_styles_from_the_one_file(viewer, page, made):
+    """
+    A .fodt is an .odt's parts in a single XML file, office:document, rather than a zip:
+    the named styles, the automatic ones and the text side by side.
+    """
+    viewer("prose.html", made("t.fodt", FLAT_ODT.encode()))
+    drawn(page)
+    assert not page.query_selector(".vw-error"), status_text(page)
+    lines = [line for line in paper_text(page).split("\n") if line.strip()]
+    assert lines == ["Flat heading", "Flat aside", "Flat body"]
+    assert abs(font_size(page, "Flat heading") / font_size(page, "Flat body") - 1.5) < 0.01
+    looks = page.evaluate(
+        "() => [...document.querySelectorAll('.vw-paper p')].map(p => {"
+        "const s = getComputedStyle(p); return [p.textContent, s.fontWeight, s.fontStyle]; })"
+    )
+    assert ["Flat heading", "700", "normal"] in looks
+    assert ["Flat aside", "400", "italic"] in looks
 
 
 def test_a_rich_text_superscript_is_smaller_whatever_size_its_text_is(viewer, page, made):

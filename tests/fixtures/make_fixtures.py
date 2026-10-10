@@ -16,7 +16,7 @@ PDFs get ReportLab's invariant flag; the OOXML formats are zips, so their
 entry timestamps and core properties are normalised by hand afterwards.
 
 Usage:  python3 tests/fixtures/make_fixtures.py
-Needs:  reportlab python-docx openpyxl python-pptx pillow cryptography
+Needs:  reportlab python-docx openpyxl python-pptx pillow pillow-heif cryptography
 """
 
 import hashlib
@@ -1488,6 +1488,7 @@ MAIN_PARTS = {
     "dotx": "application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml",
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
     "xltx": "application/vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml",
+    "xlsm": "application/vnd.ms-excel.sheet.macroEnabled.main+xml",
     "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml",
     "ppsx": "application/vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml",
     "pptm": "application/vnd.ms-powerpoint.presentation.macroEnabled.main+xml",
@@ -1520,7 +1521,8 @@ def relatives() -> None:
     """One of each Office format's relatives, made from the fixtures above."""
     for ext in ("docm", "dotx"):
         retyped("report.docx", ext)
-    retyped("budget.xlsx", "xltx")
+    for ext in ("xltx", "xlsm"):
+        retyped("budget.xlsx", ext)
     for ext in ("ppsx", "pptm", "potx"):
         retyped("deck.pptx", ext)
 
@@ -1847,6 +1849,28 @@ def audio() -> None:
         w.setframerate(rate)
         w.writeframes(bytes(frames))
     written(OUT / "tone.wav")
+
+
+def photo_formats() -> None:
+    """One photo as WebP, BMP and HEIC, the photo formats the tiling view leaves to Android.
+
+    160 by 96, a size no other picture here has, so a device test that reads the decoded
+    size back knows this file was read. The WebP is lossy, as a camera or a website saves
+    one. HEIC needs pillow-heif, since Pillow writes no HEVC.
+    """
+    from PIL import Image, ImageDraw
+    from pillow_heif import from_pillow
+
+    img = Image.new("RGB", (160, 96), (245, 245, 245))
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 0, 159, 95], outline=(30, 30, 30), width=2)
+    d.rectangle([6, 6, 54, 36], fill=(178, 45, 24))
+    img.save(OUT / "photo.webp", "WEBP", quality=80, method=6)
+    written(OUT / "photo.webp")
+    img.save(OUT / "photo.bmp", "BMP")
+    written(OUT / "photo.bmp")
+    from_pillow(img).save(OUT / "photo.heic", quality=80)
+    written(OUT / "photo.heic")
 
 
 # ---------------------------------------------------------------------------
@@ -2658,6 +2682,317 @@ def prose() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Workbooks: budget.xlsx's three sheets in the other formats SheetJS reads
+# ---------------------------------------------------------------------------
+
+# openpyxl writes none of these, so each is built by hand from its specification, as
+# legacy.doc is: the .xls from MS-XLS and MS-CFB, the .xlsb from MS-XLSB, the .ods from
+# OpenDocument. The third sheet gains a line outside Latin-1, which each stores its own
+# way: BIFF8 in UTF-16 only for a string that needs it, XLSB always, OpenDocument as XML.
+WORKBOOK = [
+    ("Summary", SHEET_ROWS),
+    ("Detail", [("Note", "Value"), ("Second sheet marker", "detail-sheet")]),
+    ("Notes", [("Third sheet marker",), ("Grüße aus Zürich, 東京",)]),
+]
+
+
+def shared_strings():
+    """Every string in WORKBOOK once, in the order first met, and how many cells hold one."""
+    strings, total = [], 0
+    for _, rows in WORKBOOK:
+        for value in (v for row in rows for v in row if isinstance(v, str)):
+            total += 1
+            if value not in strings:
+                strings.append(value)
+    return strings, total
+
+
+def biff(kind: int, body: bytes = b"") -> bytes:
+    return struct.pack("<HH", kind, len(body)) + body
+
+
+def biff_text(text: str, count_size: int) -> bytes:
+    """A BIFF8 string, its length in one byte or two: Latin-1 if every character fits."""
+    wide = any(ord(c) > 0xFF for c in text)
+    return (struct.pack("<B" if count_size == 1 else "<H", len(text)) + bytes([wide])
+            + text.encode("utf-16-le" if wide else "latin-1"))
+
+
+def one_stream_compound_file(name: str, data: bytes) -> bytes:
+    """A compound file holding one stream, padded to 4,096 bytes as legacy.doc's streams are."""
+    def u16(v): return struct.pack("<H", v)
+    def u32(v): return struct.pack("<I", v)
+
+    data += bytes(max(0, 4096 - len(data)))
+    size = len(data)
+    data += bytes(-len(data) % 512)
+    sectors = len(data) // 512
+    assert sectors <= 126, "one FAT sector maps 128 sectors"
+
+    END, FREE, FATSECT, NOSTREAM = 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFD, 0xFFFFFFFF
+    header = bytearray(512)
+    header[0:8] = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+    header[0x18:0x1A] = u16(0x3E)
+    header[0x1A:0x1C] = u16(3)
+    header[0x1C:0x1E] = u16(0xFFFE)
+    header[0x1E:0x20] = u16(9)
+    header[0x20:0x22] = u16(6)
+    header[0x2C:0x30] = u32(1)
+    header[0x30:0x34] = u32(1)
+    header[0x38:0x3C] = u32(4096)
+    header[0x3C:0x40] = u32(END)
+    header[0x44:0x48] = u32(END)
+    header[0x4C:0x50] = u32(0)
+    for i in range(1, 109):
+        header[0x4C + i * 4:0x50 + i * 4] = u32(FREE)
+
+    # Sector 0 is the FAT, 1 the directory, and the stream runs on from 2
+    fat = [FATSECT, END] + [s + 1 for s in range(2, 1 + sectors)] + [END]
+    fat += [FREE] * (128 - len(fat))
+
+    def entry(entry_name: str, kind: int, child, start, length):
+        e = bytearray(128)
+        raw = entry_name.encode("utf-16-le") + b"\0\0"
+        e[0:len(raw)] = raw
+        e[64:66] = u16(len(raw))
+        e[66] = kind
+        e[67] = 1
+        e[68:80] = u32(NOSTREAM) + u32(NOSTREAM) + u32(child)
+        e[116:124] = u32(start) + u32(length)
+        return bytes(e)
+
+    directory = (entry("Root Entry", 5, 1, END, 0) + entry(name, 2, NOSTREAM, 2, size)
+                 + bytes(256))
+    return bytes(header) + b"".join(u32(v) for v in fat) + directory + data
+
+
+def xls() -> None:
+    """budget.xls: a BIFF8 workbook, as Excel 97 to 2003 saves one."""
+    strings, total = shared_strings()
+
+    def bof(kind: int) -> bytes:
+        return biff(0x0809, struct.pack("<HHHHII", 0x0600, kind, 0x0DBB, 0x07CC, 0, 6))
+
+    font = biff(0x0031, struct.pack("<HHHHHBBBB", 200, 0, 0x7FFF, 400, 0, 0, 0, 0, 0)
+                + biff_text("Arial", 1))
+    # Fifteen style XFs, then the cell XF, number fifteen, that every cell here names
+    style_xf = biff(0x00E0, struct.pack("<HHHBBBBIIH", 0, 0, 0xFFF5, 0x20, 0, 0, 0, 0, 0, 0x20C0))
+    cell_xf = biff(0x00E0, struct.pack("<HHHBBBBIIH", 0, 0, 0x0001, 0x20, 0, 0, 0, 0, 0, 0x20C0))
+    head = (bof(0x0005)
+            + biff(0x0042, struct.pack("<H", 1200))                        # CODEPAGE: UTF-16
+            + biff(0x003D, struct.pack("<HHHHHHHHH", 0, 0, 0x3000, 0x2000, 0x38, 0, 0, 1, 0x258))
+            + font * 4 + style_xf * 15 + cell_xf
+            + biff(0x0293, struct.pack("<HBB", 0x8000, 0, 0xFF)))          # STYLE: Normal
+
+    def sheet(rows, active: bool) -> bytes:
+        cells = b""
+        for r, row in enumerate(rows):
+            for c, value in enumerate(row):
+                if isinstance(value, str):
+                    cells += biff(0x00FD, struct.pack("<HHHI", r, c, 15, strings.index(value)))
+                else:
+                    # An RK, which is how Excel stores a whole number that small
+                    cells += biff(0x027E, struct.pack("<HHHI", r, c, 15, (value << 2) | 2))
+        width = max(len(row) for row in rows)
+        window = 0x06B6 if active else 0x00B6
+        return (bof(0x0010)
+                + biff(0x0200, struct.pack("<IIHHH", 0, len(rows), 0, width, 0))
+                + cells
+                + biff(0x023E, struct.pack("<HHHHHHHI", window, 0, 0, 64, 0, 0, 0, 0))
+                + biff(0x000A))
+
+    sheets = [sheet(rows, n == 0) for n, (_, rows) in enumerate(WORKBOOK)]
+    sst = biff(0x00FC, struct.pack("<II", total, len(strings))
+               + b"".join(biff_text(s, 2) for s in strings))
+
+    def bound(offsets) -> bytes:
+        return b"".join(biff(0x0085, struct.pack("<IBB", at, 0, 0) + biff_text(name, 1))
+                        for at, (name, _) in zip(offsets, WORKBOOK))
+
+    # Each BOUNDSHEET says where its sheet's BOF is, so the globals are measured first
+    at = len(head) + len(bound([0] * len(sheets))) + len(sst) + len(biff(0x000A))
+    offsets = []
+    for body in sheets:
+        offsets.append(at)
+        at += len(body)
+    stream = head + bound(offsets) + sst + biff(0x000A) + b"".join(sheets)
+    (OUT / "budget.xls").write_bytes(one_stream_compound_file("Workbook", stream))
+    written(OUT / "budget.xls")
+
+
+def brt(kind: int, body: bytes = b"") -> bytes:
+    """A BIFF12 record. Its type and size are each written seven bits a byte, low first."""
+    def varint(v: int) -> bytes:
+        out = bytearray()
+        while True:
+            out.append((v & 0x7F) | (0x80 if v > 0x7F else 0))
+            v >>= 7
+            if not v:
+                return bytes(out)
+    return varint(kind) + varint(len(body)) + body
+
+
+def wide_text(text: str) -> bytes:
+    """An XLWideString: a count of UTF-16 units, then the units."""
+    raw = text.encode("utf-16-le")
+    return struct.pack("<I", len(raw) // 2) + raw
+
+
+OOXML_RELS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+
+
+def xlsb() -> None:
+    """budget.xlsb: Excel's binary workbook, the same parts as an .xlsx with records for XML."""
+    strings, total = shared_strings()
+
+    def sheet(rows) -> bytes:
+        width = max(len(row) for row in rows)
+        out = brt(0x81) + brt(0x94, struct.pack("<IIII", 0, len(rows) - 1, 0, width - 1))
+        out += brt(0x91)
+        for r, row in enumerate(rows):
+            # BrtRowHdr: the row, its style, a height of 15pt, no flags, and one span of cells
+            out += brt(0x00, struct.pack("<IIHBBBI", r, 0, 300, 0, 0, 0, 1)
+                       + struct.pack("<II", 0, len(row) - 1))
+            for c, value in enumerate(row):
+                cell = struct.pack("<II", c, 0)
+                if isinstance(value, str):
+                    out += brt(0x07, cell + struct.pack("<I", strings.index(value)))   # BrtCellIsst
+                else:
+                    out += brt(0x02, cell + struct.pack("<I", (value << 2) | 2))       # BrtCellRk
+        return out + brt(0x92) + brt(0x82)
+
+    book = brt(0x83) + brt(0x8F)
+    for n, (name, _) in enumerate(WORKBOOK, start=1):
+        book += brt(0x9C, struct.pack("<II", 0, n) + wide_text(f"rId{n}") + wide_text(name))
+    book += brt(0x90) + brt(0x84)
+
+    sst = brt(0x9F, struct.pack("<II", total, len(strings)))
+    sst += b"".join(brt(0x13, b"\x00" + wide_text(s)) for s in strings)
+    sst += brt(0xA0)
+
+    # The least of a style sheet: one font, one cell style and one cell format, which every
+    # cell names. Excel always writes one, and SheetJS looks each cell's format up in it.
+    def xf(parent: int) -> bytes:
+        """A BrtXF: its parent, then font, fill and border 0, and locked, as cells are."""
+        return brt(0x2F, struct.pack("<HHHHHBBBBH", parent, 0, 0, 0, 0, 0, 0, 0, 0x10, 0))
+
+    styles = (
+        brt(0x116)
+        + brt(0x263, struct.pack("<I", 1))
+        + brt(0x2B, struct.pack("<HHHHBBBB", 220, 0, 400, 0, 0, 2, 0, 0) + bytes(8)
+              + bytes([2]) + wide_text("Calibri"))
+        + brt(0x264)
+        + brt(0x272, struct.pack("<I", 1)) + xf(0xFFFF) + brt(0x273)
+        + brt(0x269, struct.pack("<I", 1)) + xf(0) + brt(0x26A)
+        + brt(0x26B, struct.pack("<I", 1))
+        + brt(0x30, struct.pack("<IHBB", 0, 1, 0, 0xFF) + wide_text("Normal"))
+        + brt(0x26C)
+        + brt(0x117)
+    )
+
+    main = "application/vnd.ms-excel.sheet.binary.macroEnabled.main"
+    types = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        f'<Default Extension="bin" ContentType="{main}"/>'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        f'<Override PartName="/xl/workbook.bin" ContentType="{main}"/>'
+        + "".join(f'<Override PartName="/xl/worksheets/sheet{n}.bin" '
+                  'ContentType="application/vnd.ms-excel.worksheet"/>'
+                  for n in range(1, len(WORKBOOK) + 1))
+        + '<Override PartName="/xl/sharedStrings.bin" ContentType="application/vnd.ms-excel.sharedStrings"/>'
+        '<Override PartName="/xl/styles.bin" ContentType="application/vnd.ms-excel.styles"/>'
+        '</Types>'
+    )
+    package_rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        f'<Relationship Id="rId1" Type="{OOXML_RELS}/officeDocument" Target="xl/workbook.bin"/>'
+        '</Relationships>'
+    )
+    book_rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        + "".join(f'<Relationship Id="rId{n}" Type="{OOXML_RELS}/worksheet" '
+                  f'Target="worksheets/sheet{n}.bin"/>' for n in range(1, len(WORKBOOK) + 1))
+        + f'<Relationship Id="rId{len(WORKBOOK) + 1}" Type="{OOXML_RELS}/sharedStrings" '
+        'Target="sharedStrings.bin"/>'
+        f'<Relationship Id="rId{len(WORKBOOK) + 2}" Type="{OOXML_RELS}/styles" Target="styles.bin"/>'
+        '</Relationships>'
+    )
+    members = [
+        Member(b"[Content_Types].xml", types.encode()),
+        Member(b"_rels/.rels", package_rels.encode()),
+        Member(b"xl/workbook.bin", book),
+        Member(b"xl/_rels/workbook.bin.rels", book_rels.encode()),
+        *(Member(f"xl/worksheets/sheet{n}.bin".encode(), sheet(rows))
+          for n, (_, rows) in enumerate(WORKBOOK, start=1)),
+        Member(b"xl/sharedStrings.bin", sst),
+        Member(b"xl/styles.bin", styles),
+    ]
+    (OUT / "budget.xlsb").write_bytes(zip_bytes(members))
+    written(OUT / "budget.xlsb")
+
+
+def ods() -> None:
+    """budget.ods: an OpenDocument spreadsheet, a zip of XML as LibreOffice Calc saves one."""
+    ns = (
+        'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
+        'xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" '
+        'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" '
+        'office:version="1.3"'
+    )
+
+    def cell(value) -> str:
+        if isinstance(value, str):
+            return f'<table:table-cell office:value-type="string"><text:p>{value}</text:p></table:table-cell>'
+        return (f'<table:table-cell office:value-type="float" office:value="{value}">'
+                f'<text:p>{value}</text:p></table:table-cell>')
+
+    tables = "".join(
+        f'<table:table table:name="{name}">'
+        f'<table:table-column table:number-columns-repeated="{max(len(row) for row in rows)}"/>'
+        + "".join("<table:table-row>" + "".join(cell(v) for v in row) + "</table:table-row>"
+                  for row in rows)
+        + "</table:table>"
+        for name, rows in WORKBOOK
+    )
+    content = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<office:document-content {ns}><office:body><office:spreadsheet>{tables}'
+        '</office:spreadsheet></office:body></office:document-content>\n'
+    )
+    # LibreOffice always writes a styles.xml, and SheetJS will not open a spreadsheet without one
+    styles = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<office:document-styles {ns}><office:styles/></office:document-styles>\n'
+    )
+    manifest = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3">\n'
+        ' <manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.spreadsheet"/>\n'
+        ' <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>\n'
+        ' <manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>\n'
+        '</manifest:manifest>\n'
+    )
+    members = [
+        Member(b"mimetype", b"application/vnd.oasis.opendocument.spreadsheet", method=STORED),
+        Member(b"META-INF/manifest.xml", manifest.encode()),
+        Member(b"styles.xml", styles.encode()),
+        Member(b"content.xml", content.encode()),
+    ]
+    (OUT / "budget.ods").write_bytes(zip_bytes(members))
+    written(OUT / "budget.ods")
+
+
+def workbooks() -> None:
+    xls()
+    xlsb()
+    ods()
+
+
+# ---------------------------------------------------------------------------
 # 3D models: one bracket, as the two kinds of STL
 # ---------------------------------------------------------------------------
 
@@ -2735,7 +3070,7 @@ def main() -> int:
     for step in (pdfs, wasm_decoded_images, docx, raised_runs, word_pages, word_columns, word_unrecorded, word_colours, word_lines, xlsx, pptx,
                  without_app_properties, freeforms, straight_lines, wrapping, weights, inherited_bold, line_breaks, unwrapped,
                  symbol_bullets, placed_by_design, unsized, unreadable, charted, undrawn, relatives, texts, images, audio,
-                 zips, prose, models):
+                 photo_formats, zips, prose, workbooks, models):
         step()
     total = sum(p.stat().st_size for p in OUT.iterdir() if p.is_file())
     count = sum(1 for p in OUT.iterdir() if p.is_file())

@@ -40,6 +40,12 @@ object DeviceFixtures {
     }
 
     /**
+     * Where a file made on the device for one test goes, so [uriFor] and [viewIntent] serve
+     * it as they serve the APK's own, which they never copy over a file already there.
+     */
+    fun made(name: String): File = File(dir(), name)
+
+    /**
      * The intent the home screen sends when the reader taps a document. By the viewer's
      * internal name, because these URIs are on Gander's own FileProvider, which the exported
      * name refuses: see ViewerActivity.INTERNAL_VIEWER.

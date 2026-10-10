@@ -1,7 +1,13 @@
 package com.arjun.gander
 
+import android.media.MediaFormat
+import android.media.MediaMuxer
+import android.os.SystemClock
 import android.view.View
+import android.webkit.WebView
 import android.widget.FrameLayout
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
@@ -93,4 +99,98 @@ class ViewerNativeTest {
         }
     }
 
+    /**
+     * What drew [fixture], once something had, within ten seconds: "tiling" and the size the
+     * tiling view decoded, or "web" and the size the page decoded its picture at, when
+     * Android's region decoder gave up and the viewer fell back to the page GIFs get.
+     */
+    private fun drawnBy(fixture: String): String = open(fixture).use { scenario ->
+        val deadline = SystemClock.uptimeMillis() + 10_000
+        var drawn = ""
+        while (drawn.isEmpty() && SystemClock.uptimeMillis() < deadline) {
+            val views = children(scenario)
+            val tiles = views.filterIsInstance<SubsamplingScaleImageView>().firstOrNull()
+            if (tiles != null) {
+                scenario.onActivity {
+                    if (tiles.isReady) drawn = "tiling ${tiles.sWidth}x${tiles.sHeight}"
+                }
+            } else if (views.any { it is WebView }) {
+                drawn = WebViewProbe.text(scenario, PICTURE_SIZE)
+            }
+            if (drawn.isEmpty()) Thread.sleep(100)
+        }
+        drawn
+    }
+
+    /** A lossy WebP, as websites serve photos. */
+    @Test
+    fun aWebpPhotoIsDecodedByTheTilingView() {
+        assertThat(drawnBy("photo.webp")).isEqualTo("tiling 160x96")
+    }
+
+    /** What an iPhone takes photos in unless told otherwise. */
+    @Test
+    fun aHeicPhotoIsDecodedByTheTilingView() {
+        assertThat(drawnBy("photo.heic")).isEqualTo("tiling 160x96")
+    }
+
+    /**
+     * Android's region decoder, which the tiling view needs, takes JPEG, PNG, WebP and HEIF
+     * but not BMP, so a BMP falls back to the page and is shown whole, without deep zoom.
+     */
+    @Test
+    fun aBmpPhotoIsShownByThePageInstead() {
+        assertThat(drawnBy("photo.bmp")).isEqualTo("web 160x96")
+    }
+
+    /**
+     * A video plays: the player knows the picture's size and has rendered frames of it to
+     * the screen, which no test off the device can show, since only a device has decoders.
+     * Each file is made by the device's own encoder: H.264 in an MP4, as a phone records,
+     * and VP8 in WebM, as the web serves.
+     */
+    @Test
+    fun anMp4VideoPlaysItsPictures() =
+        assertPlays("clip.mp4", MediaFormat.MIMETYPE_VIDEO_AVC, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+
+    @Test
+    fun aWebmVideoPlaysItsPictures() =
+        assertPlays("clip.webm", MediaFormat.MIMETYPE_VIDEO_VP8, MediaMuxer.OutputFormat.MUXER_OUTPUT_WEBM)
+
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun assertPlays(name: String, mime: String, container: Int) {
+        MadeVideo.write(DeviceFixtures.made(name), mime, container)
+        open(name).use { scenario ->
+            val deadline = SystemClock.uptimeMillis() + 15_000
+            var size = ""
+            var rendered = 0
+            var audioScreen = false
+            while (rendered < 5 && SystemClock.uptimeMillis() < deadline) {
+                val view = children(scenario).filterIsInstance<PlayerView>().firstOrNull()
+                scenario.onActivity { activity ->
+                    audioScreen = activity.findViewById<View?>(R.id.audioCover) != null
+                    val player = view?.player as? ExoPlayer
+                    size = when {
+                        player == null -> "no player"
+                        player.playerError != null -> "failed: ${player.playerError!!.errorCodeName}"
+                        else -> "${player.videoSize.width}x${player.videoSize.height}"
+                    }
+                    // The most seen, since a renderer's counts go when it is disabled
+                    rendered = maxOf(rendered, player?.videoDecoderCounters?.renderedOutputBufferCount ?: 0)
+                }
+                if (rendered < 5) Thread.sleep(100)
+            }
+            assertThat(audioScreen).isFalse()
+            assertThat(size).isEqualTo("${MadeVideo.WIDTH}x${MadeVideo.HEIGHT}")
+            assertThat(rendered).isAtLeast(5)
+        }
+    }
+
+    private companion object {
+        /** The picture's decoded size in the page that GIFs get, or nothing until it has one. */
+        const val PICTURE_SIZE = """(function () {
+            var i = document.getElementById('img');
+            return i && i.complete && i.naturalWidth ? 'web ' + i.naturalWidth + 'x' + i.naturalHeight : '';
+        })()"""
+    }
 }

@@ -14,9 +14,12 @@
   :root { --vw-zoom: 2.75; }
 
   body { background: #ffffff; }
+  /* Held under as much of the title bar floating over the sheet as is on screen, which changes
+     as the bar follows the reader's scrolling */
   #tabs {
     position: sticky;
     top: 0;
+    top: calc(var(--vw-top, 0px) - var(--vw-bar-gone, 0px));
     z-index: 5;
     display: flex;
     flex-wrap: nowrap;

@@ -52,7 +52,8 @@
    */
   #result {
     box-sizing: border-box;
-    min-height: var(--vw-fit, 100vh);
+    /* Less the room kept for the title bar above, as pdf.html does */
+    min-height: calc(var(--vw-fit, 100vh) - var(--vw-top, 0px));
     display: flex;
     flex-direction: column;
     justify-content: center;

@@ -342,6 +342,8 @@ var vwFind = (function () {
   }
 
   function onCommand(msg) {
+    /* The title bar's height and whereabouts, which app.js keeps for every page */
+    if (vwBarSaid(msg)) return;
     var verb = msg.charAt(0);
     if (verb === "q") {
       var q = msg.slice(1);

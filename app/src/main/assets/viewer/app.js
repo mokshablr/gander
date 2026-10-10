@@ -137,6 +137,69 @@ function vwFitHeight() {
     addEventListener("resize", vwFitHeight);
   }
   document.documentElement.style.setProperty("--vw-fit", window.innerHeight + "px");
+  // A document wider than the layout zooms the page out, which changes what a dp is here
+  vwPlaceTop();
+}
+
+/*
+ * The room a document leaves at its top for the title bar Gander floats over it, which goes up
+ * out of sight as the reader scrolls down. Issue #40.
+ *
+ * top= on the URL, and "t" over the channel when it changes, give the bar's height in dp, and
+ * --vw-top is that in this page's CSS px at its widest zoom, kept clear by app.css. vv.width *
+ * vv.scale is the WebView's width in dp at any pinch and innerWidth what the page fits across it
+ * at the widest, so the two say what a dp is here. --vw-bar-gone is how much of the bar is out
+ * of sight, in the same px, for whatever on the page is held under it.
+ */
+var vwTopDp = Number(vwParams.get("top")) || 0;
+var vwTopPx = 0;
+var vwTopBound = false;
+var vwBarGoneDp = 0;
+var vwBarGonePx = 0;
+
+function vwPlaceTop() {
+  if (!vwTopDp && !vwTopPx) return;
+  if (!vwTopBound) {
+    vwTopBound = true;
+    // Turning the phone changes the width a dp is measured against
+    addEventListener("resize", vwPlaceTop);
+  }
+  var vv = window.visualViewport;
+  var across = vv && vv.scale > 0 ? vv.width * vv.scale : 0;
+  var perDp = across > 0 && window.innerWidth > 0 ? window.innerWidth / across : 1;
+  var px = vwTopDp * perDp;
+  var gone = vwBarGoneDp * perDp;
+  var root = document.documentElement.style;
+  if (px !== vwTopPx) {
+    vwTopPx = px;
+    root.setProperty("--vw-top", px + "px");
+  }
+  if (gone !== vwBarGonePx) {
+    vwBarGonePx = gone;
+    root.setProperty("--vw-bar-gone", gone + "px");
+  }
+}
+
+vwPlaceTop();
+
+/*
+ * The app on the bar, over the channel, from whichever script holds it: "t<dp>" its height, which
+ * the search bar under it adds to, and "b<dp>" how much of it has gone up out of sight, sent as it
+ * follows the reader's scrolling. Answers whether the message was one of those.
+ */
+function vwBarSaid(msg) {
+  var verb = msg.charAt(0);
+  if (verb === "t") {
+    vwTopDp = Number(msg.slice(1)) || 0;
+    vwPlaceTop();
+    return true;
+  }
+  if (verb === "b") {
+    vwBarGoneDp = Number(msg.slice(1)) || 0;
+    vwPlaceTop();
+    return true;
+  }
+  return false;
 }
 
 /*

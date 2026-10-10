@@ -13,7 +13,7 @@
   justify-content: center;
   box-sizing: border-box;
   min-height: 100vh;
-  min-height: var(--vw-fit, 100vh);
+  min-height: calc(var(--vw-fit, 100vh) - var(--vw-top, 0px));
   padding: 16px 8px;
 }
 

@@ -65,6 +65,8 @@
     box-sizing: border-box;
     padding: 8px 0;
     min-height: 100vh;
+    /* Less the room kept for the title bar above, or a short document would scroll by that much */
+    min-height: calc(100vh - var(--vw-top, 0px));
     display: flex;
     flex-direction: column;
     justify-content: center;

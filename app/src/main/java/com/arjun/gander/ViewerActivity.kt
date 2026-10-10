@@ -21,6 +21,7 @@ import android.print.PrintManager
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.text.InputType
+import android.view.KeyEvent
 import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
@@ -86,6 +87,13 @@ open class ViewerActivity : AppCompatActivity() {
         private const val STATE_PLAYER_POSITION = "player_position"
         private const val STATE_FULL_SCREEN = "full_screen"
         private const val ASSET_HOST = "appassets.androidplatform.net"
+
+        /** The keys a WebView scrolls a document by. */
+        private val SCROLL_KEYS = setOf(
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_PAGE_UP,
+            KeyEvent.KEYCODE_PAGE_DOWN, KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_MOVE_HOME,
+            KeyEvent.KEYCODE_MOVE_END,
+        )
 
         /**
          * This activity again, under the name Gander's own screens open it by.
@@ -183,7 +191,7 @@ open class ViewerActivity : AppCompatActivity() {
     /** How the screen was held for a video in full screen, before the viewer was made again. */
     private var playerHeld: Int? = null
 
-    /** The title bar over a document, which slides away as it is read. See [DocumentChrome]. Read by tests. */
+    /** The title bar over a document, which goes up out of sight as it is read. See [DocumentChrome]. Read by tests. */
     internal var documentChrome: DocumentChrome? = null
         private set
 
@@ -945,7 +953,7 @@ open class ViewerActivity : AppCompatActivity() {
                     } else {
                         dragging = true
                         // A drag down the thumb is the reader scrolling, and moves the title bar
-                        documentChrome?.touched(event)
+                        documentChrome?.grabbed()
                         grabOffset = event.y - top
                         thumb.isPressed = true
                         track.parent.requestDisallowInterceptTouchEvent(true)
@@ -1825,7 +1833,7 @@ open class ViewerActivity : AppCompatActivity() {
         // And Print, which has no document to print until Reload brings it back
         goneMenu.findItem(R.id.action_print)?.isVisible = false
         closeSearchChannel()
-        // Back above the card, which has nothing to scroll that would bring a bar back that has slid away
+        // Back above the card, which has nothing to scroll that would bring back a bar gone out of sight
         documentChrome?.land()
         documentChrome = null
 
@@ -1998,6 +2006,19 @@ open class ViewerActivity : AppCompatActivity() {
         super.onWindowFocusChanged(hasFocus)
         videoChrome?.focusChanged(hasFocus)
         documentChrome?.focusChanged(hasFocus)
+    }
+
+    // A mouse wheel or a touchpad scrolling a document moves its title bar as a finger does. Seen
+    // here, before the WebView, which takes them in its own way.
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_SCROLL) documentChrome?.nudged()
+        return super.dispatchGenericMotionEvent(event)
+    }
+
+    // And so do the keys that scroll it
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN && event.keyCode in SCROLL_KEYS) documentChrome?.nudged()
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onStart() {

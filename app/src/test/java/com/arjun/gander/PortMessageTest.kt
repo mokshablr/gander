@@ -29,8 +29,8 @@ class PortMessageTest {
         assertThat(PortCommand.nightMode(true)).isEqualTo("i1")
         assertThat(PortCommand.nightMode(false)).isEqualTo("i0")
         assertThat(PortCommand.barHeight("64")).isEqualTo("t64")
-        assertThat(PortCommand.barShown(true)).isEqualTo("b1")
-        assertThat(PortCommand.barShown(false)).isEqualTo("b0")
+        assertThat(PortCommand.barGone("0")).isEqualTo("b0")
+        assertThat(PortCommand.barGone("23.5")).isEqualTo("b23.5")
     }
 
     /**
@@ -49,7 +49,7 @@ class PortMessageTest {
             PortCommand.goToPage(1),
             PortCommand.nightMode(true),
             PortCommand.barHeight("64"),
-            PortCommand.barShown(true),
+            PortCommand.barGone("0"),
         ).map { it.take(1) }
         assertThat(verbs).containsNoDuplicates()
         assertThat(verbs).containsExactly("q", "n", "p", "c", "g", "i", "t", "b")

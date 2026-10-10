@@ -2,9 +2,9 @@
 The room a document leaves at its top for the title bar that floats over it, issue #40.
 
 ViewerActivity puts the bar's height in dp on the URL as top=, and sends it again over the
-channel as "t<dp>" when the search bar under it changes it. "b0" and "b1" say whether the bar
-has slid away. In this harness a CSS px is a dp, since the page is not zoomed; the phone's
-zoom is tested on a page shaped like a phone.
+channel as "t<dp>" when the search bar under it changes it. "b<dp>" says how much of the bar has
+gone up out of sight as it follows the reader's scrolling. In this harness a CSS px is a dp, since
+the page is not zoomed; the phone's zoom is tested on a page shaped like a phone.
 """
 
 import pytest
@@ -210,23 +210,42 @@ def test_go_to_page_in_a_word_document_puts_it_just_below_the_bar(opened, port):
     )
 
 
-def test_a_sheets_tabs_follow_the_bar(opened, port):
+def test_a_sheets_tabs_follow_the_bar_pixel_for_pixel(opened, port):
     page = opened("xlsx.html", "budget.xlsx", top=BAR)
     tabs_top = "() => getComputedStyle(document.getElementById('tabs')).top"
     assert page.evaluate(tabs_top) == f"{BAR}px"
     channel = port()
 
-    channel.send("b0")
-    page.wait_for_function(f"() => ({tabs_top})() === '0px'", timeout=5000)
-    channel.send("b1")
-    page.wait_for_function(f"() => ({tabs_top})() === '{BAR}px'", timeout=5000)
+    for gone, held_at in (("20", "36px"), ("56", "0px"), ("12.5", "43.5px"), ("0", f"{BAR}px")):
+        channel.send("b" + gone)
+        page.wait_for_function(f"() => ({tabs_top})() === '{held_at}'", timeout=5000)
+
+
+def test_a_zoomed_out_page_hears_how_much_of_the_bar_has_gone_in_its_own_px(browser, server):
+    """pdf.html is wider than a phone and zoomed out to fit, so a dp is more than one of its px."""
+    context = browser.new_context(
+        viewport={"width": 411, "height": 891}, device_scale_factor=2.625,
+        is_mobile=True, has_touch=True,
+    )
+    try:
+        page = context.new_page()
+        server.show("six-pages.pdf")
+        page.goto(server.url("pdf.html", top=BAR))
+        wait_for_pdf(page)
+        page.evaluate("() => vwBarSaid('b20')")
+        assert page.evaluate(
+            "() => parseFloat(getComputedStyle(document.documentElement)"
+            ".getPropertyValue('--vw-bar-gone')) * visualViewport.scale"
+        ) == pytest.approx(20, abs=0.5)
+    finally:
+        context.close()
 
 
 def test_the_bars_words_are_not_taken_for_a_search(opened, port):
     page = opened("text.html", "plain.txt", top=BAR)
     channel = port()
     channel.send("t80")
-    channel.send("b0")
+    channel.send("b12")
     page.wait_for_timeout(300)
     assert channel.counts() == []
     assert room(page) == "80px"

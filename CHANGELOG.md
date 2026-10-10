@@ -2,11 +2,12 @@
 
 ## Unreleased
 
-- The title bar slides away as you scroll down a document, and comes back as you scroll up or
-  reach the top (#40, asked for in a Play review). It slides over the page rather than resizing
-  it, so the text doesn't jump, and the clock above it stays. It stays put while you search, and
-  with TalkBack on. This is in PDFs, Word and other text documents, spreadsheets, presentations,
-  Markdown and text files.
+- The title bar scrolls up out of sight as you scroll down a document, following your finger,
+  and comes back as you scroll up or reach the top (#40, asked for in a Play review). Let go with
+  it part way and it finishes going the way most of it has gone. It moves over the page rather
+  than resizing it, so the text doesn't jump, and the clock above it stays. It stays put while
+  you search, and with TalkBack on. This is in PDFs, Word and other text documents, spreadsheets,
+  presentations, Markdown and text files.
 
 ## 2.3 (2026-10-09)
 

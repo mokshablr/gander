@@ -46,8 +46,11 @@ internal object PortCommand {
      */
     fun barHeight(dp: String) = "t$dp"
 
-    /** Whether the title bar over a document is on screen or has slid away. */
-    fun barShown(shown: Boolean) = if (shown) "b1" else "b0"
+    /**
+     * How much of the title bar over a document has gone up out of sight, in dp: 0 while all of
+     * it is on screen.
+     */
+    fun barGone(dp: String) = "b$dp"
 }
 
 /** What pdf.html sends back, once it has been read and found sound. */

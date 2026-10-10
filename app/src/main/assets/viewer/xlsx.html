@@ -14,13 +14,12 @@
   :root { --vw-zoom: 2.75; }
 
   body { background: #ffffff; }
-  /* Held under the title bar floating over the sheet, and up to the top, in the bar's own time,
-     while it has slid away */
+  /* Held under as much of the title bar floating over the sheet as is on screen, which changes
+     as the bar follows the reader's scrolling */
   #tabs {
     position: sticky;
     top: 0;
-    top: var(--vw-top, 0px);
-    transition: top 200ms ease-in-out;
+    top: calc(var(--vw-top, 0px) - var(--vw-bar-gone, 0px));
     z-index: 5;
     display: flex;
     flex-wrap: nowrap;
@@ -44,7 +43,6 @@
     border-color: var(--vw-accent);
     color: var(--vw-accent-ink);
   }
-  html.vw-bar-away #tabs { top: 0; }
   #sheet { padding: 8px; overflow: auto; }
   #sheet table { border-collapse: collapse; font-size: 13px; }
   #sheet td, #sheet th {

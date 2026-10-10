@@ -6,6 +6,8 @@ import android.content.pm.PackageInfo
 import android.net.Uri
 import android.os.Looper
 import android.os.SystemClock
+import android.view.InputDevice
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -21,6 +23,7 @@ import com.google.android.material.shape.MaterialShapeDrawable
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import java.time.Duration
+import java.util.Locale
 import java.util.concurrent.Executor
 import org.junit.Before
 import org.junit.Test
@@ -31,7 +34,8 @@ import org.robolectric.android.controller.ActivityController
 import org.robolectric.shadows.ShadowWebView
 
 /**
- * The title bar over a document, which slides away as the reader scrolls down it. Issue #40.
+ * The title bar over a document, which goes up out of sight as the reader scrolls down it,
+ * following the scrolling pixel for pixel. Issue #40.
  *
  * The WebView is Robolectric's, so nothing is drawn and nothing scrolls by itself: a scroll here
  * is the WebView moved to a place, with or without a finger on it first.
@@ -81,10 +85,10 @@ class DocumentChromeTest {
 
     private fun settle() = shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
 
-    private fun ViewerActivity.touch(action: Int, pointers: Int = 1) {
+    private fun ViewerActivity.touch(action: Int, pointers: Int = 1, y: Float = 400f) {
         val now = SystemClock.uptimeMillis()
         val properties = Array(pointers) { i -> MotionEvent.PointerProperties().apply { id = i } }
-        val coords = Array(pointers) { i -> MotionEvent.PointerCoords().apply { x = 100f + 50f * i; y = 400f } }
+        val coords = Array(pointers) { i -> MotionEvent.PointerCoords().apply { x = 100f + 50f * i; this.y = y } }
         val event = MotionEvent.obtain(now, now, action, pointers, properties, coords, 0, 0, 1f, 1f, 0, 0, 0, 0)
         web.dispatchTouchEvent(event)
         event.recycle()
@@ -93,13 +97,22 @@ class DocumentChromeTest {
     private val secondFingerDown =
         MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT)
 
+    /** A finger put down and moved further than a tap goes, which is when Android starts a scroll. */
+    private fun ViewerActivity.drag() {
+        touch(MotionEvent.ACTION_DOWN)
+        touch(MotionEvent.ACTION_MOVE, y = 300f)
+    }
+
     /** A finger put down, the document moved to [y] under it, and the finger lifted. */
     private fun ViewerActivity.swipeTo(y: Int) {
-        touch(MotionEvent.ACTION_DOWN)
+        drag()
         web.scrollTo(0, y)
         touch(MotionEvent.ACTION_UP)
         settle()
     }
+
+    /** How far up the bar has gone, in px. */
+    private val ViewerActivity.gone get() = -top.translationY
 
     // ---------------------------------------------------------------
     // Where things are
@@ -166,7 +179,7 @@ class DocumentChromeTest {
     // ---------------------------------------------------------------
 
     @Test
-    fun scrollingDownSlidesTheBarAwayAndScrollingUpBringsItBack() {
+    fun scrollingDownTakesTheBarAwayAndScrollingUpBringsItBack() {
         val viewer = pdf()
         assertThat(viewer.top.height).isGreaterThan(0)
 
@@ -174,6 +187,74 @@ class DocumentChromeTest {
         assertThat(viewer.barAway).isTrue()
 
         viewer.swipeTo(400)
+        assertThat(viewer.barUp).isTrue()
+    }
+
+    @Test
+    fun theBarFollowsTheScrollingPixelForPixel() {
+        val viewer = pdf()
+        val height = viewer.top.height
+        assertThat(height).isGreaterThan(40)
+
+        viewer.drag()
+        viewer.web.scrollTo(0, 10)
+        assertThat(viewer.gone).isEqualTo(10f)
+        viewer.web.scrollTo(0, 30)
+        assertThat(viewer.gone).isEqualTo(30f)
+        viewer.web.scrollTo(0, 25)
+        assertThat(viewer.gone).isEqualTo(25f)
+        assertThat(viewer.top.visibility).isEqualTo(View.VISIBLE)
+
+        // No further than all of it, and back from there at once
+        viewer.web.scrollTo(0, 900)
+        assertThat(viewer.barAway).isTrue()
+        viewer.web.scrollTo(0, 890)
+        assertThat(viewer.gone).isEqualTo(height - 10f)
+        assertThat(viewer.top.visibility).isEqualTo(View.VISIBLE)
+    }
+
+    @Test
+    fun letGoPartWayTheBarFinishesTheWayMostOfItHasGone() {
+        val viewer = pdf()
+        val height = viewer.top.height
+
+        viewer.swipeTo(height * 3 / 10)
+        assertThat(viewer.barUp).isTrue()
+
+        viewer.swipeTo(height * 3 / 10 + height * 7 / 10)
+        assertThat(viewer.barAway).isTrue()
+    }
+
+    /** A link to a heading, say: the finger never moved, so the reader did not scroll. */
+    @Test
+    fun aJumpATapMakesLeavesTheBar() {
+        val viewer = pdf()
+        viewer.touch(MotionEvent.ACTION_DOWN)
+        viewer.touch(MotionEvent.ACTION_UP)
+        viewer.web.scrollTo(0, 600)
+        settle()
+        assertThat(viewer.barUp).isTrue()
+    }
+
+    @Test
+    fun aMouseWheelOrAKeyMovesTheBarAsAFingerDoes() {
+        val viewer = pdf()
+        val now = SystemClock.uptimeMillis()
+        val coords = MotionEvent.PointerCoords().apply { setAxisValue(MotionEvent.AXIS_VSCROLL, -1f) }
+        val properties = MotionEvent.PointerProperties().apply { toolType = MotionEvent.TOOL_TYPE_MOUSE }
+        val wheel = MotionEvent.obtain(
+            now, now, MotionEvent.ACTION_SCROLL, 1, arrayOf(properties), arrayOf(coords),
+            0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_MOUSE, 0,
+        )
+        viewer.dispatchGenericMotionEvent(wheel)
+        wheel.recycle()
+        viewer.web.scrollTo(0, 600)
+        settle()
+        assertThat(viewer.barAway).isTrue()
+
+        viewer.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_PAGE_UP))
+        viewer.web.scrollTo(0, 300)
+        settle()
         assertThat(viewer.barUp).isTrue()
     }
 
@@ -194,7 +275,7 @@ class DocumentChromeTest {
     @Test
     fun aFlingGoesOnMovingTheBarUntilTheDocumentStops() {
         val viewer = pdf()
-        viewer.touch(MotionEvent.ACTION_DOWN)
+        viewer.drag()
         viewer.touch(MotionEvent.ACTION_UP)
         // Still moving after the finger has lifted, for longer than the quiet that ends a fling
         // when nothing moves
@@ -226,7 +307,7 @@ class DocumentChromeTest {
     @Test
     fun aPinchLeavesTheBar() {
         val viewer = pdf()
-        viewer.touch(MotionEvent.ACTION_DOWN)
+        viewer.drag()
         viewer.touch(secondFingerDown, pointers = 2)
         viewer.web.scrollTo(0, 600)
         settle()
@@ -237,8 +318,9 @@ class DocumentChromeTest {
     fun aTwitchUnderTheFingerLeavesTheBar() {
         val viewer = pdf()
         viewer.swipeTo(600)
-        // Back up by less than a finger moves before Android calls it a scroll
+        // A finger that has not moved as far as Android needs to call it a scroll
         viewer.touch(MotionEvent.ACTION_DOWN)
+        viewer.touch(MotionEvent.ACTION_MOVE, y = 401f)
         viewer.web.scrollTo(0, 598)
         settle()
         assertThat(viewer.barAway).isTrue()
@@ -301,17 +383,29 @@ class DocumentChromeTest {
 
     private fun ViewerActivity.barHeight() = PortCommand.barHeight(documentChrome!!.heightDp())
 
+    /** [px] in dp, as the bar's messages put it. */
+    private fun ViewerActivity.dp(px: Int) =
+        String.format(Locale.ROOT, "%.1f", px / resources.displayMetrics.density).removeSuffix(".0")
+
     @Test
-    fun thePageIsToldTheBarsHeightAndWhetherItIsOnScreen() {
+    fun thePageIsToldTheBarsHeightAndHowMuchOfItIsOutOfSight() {
         val viewer = pdf()
         viewer.openChannel()
         val height = viewer.barHeight()
         assertThat(viewer.said()).containsExactly(height)
 
-        viewer.swipeTo(600)
+        viewer.drag()
+        viewer.web.scrollTo(0, 20)
+        viewer.web.scrollTo(0, 600)
+        viewer.touch(MotionEvent.ACTION_UP)
+        settle()
         viewer.swipeTo(300)
-        assertThat(viewer.said())
-            .containsExactly(height, PortCommand.barShown(false), PortCommand.barShown(true)).inOrder()
+        assertThat(viewer.said()).containsExactly(
+            height,
+            PortCommand.barGone(viewer.dp(20)),
+            PortCommand.barGone(viewer.dp(viewer.top.height)),
+            PortCommand.barGone("0"),
+        ).inOrder()
     }
 
     /** The search bar is the bar's too, so the page leaves room for both while it is open. */
@@ -339,7 +433,8 @@ class DocumentChromeTest {
         val viewer = pdf()
         viewer.swipeTo(600)
         viewer.openChannel()
-        assertThat(viewer.said()).containsExactly(viewer.barHeight(), PortCommand.barShown(false)).inOrder()
+        assertThat(viewer.said())
+            .containsExactly(viewer.barHeight(), PortCommand.barGone(viewer.dp(viewer.top.height))).inOrder()
     }
 
     @Test

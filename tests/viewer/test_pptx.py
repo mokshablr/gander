@@ -330,16 +330,212 @@ def test_a_box_set_not_to_wrap_keeps_its_lines_whole(viewer, page):
 
 
 # ---------------------------------------------------------------------------
-# Symbol bullets: see dingbat.js in pptx.html
+# Symbol bullets: see bulletsAPhoneDraws in pptx.js, and symbol-fonts.js
 # ---------------------------------------------------------------------------
 
-def test_a_bullet_in_wingdings_2_or_3_is_drawn_as_its_unicode(viewer, page):
-    """PPTXjs maps them from a table Gander did not ship, and threw on the first (#48)."""
+def bullets(page, name):
+    """Each paragraph of the shape called [name], as its bullet and its text."""
+    return page.evaluate(
+        """(n) => [...document.querySelectorAll(`#result div.block[_name="${n}"] .slide-prgrph`)]
+             .map(p => { const b = p.firstElementChild.textContent; return [b, p.textContent.slice(b.length)]; })""",
+        name,
+    )
+
+
+def test_a_symbol_font_bullet_is_drawn_as_a_character_a_phone_has(viewer, page):
+    """
+    No phone has Wingdings, Symbol or their kin. PPTXjs drew the Circuit design's arrowhead
+    from Wingdings 3 (#48) and PowerPoint's own arrow as characters Android has no glyph for,
+    a bullet given in the private use area as an empty box, whatever its font, and a
+    Webdings one as the digit it is stored as.
+    """
     viewer("pptx.html", "symbol-bullets.pptx")
-    wait_for_deck(page, 1)
-    said = page.text_content('#result div[_name="Bullets"]')
-    assert "●" in said, said
-    assert "\U0001f782" in said, said
+    wait_for_deck(page, 2)
+    assert bullets(page, "Bullets") == [
+        ["●", "A circle from Wingdings 2"],
+        ["▶", "An arrowhead from Wingdings 3"],
+        ["➢", "The arrow PowerPoint offers"],
+        ["●", "A round bullet from Wingdings"],
+        ["•", "A bullet from Symbol"],
+        ["▶", "A triangle from Webdings"],
+        ["•", "A printer from Wingdings 2"],
+        ["•", "A private use bullet from StarSymbol"],
+    ]
+
+
+def test_a_bullet_the_design_sets_in_wingdings_is_not_drawn_as_a_letter(viewer, page):
+    """PPTXjs looked for a bullet's font only in the paragraph, so the master's round one came out an l."""
+    viewer("pptx.html", "symbol-bullets.pptx")
+    wait_for_deck(page, 2)
+    assert bullets(page, "Designed") == [["●", "A round bullet from the master"]]
+
+
+def test_a_bullet_in_smartart_is_drawn_as_a_character_a_phone_has(viewer, page):
+    """SmartArt is drawn from a part of its own, where bullets were not put right, so its round one came out an l."""
+    viewer("pptx.html", "symbol-bullets.pptx")
+    wait_for_deck(page, 3)
+    assert bullets(page, "Round in SmartArt") == [["●", "A round bullet in SmartArt"]]
+    assert bullets(page, "Arrowhead in SmartArt") == [["▶", "An arrowhead in SmartArt"]]
+
+
+def test_a_bullet_in_a_part_domparser_cannot_read_is_still_one_a_phone_draws(viewer, page, made, fixture_path):
+    """
+    pptx.js puts bullets right only in a part DOMParser can read, and PPTXjs reads more than
+    that, such as an attribute whose prefix nothing declares. There PPTXjs looks a Wingdings 2
+    or 3 bullet up in a table of its own, and without one it threw and the shape was left out.
+    pptx.js gives it that table, made of characters a phone has.
+    """
+    with zipfile.ZipFile(fixture_path("symbol-bullets.pptx")) as z:
+        parts = {name: z.read(name) for name in z.namelist()}
+    slide = parts["ppt/slides/slide1.xml"].decode()
+    unread = slide.replace("<p:sld ", '<p:sld vw:unread="1" ', 1)
+    assert unread != slide
+    assert page.evaluate(
+        "x => new DOMParser().parseFromString(x, 'application/xml').getElementsByTagName('parsererror').length",
+        unread,
+    )
+    parts["ppt/slides/slide1.xml"] = unread.encode()
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, data in parts.items():
+            z.writestr(name, data)
+    viewer("pptx.html", made("unread.pptx", out.getvalue()))
+    wait_for_deck(page, 3)
+    assert bullets(page, "Bullets")[:2] == [
+        ["●", "A circle from Wingdings 2"],
+        ["▶", "An arrowhead from Wingdings 3"],
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Where a bullet sits: see bulletsHang in pptx.js
+# ---------------------------------------------------------------------------
+
+def deck_changed(made, fixture_path, name, change):
+    """symbol-bullets.pptx with its first slide's XML put through [change]."""
+    with zipfile.ZipFile(fixture_path("symbol-bullets.pptx")) as z:
+        parts = {part: z.read(part) for part in z.namelist()}
+    slide = parts["ppt/slides/slide1.xml"].decode()
+    changed = change(slide)
+    assert changed != slide
+    parts["ppt/slides/slide1.xml"] = changed.encode()
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        for part, data in parts.items():
+            z.writestr(part, data)
+    return made(name, out.getvalue())
+
+
+def first_lines(page, name):
+    """
+    Each paragraph of the shape called [name]: where its bullet's glyph starts and ends,
+    where its text starts, the baselines of the bullet and of the text's first line, each
+    found by a probe of no size, which sits on the baseline, and how many lines the text
+    takes. And how many px of the slide as drawn make an inch of the deck, 10 inches wide.
+    """
+    return page.evaluate(
+        """(n) => [...document.querySelectorAll(`#result div.block[_name="${n}"] .slide-prgrph`)].map(p => {
+             const firstText = (el) => {
+               const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+               let node = walker.nextNode();
+               while (node && !node.data.trim()) node = walker.nextNode();
+               return node;
+             };
+             const box = (node) => { const r = document.createRange(); r.selectNodeContents(node);
+                                     return r.getBoundingClientRect(); };
+             const onBaseline = (node) => {
+               const probe = document.createElement('span');
+               probe.style.cssText = 'display:inline-block;width:0;height:0';
+               node.parentNode.insertBefore(probe, node);
+               const y = probe.getBoundingClientRect().bottom;
+               probe.remove();
+               return y;
+             };
+             const glyph = firstText(p.firstElementChild), text = firstText(p.lastElementChild);
+             const start = document.createRange(); start.setStart(text, 0); start.setEnd(text, 1);
+             const all = document.createRange(); all.selectNodeContents(p.lastElementChild);
+             const lines = new Set([...all.getClientRects()].filter(r => r.width > 0).map(r => Math.round(r.bottom)));
+             return {glyph: box(glyph).left, glyphEnd: box(glyph).right, text: start.getBoundingClientRect().left,
+                     bulletBaseline: onBaseline(glyph), textBaseline: onBaseline(text), lines: lines.size,
+                     inch: p.closest('.slide').getBoundingClientRect().width / 10};
+           })""",
+        name,
+    )
+
+
+def test_the_text_after_a_bullet_starts_at_its_paragraphs_margin_whatever_the_bullets_width(viewer, page):
+    """
+    PowerPoint hangs a bullet in the room the paragraph's indent leaves for it and starts the
+    text at the paragraph's margin, here half an inch after the bullet. PPTXjs started the text
+    after the bullet's glyph and then that room again, so text after a wide arrow began further
+    right than text after a dot, and a list with both came out ragged.
+    """
+    viewer("pptx.html", "symbol-bullets.pptx")
+    wait_for_deck(page, 2)
+    lines = first_lines(page, "Bullets")
+    assert len({round(line["glyphEnd"] - line["glyph"]) for line in lines}) > 2, "the bullets should differ in width"
+    for line in lines:
+        assert line["text"] - line["glyph"] == pytest.approx(line["inch"] / 2, abs=0.5)
+
+
+def test_a_bullet_wider_than_its_room_pushes_its_text_along_rather_than_into_it(viewer, page, made, fixture_path):
+    """A twentieth of an inch is less than a round bullet needs, so its text starts after it, as in PowerPoint."""
+    deck = deck_changed(made, fixture_path, "narrow.pptx", lambda xml: xml.replace(
+        'marL="457200" indent="-457200"', 'marL="45720" indent="-45720"', 1))
+    viewer("pptx.html", deck)
+    wait_for_deck(page, 2)
+    first = first_lines(page, "Bullets")[0]
+    assert first["glyphEnd"] - first["glyph"] > first["inch"] / 20
+    assert first["text"] >= first["glyphEnd"] - 0.5
+
+
+def test_a_bullet_sits_on_its_texts_first_line(viewer, page, made, fixture_path):
+    """
+    PowerPoint draws a bullet as a character on its text's first line. PPTXjs lined it up with
+    the paragraph's top, middle or bottom by how the text is aligned, so a bullet sat above
+    its line's middle, and beside the last line of a right-aligned paragraph of several.
+    """
+    long = "A circle from Wingdings 2, on a line that runs on past the end of its box. " * 3
+    deck = deck_changed(made, fixture_path, "aligned.pptx", lambda xml: xml.replace(
+        '<a:bodyPr wrap="none">', "<a:bodyPr>", 1
+    ).replace(
+        '<a:pPr marL="457200" indent="-457200">', '<a:pPr marL="457200" indent="-457200" algn="r">', 1
+    ).replace(">A circle from Wingdings 2<", f">{long.strip()}<", 1))
+    viewer("pptx.html", deck)
+    wait_for_deck(page, 2)
+    lines = first_lines(page, "Bullets")
+    assert lines[0]["lines"] >= 3
+    for line in lines:
+        assert line["bulletBaseline"] == pytest.approx(line["textBaseline"], abs=0.5)
+
+
+# What a bullet in Wingdings 2, Wingdings 3 or Webdings can become, every one found in a plain
+# font of both Android 9 and Android 16, from their font files on 9 Oct 2026. A character
+# joins this list only once a phone's fonts have it too.
+ANDROID_DRAWS = (
+    "&+•※‽⁂←↑→↓↔↕↖↗↘↙↨↯↰↱↲↳↵↶↹↺↻⇆⇇⇈⇉⇊"
+    "⇞⇟⇠⇡⇢⇣⇤⇥⇦⇧⇨⇪⇱⇲⇵⊖⊗⊘⊙⋅⌃⌤⌥⍽⎋⏐⏭⏮␣①②③"
+    "④⑤⑥⑦⑧⑨⑩Ⓟ⓪⓿■□▣▪▲△▴▵▶▷▸▹▼▽▾▿◀◁◂◃◆◇"
+    "◈◊○●◒◓◖◗◢◣◤◥★☉☑☒☜☞☟☽☾⛷✂✄✎✓✔✕✖✗✚✝"
+    "✦✯✱✳✶✷✹❖❧❶❷❸❹❺❻❼❽❾❿➡➤⤒⤓⤴⤵⤶⤷⦁⦸⦿⬅⬆"
+    "⬇⬈⬉⬊⬋⬎⬏⬐⬑⬟⬢⬣⬤⬥⬧⬩⬪⭘⸿"
+)
+
+
+def test_every_wingdings_2_3_and_webdings_bullet_is_one_android_draws(viewer, page):
+    viewer("pptx.html", "symbol-bullets.pptx")
+    wait_for_deck(page, 2)
+    drawn = page.evaluate(
+        """() => { const out = new Set();
+             for (const face of ["Wingdings 2", "Wingdings 3", "Webdings"])
+               for (let code = 0x21; code <= 0xFF; code++) {
+                 out.add(vwSymbolBullet(face, String.fromCharCode(code)));
+                 out.add(vwSymbolBullet(face, String.fromCharCode(0xF000 + code)));
+               }
+             return [...out].join(""); }"""
+    )
+    assert len(drawn) > 150, drawn
+    assert set(drawn) - set(ANDROID_DRAWS) == set()
 
 
 # ---------------------------------------------------------------------------

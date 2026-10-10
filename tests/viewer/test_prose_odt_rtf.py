@@ -549,3 +549,34 @@ def test_a_word_for_a_character_after_a_unicode_character_is_its_fallback(viewer
         "() => [...document.querySelectorAll('.vw-body p')].map(p => p.textContent)"
     )
     assert paragraphs == ["A\u2022B\u2014C\u201cD", "caf\u00e9", "next"]
+
+
+# ------------------------------------------------------------------------------------
+# Symbol fonts
+# ------------------------------------------------------------------------------------
+
+def test_each_symbol_font_is_read_through_its_own_table(viewer, page, made):
+    """
+    Wingdings 2, Wingdings 3 and Webdings were read as Wingdings, so Wingdings 2's tick and
+    Webdings' came out as bullets and Wingdings 3's arrowhead as a quotation mark. Each is
+    now the character symbol-fonts.js gives for its own font, by the font's code and in the
+    private use area, where Word puts it. LibreOffice draws the fonts themselves, which a
+    phone does not have.
+    """
+    open_rtf(viewer, page, made,
+             r"{\rtf1\ansi\deff0{\fonttbl{\f0\froman Times New Roman;}{\f1\fnil\fcharset2 Wingdings;}"
+             r"{\f2\fnil\fcharset2 Wingdings 2;}{\f3\fnil\fcharset2 Wingdings 3;}"
+             r"{\f4\fnil\fcharset2 Webdings;}}"
+             r"\pard a{\f1 \'e0}b{\f2 P}c{\f3 \'7d}d{\f4 a}e{\f2\uc1\u61520?}f\par}")
+    assert paper_text(page).strip() == "a\u2192b\u2713c\u25b6d\u2714e\u2713f"
+
+
+def test_a_list_bullet_in_wingdings_3_is_its_arrowhead(viewer, page, made):
+    """A list's bullet in Wingdings 3 came out as a quotation mark, read as Wingdings."""
+    items = "".join(f"<text:list-item><text:p>{word}</text:p></text:list-item>" for word in ["one", "two"])
+    open_odt(viewer, page, made,
+             f'<text:list text:style-name="L1">{items}</text:list>',
+             automatic='<text:list-style style:name="L1"><text:list-level-style-bullet text:level="1"'
+                       ' text:bullet-char="\uf07d"><style:text-properties style:font-name="Wingdings 3"/>'
+                       '</text:list-level-style-bullet></text:list-style>')
+    assert labels(page) == ["\u25b6", "\u25b6"]

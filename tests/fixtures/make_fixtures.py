@@ -1229,23 +1229,35 @@ def unwrapped() -> None:
 
 def symbol_bullets() -> None:
     """
-    Bullets in Wingdings 2 and Wingdings 3, as the Circuit design sets them (#48). PPTXjs
-    maps their characters to Unicode from a table in a file of its own, which Gander did not
-    ship, so the first such bullet stopped the deck.
+    Bullets in the symbol fonts no phone has, set as PowerPoint and its designs set them: by
+    the font's own code, or by that code in the private use area. The Circuit design's
+    Wingdings 3 arrowhead (#48), PowerPoint's own arrow, one each from Wingdings, Wingdings 2,
+    Symbol and Webdings, and LibreOffice's StarSymbol in the private use area, which it has no
+    glyph for either. A second slide's body text takes a round Wingdings bullet from the
+    master, as a design gives one. A third holds SmartArt, which is drawn from a part of its
+    own, with a round Wingdings bullet and the Wingdings 3 arrowhead there.
     """
     from pptx import Presentation
+    from pptx.opc.package import Part
+    from pptx.opc.packuri import PackURI
     from pptx.oxml import parse_xml
-    from pptx.oxml.ns import nsdecls
+    from pptx.oxml.ns import nsdecls, qn
     from pptx.util import Inches, Pt
 
     prs = Presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
-    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(8), Inches(2))
+    box = slide.shapes.add_textbox(Inches(1), Inches(0.5), Inches(8), Inches(6))
     box.name = "Bullets"
     frame = box.text_frame
     for n, (font, char, text) in enumerate((
         ("Wingdings 2", chr(0xF098), "A circle from Wingdings 2"),
         ("Wingdings 3", chr(0xF07D), "An arrowhead from Wingdings 3"),
+        ("Wingdings", "\u00d8", "The arrow PowerPoint offers"),
+        ("Wingdings", chr(0xF06C), "A round bullet from Wingdings"),
+        ("Symbol", chr(0xF0B7), "A bullet from Symbol"),
+        ("Webdings", "4", "A triangle from Webdings"),
+        ("Wingdings 2", chr(0xF036), "A printer from Wingdings 2"),
+        ("StarSymbol", chr(0xF06C), "A private use bullet from StarSymbol"),
     )):
         paragraph = frame.paragraphs[0] if n == 0 else frame.add_paragraph()
         run = paragraph.add_run()
@@ -1256,6 +1268,61 @@ def symbol_bullets() -> None:
         props.set("indent", "-457200")
         props.append(parse_xml(f'<a:buFont {nsdecls("a")} typeface="{font}"/>'))
         props.append(parse_xml(f'<a:buChar {nsdecls("a")} char="{char}"/>'))
+
+    level = prs.slide_master.element.find(qn("p:txStyles")).find(qn("p:bodyStyle")).find(qn("a:lvl1pPr"))
+    level.find(qn("a:buFont")).set("typeface", "Wingdings")
+    level.find(qn("a:buChar")).set("char", "l")
+    designed = prs.slides.add_slide(prs.slide_layouts[1])
+    designed.shapes.title.text = "From the design"
+    body = designed.placeholders[1]
+    body.name = "Designed"
+    body.text = "A round bullet from the master"
+
+    # SmartArt as PowerPoint saves it: a frame on the slide naming the diagram's data, layout,
+    # style and colour parts, and the drawing PPTXjs draws it from, found by the slide's
+    # relationships. Its shapes are named here, where PowerPoint leaves them unnamed, for the
+    # tests to find them.
+    dgm = "http://schemas.openxmlformats.org/drawingml/2006/diagram"
+    smart = prs.slides.add_slide(prs.slide_layouts[6])
+    ids = {}
+    for kind, name, root, content in (
+        ("diagramData", "data1", "dataModel", "diagramData"),
+        ("diagramLayout", "layout1", "layoutDef", "diagramLayout"),
+        ("diagramQuickStyle", "quickStyle1", "styleDef", "diagramStyle"),
+        ("diagramColors", "colors1", "colorsDef", "diagramColors"),
+    ):
+        part = Part(PackURI(f"/ppt/diagrams/{name}.xml"),
+                    f"application/vnd.openxmlformats-officedocument.drawingml.{content}+xml",
+                    prs.part.package, f'<dgm:{root} xmlns:dgm="{dgm}"/>'.encode())
+        ids[kind] = smart.part.relate_to(
+            part, f"http://schemas.openxmlformats.org/officeDocument/2006/relationships/{kind}")
+    shapes = ""
+    for n, (name, font, char, text) in enumerate((
+        ("Round in SmartArt", "Wingdings", "l", "A round bullet in SmartArt"),
+        ("Arrowhead in SmartArt", "Wingdings 3", chr(0xF07D), "An arrowhead in SmartArt"),
+    )):
+        shapes += (
+            f'<dsp:sp modelId="{{00000000-0000-0000-0000-00000000000{n + 1}}}"><dsp:nvSpPr>'
+            f'<dsp:cNvPr id="0" name="{name}"/><dsp:cNvSpPr/></dsp:nvSpPr><dsp:spPr><a:xfrm>'
+            f'<a:off x="0" y="{n * 1371600}"/><a:ext cx="7315200" cy="1371600"/></a:xfrm>'
+            '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></dsp:spPr><dsp:txBody><a:bodyPr/>'
+            f'<a:lstStyle/><a:p><a:pPr marL="457200" indent="-457200"><a:buFont typeface="{font}"/>'
+            f'<a:buChar char="{char}"/></a:pPr><a:r><a:rPr lang="en-US" sz="2400"/><a:t>{text}</a:t>'
+            '</a:r></a:p></dsp:txBody></dsp:sp>'
+        )
+    drawing = Part(PackURI("/ppt/diagrams/drawing1.xml"), "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+                   prs.part.package,
+                   (f'<dsp:drawing xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram" {nsdecls("a")}>'
+                    '<dsp:spTree><dsp:nvGrpSpPr><dsp:cNvPr id="0" name=""/><dsp:cNvGrpSpPr/></dsp:nvGrpSpPr>'
+                    f'<dsp:grpSpPr/>{shapes}</dsp:spTree></dsp:drawing>').encode())
+    smart.part.relate_to(drawing, "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing")
+    smart.shapes._spTree.append(parse_xml(
+        f'<p:graphicFrame {nsdecls("p", "a", "r")}><p:nvGraphicFramePr><p:cNvPr id="2" name="SmartArt"/>'
+        '<p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr>'
+        '<p:xfrm><a:off x="914400" y="1371600"/><a:ext cx="7315200" cy="2743200"/></p:xfrm>'
+        f'<a:graphic><a:graphicData uri="{dgm}"><dgm:relIds xmlns:dgm="{dgm}" r:dm="{ids["diagramData"]}"'
+        f' r:lo="{ids["diagramLayout"]}" r:qs="{ids["diagramQuickStyle"]}" r:cs="{ids["diagramColors"]}"/>'
+        '</a:graphicData></a:graphic></p:graphicFrame>'))
     fix_core_properties(prs)
     prs.save(str(OUT / "symbol-bullets.pptx"))
     normalize_zip(OUT / "symbol-bullets.pptx")

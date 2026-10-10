@@ -34,7 +34,13 @@ JSZip.prototype.load = function () {
   if (sized && sized !== presentation.asText()) zip.file("ppt/presentation.xml", sized);
   zip.file(/^ppt\/(slides|slideLayouts|slideMasters)\/[^/]+\.xml$/).forEach(function (part) {
     var xml = part.asText();
-    var drawable = breaksPptxjsKeeps(pathsPptxjsDraws(xml));
+    var drawable = bulletsAPhoneDraws(breaksPptxjsKeeps(pathsPptxjsDraws(xml)));
+    if (drawable !== xml) zip.file(part.name, drawable);
+  });
+  // SmartArt is drawn from parts of its own, which carry bullets of their own
+  zip.file(/^ppt\/diagrams\/[^/]+\.xml$/).forEach(function (part) {
+    var xml = part.asText();
+    var drawable = bulletsAPhoneDraws(xml);
     if (drawable !== xml) zip.file(part.name, drawable);
   });
   var designs = {};
@@ -167,6 +173,53 @@ function breaksPptxjsKeeps(xml) {
   }
   return changed ? new XMLSerializer().serializeToString(doc) : xml;
 }
+
+/*
+ * A bullet set in Wingdings, Symbol or their kin, which no phone has, drew as an empty box or
+ * as the letter it is stored as, such as an "l" for a round one: PPTXjs maps only a few, and
+ * looks for the font only in the paragraph, where a design's master usually sets it. Each is
+ * given the character it stands for, one a phone can draw (symbol-fonts.js), and loses the
+ * font, which would send PPTXjs to its own table again.
+ */
+var SYMBOL_BULLETS = /<a:buFont\b[^>]*\stypeface="(wingdings|webdings|symbol)\b|<a:buChar\b[^>]*\schar="(&#|[\uE000-\uF8FF])/i;
+
+function bulletsAPhoneDraws(xml) {
+  if (!SYMBOL_BULLETS.test(xml)) return xml;
+  var doc = new DOMParser().parseFromString(xml, "application/xml");
+  if (doc.getElementsByTagName("parsererror").length) return xml;
+  var changed = false;
+  var chars = doc.getElementsByTagNameNS(DRAWINGML, "buChar");
+  for (var i = 0; i < chars.length; i++) {
+    var font = childrenNamed(chars[i].parentNode, "buFont")[0];
+    var was = chars[i].getAttribute("char");
+    var now = vwSymbolBullet(font && font.getAttribute("typeface"), was);
+    if (now !== was) {
+      chars[i].setAttribute("char", now);
+      changed = true;
+    }
+  }
+  var fonts = [].slice.call(doc.getElementsByTagNameNS(DRAWINGML, "buFont"));
+  for (var j = 0; j < fonts.length; j++) {
+    if (vwIsSymbolFont(fonts[j].getAttribute("typeface"))) {
+      fonts[j].parentNode.removeChild(fonts[j]);
+      changed = true;
+    }
+  }
+  return changed ? new XMLSerializer().serializeToString(doc) : xml;
+}
+
+/*
+ * PPTXjs looks a Wingdings 2 or 3 bullet up in a table of its own, upstream's dingbat.js, and
+ * throws without one. Only a part DOMParser cannot read still sends a bullet there, so the
+ * table is made from symbol-fonts.js, under the name and in the form PPTXjs reads, and such a
+ * bullet gets a character a phone has like any other.
+ */
+var dingbat_unicode = [];
+[["Wingdings 2", VW_WINGDINGS_2], ["Wingdings 3", VW_WINGDINGS_3]].forEach(function (font) {
+  for (var i = 0; i < font[1].length; i++) {
+    dingbat_unicode.push({ f: font[0], code: 0x20 + i, unicode: font[1].charCodeAt(i) });
+  }
+});
 
 /*
  * PPTXjs makes a run bold or italic only when the run itself says so (getFontBold,
@@ -426,6 +479,41 @@ function regularWeight(root) {
 }
 
 /*
+ * A bullet hangs in the room its paragraph's indent leaves for it, as in PowerPoint, so the
+ * text after it starts at the paragraph's margin whatever the bullet's width. PPTXjs puts that
+ * room after the bullet instead, as padding on the text, so text after a wide bullet started
+ * further right than text after a narrow one, and paragraphs with different bullets came out
+ * ragged. The room becomes the bullet box's least width, which a bullet wider than the room
+ * still pushes past rather than running into its text.
+ *
+ * A character or a number is then marked for pptx.html, which sits it on its text's first
+ * line. A picture is left where PPTXjs put it: sat on the line as a character is, a picture
+ * taller than the text pushed the text down, by 7 px in one of Apache POI's decks.
+ */
+function bulletsHang(root) {
+  var rows = root.querySelectorAll(".slide-prgrph");
+  for (var i = 0; i < rows.length; i++) {
+    var bullet = rows[i].firstElementChild;
+    var text = rows[i].lastElementChild;
+    if (!bullet || bullet === text) continue;
+    // Left to right, or right to left
+    var side = text.style.paddingLeft ? "paddingLeft" : "paddingRight";
+    if (text.style[side]) {
+      bullet.style.minWidth = text.style[side];
+      text.style[side] = "0px";
+    }
+    if (bullet.querySelector("img")) continue;
+    rows[i].classList.add("vw-bulleted");
+    // Its box and line no taller than nothing, so that sitting it on the text's first line
+    // never makes that line taller or moves the text down. The bullet still shows, outside them.
+    bullet.style.height = "0";
+    bullet.style.lineHeight = "0";
+    var glyph = bullet.firstElementChild;
+    if (glyph) glyph.style.lineHeight = "0";
+  }
+}
+
+/*
  * What Gander cannot draw is marked where it would be, by a box that says what is missing,
  * as a picture in a .doc or .odt is (prose-draw.js). Left blank, a slide reads as though
  * the deck had nothing there. Three kinds, which between them mark 23 of the 97 that open of
@@ -497,6 +585,7 @@ new MutationObserver(function (records, observer) {
   observer.disconnect();
   spacesThatBreak(result);
   regularWeight(result);
+  bulletsHang(result);
   whatIsMissing(result);
 }).observe(document.getElementById("result"), { childList: true });
 

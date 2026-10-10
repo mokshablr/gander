@@ -3,6 +3,7 @@ package com.arjun.gander
 import android.media.Image
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
+import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import java.io.File
@@ -34,7 +35,11 @@ object MadeVideo {
             setInteger(MediaFormat.KEY_FRAME_RATE, fps)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
         }
-        val codec = MediaCodec.createEncoderByType(mime)
+        // The first encoder listed for a type can refuse frames this small: the Nothing Phone
+        // (2)'s hardware H.264 encoder takes nothing under 128x128. Ask for one that does.
+        val name = MediaCodecList(MediaCodecList.REGULAR_CODECS).findEncoderForFormat(format)
+            ?: error("No $mime encoder takes ${WIDTH}x$HEIGHT frames")
+        val codec = MediaCodec.createByCodecName(name)
         codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
         codec.start()
         val muxer = MediaMuxer(file.path, container)

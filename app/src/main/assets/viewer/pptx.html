@@ -88,6 +88,13 @@
   #result div.block[_id^="nowrap-"] .slide-prgrph > div:last-child { min-width: max-content; }
 
   /*
+   * A bullet sits on its text's first line, as PowerPoint draws it, a character on the line.
+   * PPTXjs lines it up with the paragraph's top, middle or bottom by how the text is aligned,
+   * so it sat above the line's middle, or halfway down a paragraph of several lines.
+   */
+  #result .slide-prgrph.vw-bulleted { align-items: baseline; }
+
+  /*
    * The box pptx.js puts where a chart, picture or shape it cannot draw would be, in the
    * colours of the same box in a .doc (prose.css). Filled, so that it reads on a slide of
    * any colour. pptx.js sets its type size, which goes with the slide's width.

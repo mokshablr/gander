@@ -479,6 +479,41 @@ function regularWeight(root) {
 }
 
 /*
+ * A bullet hangs in the room its paragraph's indent leaves for it, as in PowerPoint, so the
+ * text after it starts at the paragraph's margin whatever the bullet's width. PPTXjs puts that
+ * room after the bullet instead, as padding on the text, so text after a wide bullet started
+ * further right than text after a narrow one, and paragraphs with different bullets came out
+ * ragged. The room becomes the bullet box's least width, which a bullet wider than the room
+ * still pushes past rather than running into its text.
+ *
+ * A character or a number is then marked for pptx.html, which sits it on its text's first
+ * line. A picture is left where PPTXjs put it: sat on the line as a character is, a picture
+ * taller than the text pushed the text down, by 7 px in one of Apache POI's decks.
+ */
+function bulletsHang(root) {
+  var rows = root.querySelectorAll(".slide-prgrph");
+  for (var i = 0; i < rows.length; i++) {
+    var bullet = rows[i].firstElementChild;
+    var text = rows[i].lastElementChild;
+    if (!bullet || bullet === text) continue;
+    // Left to right, or right to left
+    var side = text.style.paddingLeft ? "paddingLeft" : "paddingRight";
+    if (text.style[side]) {
+      bullet.style.minWidth = text.style[side];
+      text.style[side] = "0px";
+    }
+    if (bullet.querySelector("img")) continue;
+    rows[i].classList.add("vw-bulleted");
+    // Its box and line no taller than nothing, so that sitting it on the text's first line
+    // never makes that line taller or moves the text down. The bullet still shows, outside them.
+    bullet.style.height = "0";
+    bullet.style.lineHeight = "0";
+    var glyph = bullet.firstElementChild;
+    if (glyph) glyph.style.lineHeight = "0";
+  }
+}
+
+/*
  * What Gander cannot draw is marked where it would be, by a box that says what is missing,
  * as a picture in a .doc or .odt is (prose-draw.js). Left blank, a slide reads as though
  * the deck had nothing there. Three kinds, which between them mark 23 of the 97 that open of
@@ -550,6 +585,7 @@ new MutationObserver(function (records, observer) {
   observer.disconnect();
   spacesThatBreak(result);
   regularWeight(result);
+  bulletsHang(result);
   whatIsMissing(result);
 }).observe(document.getElementById("result"), { childList: true });
 

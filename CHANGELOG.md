@@ -6,6 +6,9 @@
   or the letter l. PowerPoint sets many bullets in fonts no phone has, such as Wingdings, so
   Gander now draws each as the nearest character the phone has, PowerPoint's own arrow bullet
   and the triangles of designs such as Circuit among them.
+- The text after a slide's bullets starts where PowerPoint starts it, whatever each bullet's
+  width, and each bullet sits on its line. Text after a wide bullet began further right than
+  text after a narrow one, and bullets sat high.
 - In a .doc, .odt or .rtf file, symbols set in Wingdings 2, Wingdings 3 or Webdings show as the
   ticks, arrows and shapes they are, where they came out as other symbols or plain bullets.
 

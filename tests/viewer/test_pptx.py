@@ -407,6 +407,108 @@ def test_a_bullet_in_a_part_domparser_cannot_read_is_still_one_a_phone_draws(vie
     ]
 
 
+# ---------------------------------------------------------------------------
+# Where a bullet sits: see bulletsHang in pptx.js
+# ---------------------------------------------------------------------------
+
+def deck_changed(made, fixture_path, name, change):
+    """symbol-bullets.pptx with its first slide's XML put through [change]."""
+    with zipfile.ZipFile(fixture_path("symbol-bullets.pptx")) as z:
+        parts = {part: z.read(part) for part in z.namelist()}
+    slide = parts["ppt/slides/slide1.xml"].decode()
+    changed = change(slide)
+    assert changed != slide
+    parts["ppt/slides/slide1.xml"] = changed.encode()
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        for part, data in parts.items():
+            z.writestr(part, data)
+    return made(name, out.getvalue())
+
+
+def first_lines(page, name):
+    """
+    Each paragraph of the shape called [name]: where its bullet's glyph starts and ends,
+    where its text starts, the baselines of the bullet and of the text's first line, each
+    found by a probe of no size, which sits on the baseline, and how many lines the text
+    takes. And how many px of the slide as drawn make an inch of the deck, 10 inches wide.
+    """
+    return page.evaluate(
+        """(n) => [...document.querySelectorAll(`#result div.block[_name="${n}"] .slide-prgrph`)].map(p => {
+             const firstText = (el) => {
+               const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+               let node = walker.nextNode();
+               while (node && !node.data.trim()) node = walker.nextNode();
+               return node;
+             };
+             const box = (node) => { const r = document.createRange(); r.selectNodeContents(node);
+                                     return r.getBoundingClientRect(); };
+             const onBaseline = (node) => {
+               const probe = document.createElement('span');
+               probe.style.cssText = 'display:inline-block;width:0;height:0';
+               node.parentNode.insertBefore(probe, node);
+               const y = probe.getBoundingClientRect().bottom;
+               probe.remove();
+               return y;
+             };
+             const glyph = firstText(p.firstElementChild), text = firstText(p.lastElementChild);
+             const start = document.createRange(); start.setStart(text, 0); start.setEnd(text, 1);
+             const all = document.createRange(); all.selectNodeContents(p.lastElementChild);
+             const lines = new Set([...all.getClientRects()].filter(r => r.width > 0).map(r => Math.round(r.bottom)));
+             return {glyph: box(glyph).left, glyphEnd: box(glyph).right, text: start.getBoundingClientRect().left,
+                     bulletBaseline: onBaseline(glyph), textBaseline: onBaseline(text), lines: lines.size,
+                     inch: p.closest('.slide').getBoundingClientRect().width / 10};
+           })""",
+        name,
+    )
+
+
+def test_the_text_after_a_bullet_starts_at_its_paragraphs_margin_whatever_the_bullets_width(viewer, page):
+    """
+    PowerPoint hangs a bullet in the room the paragraph's indent leaves for it and starts the
+    text at the paragraph's margin, here half an inch after the bullet. PPTXjs started the text
+    after the bullet's glyph and then that room again, so text after a wide arrow began further
+    right than text after a dot, and a list with both came out ragged.
+    """
+    viewer("pptx.html", "symbol-bullets.pptx")
+    wait_for_deck(page, 2)
+    lines = first_lines(page, "Bullets")
+    assert len({round(line["glyphEnd"] - line["glyph"]) for line in lines}) > 2, "the bullets should differ in width"
+    for line in lines:
+        assert line["text"] - line["glyph"] == pytest.approx(line["inch"] / 2, abs=0.5)
+
+
+def test_a_bullet_wider_than_its_room_pushes_its_text_along_rather_than_into_it(viewer, page, made, fixture_path):
+    """A twentieth of an inch is less than a round bullet needs, so its text starts after it, as in PowerPoint."""
+    deck = deck_changed(made, fixture_path, "narrow.pptx", lambda xml: xml.replace(
+        'marL="457200" indent="-457200"', 'marL="45720" indent="-45720"', 1))
+    viewer("pptx.html", deck)
+    wait_for_deck(page, 2)
+    first = first_lines(page, "Bullets")[0]
+    assert first["glyphEnd"] - first["glyph"] > first["inch"] / 20
+    assert first["text"] >= first["glyphEnd"] - 0.5
+
+
+def test_a_bullet_sits_on_its_texts_first_line(viewer, page, made, fixture_path):
+    """
+    PowerPoint draws a bullet as a character on its text's first line. PPTXjs lined it up with
+    the paragraph's top, middle or bottom by how the text is aligned, so a bullet sat above
+    its line's middle, and beside the last line of a right-aligned paragraph of several.
+    """
+    long = "A circle from Wingdings 2, on a line that runs on past the end of its box. " * 3
+    deck = deck_changed(made, fixture_path, "aligned.pptx", lambda xml: xml.replace(
+        '<a:bodyPr wrap="none">', "<a:bodyPr>", 1
+    ).replace(
+        '<a:pPr marL="457200" indent="-457200">', '<a:pPr marL="457200" indent="-457200" algn="r">', 1
+    ).replace(">A circle from Wingdings 2<", f">{long.strip()}<", 1))
+    viewer("pptx.html", deck)
+    wait_for_deck(page, 2)
+    lines = first_lines(page, "Bullets")
+    assert lines[0]["lines"] >= 3
+    for line in lines:
+        assert line["bulletBaseline"] == pytest.approx(line["textBaseline"], abs=0.5)
+
+
 # What a bullet in Wingdings 2, Wingdings 3 or Webdings can become, every one found in a plain
 # font of both Android 9 and Android 16, from their font files on 9 Oct 2026. A character
 # joins this list only once a phone's fonts have it too.

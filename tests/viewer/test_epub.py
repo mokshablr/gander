@@ -112,7 +112,8 @@ def box_of(page, selector):
 
 
 def little_book(made, name, chapters, metadata="", contents="", extra=None,
-                identifier="urn:uuid:00000000-0000-4000-8000-000000000054", listed="", order=None):
+                identifier="urn:uuid:00000000-0000-4000-8000-000000000054", listed="", order=None,
+                spine="", html="", package="", title_xml="<dc:title>A Little Book</dc:title>"):
     """
     A book written for one test, for what no committed one has: [chapters] is a list of
     (what its place in the reading order says of it, what goes in its head, its body), and
@@ -125,7 +126,7 @@ def little_book(made, name, chapters, metadata="", contents="", extra=None,
     def chapter(head, body):
         return (
             '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n'
-            '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">'
+            f'<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" {html}>'
             f'<head><title>A chapter</title>{head}</head>{body}</html>\n'
         )
 
@@ -138,13 +139,13 @@ def little_book(made, name, chapters, metadata="", contents="", extra=None,
         refs = "".join(f'<itemref idref="{i}"/>' for i in order)
     package = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">'
+        f'<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid" {package}>'
         '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
         '<dc:identifier>not the one the package calls its own</dc:identifier>'
         f'<dc:identifier id="uid">{identifier}</dc:identifier>'
-        f'<dc:title>A Little Book</dc:title><dc:language>en</dc:language>{metadata}</metadata>'
+        f'{title_xml}<dc:language>en</dc:language>{metadata}</metadata>'
         '<manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>'
-        f'{items}{listed}</manifest><spine>{refs}</spine></package>\n'
+        f'{items}{listed}</manifest><spine {spine}>{refs}</spine></package>\n'
     )
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
@@ -1630,6 +1631,127 @@ def test_a_long_contents_list_is_shown_whole(viewer, page, made):
     book = little_book(made, "epic.epub", [("", "", "<body><p>Sing.</p></body>")], contents=entries)
     open_book(viewer, page, fixture=book)
     assert page.evaluate("document.querySelectorAll('#epub-contents-list button').length") == 2100
+
+
+@pytest.mark.parametrize("direction,fixed", [
+    ("rtl", False), ("ltr", False), ("default", False), (None, False), ("invalid", False), ("rtl", True),
+])
+def test_spine_progression_only_mirrors_the_turn_controls(viewer, page, made, direction, fixed):
+    book = little_book(made, "progression.epub", [
+        ('properties="rendition:layout-pre-paginated"' if fixed else "",
+         '<meta name="viewport" content="width=600,height=800"/>',
+         '<body><h1>الأول</h1><p dir="ltr">English 123</p></body>'),
+        ("", "", "<body><h1>الثاني</h1></body>"),
+    ], spine=f'page-progression-direction="{direction}"' if direction else "", html='dir="rtl" lang="ar"')
+    open_book(viewer, page, fixture=book)
+    prev, next = page.locator("#epub-prev"), page.locator("#epub-next")
+    assert (next.bounding_box()["x"] < prev.bounding_box()["x"]) == (direction == "rtl")
+    assert prev.is_disabled() and next.is_enabled()
+    assert style_of(page, "body", "direction") == "rtl"
+    assert style_of(page, "p", "direction") == "ltr"
+    next.click()
+    wait_for_heading(page, "الثاني")
+    assert next.is_disabled() and prev.is_enabled()
+    prev.click()
+    wait_for_heading(page, "الأول")
+
+
+@pytest.mark.parametrize("ncx", [False, True])
+def test_navigation_labels_keep_direction_and_language(viewer, page, made, ncx):
+    labels = '<li><a href="c0.xhtml">الأول (1)</a><ol><li><a href="c1.xhtml">الثاني (2)</a></li>' \
+             '<li dir="ltr" lang="en"><a href="c1.xhtml">English (3)</a></li></ol></li>'
+    points = '<navPoint><navLabel><text>الأول (1)</text></navLabel><content src="c0.xhtml"/>' \
+             '<navPoint><navLabel><text>الثاني (2)</text></navLabel><content src="c1.xhtml"/></navPoint>' \
+             '<navPoint><navLabel><text dir="ltr" xml:lang="en">English (3)</text></navLabel>' \
+             '<content src="c1.xhtml"/></navPoint></navPoint>'
+    book = little_book(made, "labels.epub", [("", "", "<body><p>Text</p></body>")] * 2,
+        contents="" if ncx else labels, html='dir="rtl" xml:lang="ar"',
+        package='dir="rtl" xml:lang="ar"',
+        listed='<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>' if ncx else "",
+        extra={"toc.ncx": '<ncx dir="rtl" xml:lang="ar"><navMap>' + points + '</navMap></ncx>'})
+    open_book(viewer, page, fixture=book)
+    for selector in ("#epub-title", "#epub-where"):
+        assert page.get_attribute(selector, "dir") == "rtl"
+        assert page.get_attribute(selector, "lang") == "ar"
+    page.click("#epub-contents-open")
+    entries = page.locator("#epub-contents-list button")
+    assert entries.evaluate_all("els => els.map(e => e.dir)") == ["rtl", "rtl", "ltr"]
+    assert entries.evaluate_all("els => els.map(e => e.lang)") == ["ar", "ar", "en"]
+    assert entries.nth(1).evaluate("e => getComputedStyle(e).paddingRight") == "28px"
+    assert entries.nth(1).evaluate("e => getComputedStyle(e).paddingLeft") == "12px"
+    assert entries.nth(2).evaluate("e => getComputedStyle(e).paddingLeft") == "28px"
+    entries.nth(1).click()
+    page.wait_for_function("() => vwFindParts.shown() === 1")
+    assert page.get_attribute("#epub-where", "dir") == "rtl"
+    page.click("#epub-contents-open")
+    assert entries.nth(1).get_attribute("aria-current") == "true"
+
+
+def test_empty_book_title_does_not_use_the_toc_label_fallback(viewer, page, made):
+    book = little_book(made, "empty-title.epub", [("", "", "<body><p>Text</p></body>")],
+        title_xml='<dc:title title="Not the book title"/>',
+        contents='<li><a href="c0.xhtml" title="TOC fallback"/></li>')
+    open_book(viewer, page, fixture=book)
+    page.click("#epub-contents-open")
+    assert page.text_content("#epub-title") == ""
+    assert page.text_content("#epub-contents-list button") == "TOC fallback"
+    assert page.text_content("#epub-where") == "TOC fallback"
+
+
+def test_navigation_without_direction_uses_automatic_bidi(viewer, page, made):
+    book = little_book(made, "auto.epub", [("", "", "<body><p>Text</p></body>")],
+        contents='<li><a href="c0.xhtml">الأول (1)</a></li><li><a href="c0.xhtml">English (2)</a></li>',
+        spine='page-progression-direction="rtl"', html='dir="invalid"')
+    open_book(viewer, page, fixture=book)
+    page.click("#epub-contents-open")
+    entries = page.locator("#epub-contents-list button")
+    assert entries.evaluate_all("els => els.map(e => e.dir)") == ["auto", "auto"]
+    assert entries.evaluate_all("els => els.map(e => getComputedStyle(e).direction)") == ["rtl", "ltr"]
+    assert entries.evaluate_all("els => els.map(e => getComputedStyle(e).unicodeBidi)") == ["isolate"] * 2
+
+
+def test_navigation_inherits_resolved_auto_and_can_clear_language(viewer, page, made):
+    book = little_book(made, "inherited-auto.epub", [("", "", "<body><p>Text</p></body>")],
+        contents='<li dir="auto" lang="ar"><span dir="ltr" lang="en">English first</span><ol>'
+                 '<li><a lang="" href="c0.xhtml">العربية</a></li>'
+                 '<li><a xml:lang="" href="c0.xhtml">English</a></li></ol></li>'
+                 '<li dir="rtl"><span>العربية</span><ol><li dir="auto">'
+                 '<a href="c0.xhtml">123</a></li></ol></li>')
+    open_book(viewer, page, fixture=book)
+    page.click("#epub-contents-open")
+    entries = page.locator("#epub-contents-list button, #epub-contents-list span")
+    assert entries.evaluate_all("els => els.map(e => e.dir)") == ["ltr", "rtl", "rtl", "rtl", "ltr"]
+    assert entries.evaluate_all("els => els.map(e => e.lang)") == ["en", "", "", "", ""]
+
+
+def test_navigation_metadata_is_not_markup(viewer, page, made):
+    attrs = 'dir="rtl&quot; onclick=&quot;alert(1)" lang="ar&quot; onclick=&quot;alert(1)"'
+    book = little_book(made, "labels-safe.epub", [("", "", "<body><p>Text</p></body>")],
+        html=attrs, package=attrs,
+        contents='<li><a href="c0.xhtml">&lt;img src=x onerror=alert(1)&gt;</a></li>')
+    open_book(viewer, page, fixture=book)
+    page.click("#epub-contents-open")
+    assert page.locator("#epub-contents-list button").inner_text() == "<img src=x onerror=alert(1)>"
+    assert page.get_attribute("#epub-where", "dir") == "auto"
+    assert page.locator("#epub-contents img, #epub-contents [onclick], #epub-where[onclick]").count() == 0
+
+
+def test_rtl_progress_and_exact_resume(viewer, page, port, made):
+    body = '<body><h1>الأول</h1>' + ('<p>' + 'كلمة ' * 100 + '</p>') * 50 + '</body>'
+    book = little_book(made, "resume-rtl.epub", [("", "", body),
+        ("", "", "<body><p>النهاية</p></body>")], html='dir="rtl" lang="ar"',
+        spine='page-progression-direction="rtl"')
+    open_book(viewer, page, fixture=book)
+    channel = port()
+    first = channel.wait_for(r"page 1 \d+")
+    line, at = rest_on_a_line(page, channel, 1234)
+    page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
+    page.wait_for_timeout(400)
+    assert int(channel.pages()[-1].split()[1]) > int(first.split()[1])
+    page.set_viewport_size({"width": 412, "height": 1600})
+    open_book(viewer, page, fixture=book, at=at)
+    page.wait_for_function("() => window.pageYOffset > 0")
+    assert abs(top_of_letter(page, line["letter"])) <= 1
 
 
 def test_a_table_too_wide_in_a_book_read_right_to_left(viewer, page, made):

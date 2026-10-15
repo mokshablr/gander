@@ -91,6 +91,10 @@ body { font-family: sans-serif; }
 .epub-turn button { flex: 1; }
 #epub-prev { text-align: left; }
 #epub-next { text-align: right; }
+.epub-turn[dir="rtl"] #epub-prev { text-align: right; }
+.epub-turn[dir="rtl"] #epub-next { text-align: left; }
+
+.epub-where, .epub-title, .epub-contents-list button, .epub-contents-list span { unicode-bidi: isolate; }
 
 .epub-where {
   min-width: 0;
@@ -175,7 +179,7 @@ body { font-family: sans-serif; }
   box-sizing: border-box;
   width: 100%;
   padding: 12px;
-  text-align: left;
+  text-align: start;
   font-size: 15px;
   font-size: calc(15px * var(--epub-own, 1));
   line-height: 1.35;

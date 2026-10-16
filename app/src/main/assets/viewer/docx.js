@@ -172,7 +172,7 @@ var VW_DRAW = {
   inWrapper: true,
   breakPages: true,
   renderHeadersFooters: true,
-  ignoreLastRenderedPageBreak: true,
+  ignoreLastRenderedPageBreak: false,
   experimental: true,
   keepOrigin: true,
   h: makeElement

@@ -16,6 +16,8 @@
     font: 13px/1.5 "Roboto Mono", Menlo, monospace;
     white-space: pre-wrap;
     word-wrap: break-word;
+    /* pre[dir=auto]'s plaintext mode stalls on long unbroken lines. */
+    unicode-bidi: isolate;
     color: #212121;
   }
   .more {

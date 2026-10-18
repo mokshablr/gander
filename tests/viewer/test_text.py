@@ -29,6 +29,36 @@ def test_a_text_file_is_shown(viewer, page):
     assert "Plain text, opened by the text viewer." in content(page)
 
 
+@pytest.mark.parametrize("ext", ["txt", "log", "nfo", ""])
+@pytest.mark.parametrize("text,direction", [
+    ("(2026) العربية من اليمين إلى اليسار.\nEnglish second.", "rtl"),
+    ("English first.\nالعربية من اليمين إلى اليسار.", "ltr"),
+])
+def test_text_uses_the_first_strong_character_for_file_direction(viewer, page, made, port, text, direction, ext):
+    viewer("text.html", made("mixed" + ("." + ext if ext else ""), text))
+    wait_for_text(page)
+    assert content(page) == text
+    assert page.locator("#content").evaluate("el => getComputedStyle(el).direction") == direction
+    assert page.locator("#content > *").count() == 0
+    channel = port()
+    channel.query("العربية")
+    channel.wait_for_count(1, 1)
+
+
+@pytest.mark.parametrize("ext,text", [
+    ("json", '"العربية"'),
+    ("js", '"العربية"'),
+    ("yaml", "العربية: نص"),
+    ("srt", "1\n00:00:01,000 --> 00:00:03,000\nالعربية\n"),
+    ("m3u", "العربية.mp3\n"),
+])
+def test_structured_formats_keep_ltr_even_when_the_first_word_is_arabic(viewer, page, made, ext, text):
+    viewer("text.html", made("source." + ext, text))
+    wait_for_text(page)
+    assert content(page) == text
+    assert page.locator("#content").evaluate("el => getComputedStyle(el).direction") == "ltr"
+
+
 def test_newlines_survive(viewer, page):
     viewer("text.html", "plain.txt")
     wait_for_text(page)
@@ -134,6 +164,17 @@ def test_asking_for_more_appends_the_rest(viewer, page, made):
         timeout=20000,
     )
     assert len(content(page)) > first
+
+
+def test_direction_updates_when_the_first_strong_character_arrives_on_a_later_page(viewer, page, made):
+    text = "." * (VW_TEXT_PAGE - 1) + "ب\nالعربية في النهاية"
+    viewer("text.html", made("paged-rtl.txt", text))
+    wait_for_text(page)
+    page.click("#moreBtn")
+    page.wait_for_function("() => document.querySelector('#content').textContent.endsWith('النهاية')")
+    assert content(page) == text
+    assert page.locator("#content").evaluate("el => getComputedStyle(el).direction") == "rtl"
+    assert page.locator("#content > *").count() == 0
 
 
 def test_a_file_ending_exactly_on_the_boundary_offers_no_empty_page(viewer, page, made):

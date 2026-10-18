@@ -1,4 +1,6 @@
 var content = document.getElementById("content");
+// shortcut: direction is file-wide; use format-aware rendering if timestamps or ASCII art must stay LTR.
+if (["", "txt", "log", "nfo"].indexOf(vwExt) >= 0) content.dir = "auto";
 var more = document.getElementById("more");
 var moreNote = document.getElementById("moreNote");
 var moreBtn = document.getElementById("moreBtn");

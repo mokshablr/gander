@@ -6,7 +6,13 @@ if (!vwWebViewTooOld("Markdown files")) {
   vwFetchDoc("text")
     .then(function (txt) {
       var html = marked.parse(txt, { gfm: true, breaks: false });
-      document.getElementById("content").innerHTML = DOMPurify.sanitize(html);
+      var content = document.getElementById("content");
+      content.innerHTML = DOMPurify.sanitize(html);
+      // Isolate code before auto direction scans the document.
+      content.querySelectorAll("pre, code").forEach(function (el) {
+        if (!el.closest("[dir]")) el.dir = "ltr";
+      });
+      content.dir = "auto";
       vwStatusDone();
     })
     .catch(function (e) { vwError("Could not render this Markdown file", String(e)); });

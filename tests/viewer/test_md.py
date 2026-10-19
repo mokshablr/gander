@@ -1,5 +1,7 @@
 """md.html: Markdown through marked, then DOMPurify, then into the DOM."""
 
+import pytest
+
 from helpers import status_text
 
 
@@ -21,6 +23,63 @@ def test_lists_and_links_render(viewer, page):
     wait_for_render(page)
     assert len(page.query_selector_all("#content li")) >= 2
     assert page.query_selector("#content a") is not None
+
+
+@pytest.mark.parametrize("heading,direction", [
+    ("ملاحظات القراءة", "rtl"),
+    ("Reading notes", "ltr"),
+])
+def test_prose_sets_direction_without_turning_code(viewer, page, made, port, heading, direction):
+    text = f'''```js
+const count = 1;
+```
+
+# {heading}
+
+(2026) العربية من اليمين إلى اليسار.
+
+- العنصر الأول
+- العنصر الثاني
+
+> اقتباس عربي.
+
+نص مع `value += 1`.
+'''
+    viewer("md.html", made("direction.md", text))
+    wait_for_render(page)
+    assert page.locator("#content h1, #content p, #content li").evaluate_all(
+        "(els, direction) => els.every(el => getComputedStyle(el).direction === direction)", direction
+    )
+    assert page.locator("#content pre, #content code").evaluate_all(
+        "els => els.every(el => getComputedStyle(el).direction === 'ltr')"
+    )
+    assert page.locator("#content > p code").evaluate("el => getComputedStyle(el).unicodeBidi") == "isolate"
+    assert page.text_content("#content pre code") == "const count = 1;\n"
+    borders = page.locator("#content blockquote").evaluate(
+        "el => [getComputedStyle(el).borderLeftWidth, getComputedStyle(el).borderRightWidth]"
+    )
+    assert borders == (["0px", "4px"] if direction == "rtl" else ["4px", "0px"])
+    channel = port()
+    channel.query("العربية")
+    channel.wait_for_count(1, 1)
+
+
+@pytest.mark.parametrize("direction", ["rtl", "ltr", "auto"])
+def test_authored_direction_scopes_are_preserved_for_code(viewer, page, made, direction):
+    text = f'''<div dir="{direction}">
+<pre><code>مقطع عربي</code></pre>
+<p><code>مقطع عربي</code></p>
+</div>
+<code dir="{direction}">مقطع عربي</code>
+'''
+    viewer("md.html", made("authored-dir.md", text))
+    wait_for_render(page)
+    assert page.get_attribute("#content div", "dir") == direction
+    assert page.get_attribute("#content > code", "dir") == direction
+    assert page.locator("#content pre, #content code").evaluate_all(
+        "(els, direction) => els.every(el => getComputedStyle(el).direction === direction)",
+        "ltr" if direction == "ltr" else "rtl",
+    )
 
 
 def test_a_script_in_the_document_is_removed(viewer, page):

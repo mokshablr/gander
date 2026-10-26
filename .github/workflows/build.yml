@@ -28,7 +28,7 @@ jobs:
       image: mcr.microsoft.com/playwright/python:v1.62.0-noble
       options: --ipc=host
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install
         run: pip install -r tests/viewer/requirements.txt
@@ -51,7 +51,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The wrapper jar is a binary that runs before any of this repo's own
       # code does, and pull requests arrive from forks. This checks it is one

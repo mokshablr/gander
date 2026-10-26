@@ -272,11 +272,11 @@ androidComponents.onVariants { variant ->
 }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.appcompat:appcompat:1.7.0")
-    implementation("com.google.android.material:material:1.12.0")
-    implementation("androidx.recyclerview:recyclerview:1.3.2")
-    implementation("androidx.webkit:webkit:1.16.0")
+    implementation("androidx.core:core-ktx:1.19.1")
+    implementation("androidx.appcompat:appcompat:1.8.0")
+    implementation("com.google.android.material:material:1.14.0")
+    implementation("androidx.recyclerview:recyclerview:1.4.0")
+    implementation("androidx.webkit:webkit:1.18.0")
     // Zoomable image view that tiles huge bitmaps
     implementation("com.davemorrissey.labs:subsampling-scale-image-view-androidx:3.10.0")
     // EXIF orientation for photos opened via SAF content URIs
@@ -288,7 +288,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.google.truth:truth:1.4.5")
     // 4.16.1 is the first to support SDK 36, which is why the toolchain has to be JDK 21.
-    testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("org.robolectric:robolectric:4.17")
     testImplementation("androidx.test:core-ktx:1.7.0")
     testImplementation("androidx.test.ext:junit-ktx:1.3.0")
 

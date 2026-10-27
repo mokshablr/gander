@@ -42,7 +42,7 @@ jobs:
       # The rendered page beside the golden it failed against, and the
       # difference between them. Nothing to look at unless something broke.
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gander-viewer-screenshots
           path: tests/viewer/goldens/*.png
@@ -94,7 +94,7 @@ jobs:
       - name: Checksum the debug APK
         run: shasum -a 256 app/build/outputs/apk/debug/*.apk
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: gander-debug-apk
           path: app/build/outputs/apk/debug/*.apk
@@ -102,7 +102,7 @@ jobs:
       # Only on failure, and only the reports: the HTML test report says which
       # assertion went and with what, which a log tail does not.
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gander-reports
           path: app/build/reports/

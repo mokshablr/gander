@@ -92,7 +92,7 @@ jobs:
             ./gradlew connectedDebugAndroidTest --no-daemon
 
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gander-device-test-reports
           path: |
@@ -145,7 +145,7 @@ jobs:
             ./gradlew connectedDebugAndroidTest --no-daemon -Pandroid.testInstrumentationRunnerArguments.class=com.arjun.gander.PdfSimpleDeviceTest -Pandroid.testInstrumentationRunnerArguments.subFloor=required
 
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gander-sub-floor-test-reports
           path: |

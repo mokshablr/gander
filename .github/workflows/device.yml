@@ -47,7 +47,7 @@ jobs:
       # Cold-booting an AVD is most of the runtime, and it is the same AVD
       # every night.
       - name: Cache the AVD
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         id: avd-cache
         with:
           path: |

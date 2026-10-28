@@ -14,6 +14,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.view.ContextThemeWrapper
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.ColorUtils
 import androidx.core.view.WindowCompat
 import androidx.core.view.children
 import androidx.test.core.app.ApplicationProvider
@@ -22,6 +23,7 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.shape.MaterialShapeDrawable
 import com.google.common.truth.Truth.assertThat
+import kotlin.math.pow
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -210,6 +212,38 @@ class NightChromeTest {
         )
         chrome.show(false)
         assertThat(viewer.parts()).isEqualTo(asPhone)
+    }
+
+    /** WCAG 2.1 contrast between two opaque colours. */
+    private fun contrast(a: Int, b: Int): Double {
+        fun channel(c: Int): Double {
+            val s = c / 255.0
+            return if (s <= 0.03928) s / 12.92 else ((s + 0.055) / 1.055).pow(2.4)
+        }
+        fun luminance(c: Int) =
+            0.2126 * channel(Color.red(c)) + 0.7152 * channel(Color.green(c)) + 0.0722 * channel(Color.blue(c))
+        val (lighter, darker) = listOf(luminance(a), luminance(b)).sortedDescending()
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    /** Selected text against its highlight, laid over what is behind the box. */
+    private fun EditText.selectedTextContrast(behind: Int) =
+        contrast(currentTextColor, ColorUtils.compositeColors(highlightColor, behind))
+
+    // Left to Material, the highlight is the on-primary-container role at 60%, which in Gander's
+    // light palette is a near-black brown, and the text it covered measured 3.5:1
+    @Test
+    fun selectedTextInTheSearchBoxStaysReadable() {
+        val box = open("six-pages.pdf").findViewById<EditText>(R.id.searchInput)
+        assertThat(box.selectedTextContrast(context.color(R.color.gander_surface))).isAtLeast(4.5)
+    }
+
+    // Material's own highlight for a dark theme left it at 3.1:1
+    @Test
+    @Config(qualifiers = "night")
+    fun onAPhoneSetToDarkSelectedTextInTheSearchBoxStaysReadable() {
+        val box = open("six-pages.pdf").findViewById<EditText>(R.id.searchInput)
+        assertThat(box.selectedTextContrast(context.color(R.color.gander_surface))).isAtLeast(4.5)
     }
 
     @Test

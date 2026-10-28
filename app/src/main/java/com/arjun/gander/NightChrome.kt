@@ -60,8 +60,8 @@ internal class NightChrome(private val activity: AppCompatActivity) {
         })
     }
 
-    // Both read now, before show() lays the menu's overlay over the toolbar's theme, which for
-    // this toolbar is the activity's own
+    // The menu's overlay goes on the toolbar's theme, which Material keeps as its own copy of the
+    // activity's, so neither palette ever reads it
     private val asPhone = Palette(activity)
     private val atNight = Palette(nightContext)
 

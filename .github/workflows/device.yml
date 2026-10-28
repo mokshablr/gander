@@ -42,7 +42,7 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
 
       # Cold-booting an AVD is most of the runtime, and it is the same AVD
       # every night.
@@ -124,7 +124,7 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
 
       - name: Simple view tests
         uses: reactivecircus/android-emulator-runner@v2

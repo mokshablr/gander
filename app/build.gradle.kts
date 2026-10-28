@@ -152,6 +152,10 @@ android {
                 // of the suite it found that heap nearly full: out of memory in two of three
                 // full runs on 2026-10-01, where on its own it takes half a second.
                 test.maxHeapSize = "1g"
+                // Robolectric 4.17 sets up Android 16's shared memory before each test through
+                // a JDK-internal class that Java 21 doesn't export, so without this every test
+                // on API 36 fails at setup. Drop it once robolectric/robolectric#11354 ships.
+                test.jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
             }
         }
     }

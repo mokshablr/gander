@@ -328,7 +328,7 @@ class MainActivity : AppCompatActivity() {
             else -> {
                 field.text = permissions.joinToString("\n")
                 field.setTextColor(
-                    MaterialColors.getColor(field, com.google.android.material.R.attr.colorError)
+                    MaterialColors.getColor(field, androidx.appcompat.R.attr.colorError)
                 )
             }
         }
@@ -548,7 +548,7 @@ class MainActivity : AppCompatActivity() {
         // to a neutral is what leaves the red meaning one thing.
         listOf(
             AlertDialog.BUTTON_POSITIVE to
-                com.google.android.material.R.attr.colorError,
+                androidx.appcompat.R.attr.colorError,
             AlertDialog.BUTTON_NEGATIVE to
                 com.google.android.material.R.attr.colorOnSurfaceVariant
         ).forEach { (which, attr) ->

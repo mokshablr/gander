@@ -48,6 +48,7 @@
         <item name="colorPrimaryInverse">@color/gander_inverse_primary</item>
         <item name="android:colorBackground">@color/gander_surface</item>
         <item name="android:windowBackground">@color/gander_surface</item>
+        <item name="android:textColorHighlight">@color/gander_text_highlight</item>
         <item name="android:windowLightStatusBar">@bool/gander_light_status_bar</item>
         <!-- The status bar itself, on Android 14 and older, where the app colours it. With
              nothing named here the platform used colorPrimaryDark, which Material 3 sets to

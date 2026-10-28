@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Behind selected text in the app's own boxes: search, Go to page, an archive's password.
+     Material's default is the on-primary-container role at 60%, which in this palette is a
+     near-black brown; on the brand red at 40% the text measures 7:1 or better by day and 5:1 on
+     a phone set to dark. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:alpha="0.4" android:color="?attr/colorPrimary" />
+</selector>

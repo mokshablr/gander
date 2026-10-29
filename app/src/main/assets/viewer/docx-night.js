@@ -13,13 +13,6 @@ var vwNightOn = vwParams.get("night") === "1";
 var vwNightReady = false;
 if (vwNightOn) document.documentElement.classList.add("vw-night");
 
-/* invert(1) hue-rotate(180deg), written out as pdf.html's #vw-invert has it */
-var VW_NIGHT_MATRIX = [
-  [0.574, -1.430, -0.144, 1],
-  [-0.426, -0.430, -0.144, 1],
-  [-0.426, -1.430, 0.856, 1]
-];
-
 var vwColourProbe = null;
 
 /* A colour as night has it, or null for anything that is not a colour of its own */

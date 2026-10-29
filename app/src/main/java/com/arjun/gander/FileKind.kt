@@ -60,8 +60,8 @@ enum class FileKind(val page: String) {
     /**
      * Has its double tap zoomed by [DoubleTapZoom], and its page turns the WebView's own off. A
      * page or a picture is about as wide as the screen, so the WebView's own went in by a fifth
-     * to two fifths. Not a sheet: its cells are narrow, and the WebView's own takes one to the
-     * sheet's own size, which is further in than this goes.
+     * to two fifths. Not a sheet, whose page zooms itself, double taps included, so that its
+     * column letters and frozen panes stay on screen at any size: see xlsx.js.
      */
     val zoomedOnDoubleTap: Boolean
         get() = this == PDF || this == PDF_SIMPLE || this == DOCX || this == PROSE || this == PPTX ||

@@ -67,6 +67,37 @@ class DoubleTapDeviceTest {
     fun aPictureOnThePageZoomsInAboutThePlaceTappedAndBack() =
         zoomsInAboutThePlaceTappedAndBack("icon.svg", IMAGE_SHOWN)
 
+    /**
+     * A sheet's page zooms itself, so its column letters and frozen panes stay on screen, and says
+     * how far: the WebView itself never zooms. What only a device shows is that a real double tap
+     * reaches the page through the app's touch handling, and that the WebView does not zoom too.
+     */
+    @Test
+    fun aSheetZoomsItselfInAboutThePlaceTappedAndBack() {
+        open("budget.xlsx").use { scenario ->
+            WebViewProbe.await(scenario, STATUS_DONE, "budget.xlsx to be drawn")
+            val opened = WebViewProbe.text(scenario, "String(vwSheetZoom())").toDouble()
+            val before = sheetPlace(scenario)
+
+            onView(isAssignableFrom(WebView::class.java)).perform(doubleTapOffCentre)
+            WebViewProbe.await(
+                scenario, "Math.abs(vwSheetZoom() / $opened - $DOUBLE_TAP_ZOOM) < 0.02", "the sheet to zoom in", 10_000
+            )
+            val after = sheetPlace(scenario)
+            assertThat(after[0]).isWithin(4.0).of(before[0])
+            assertThat(after[1]).isWithin(4.0).of(before[1])
+            assertThat(WebViewProbe.eval(scenario, ZOOM)).isEqualTo("100")
+
+            onView(isAssignableFrom(WebView::class.java)).perform(doubleTapOffCentre)
+            WebViewProbe.await(scenario, "Math.abs(vwSheetZoom() - $opened) < 0.02", "the sheet to come back", 10_000)
+        }
+    }
+
+    /** Where in the sheet, in its own px, the place a quarter across the screen and a third down it is */
+    private fun sheetPlace(scenario: ActivityScenario<ViewerActivity>): List<Double> =
+        WebViewProbe.text(scenario, "vwSheetPlace(innerWidth / 4, innerHeight / 3).join(' ')")
+            .split(" ").map { it.toDouble() }
+
     @Test
     fun aPhotoZoomsToTwiceItsFitAndBack() {
         openCameraPhoto().use { scenario -> photoZoomsAndComesBack(scenario) }

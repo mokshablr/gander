@@ -56,14 +56,18 @@ jobs:
       # The wrapper jar is a binary that runs before any of this repo's own
       # code does, and pull requests arrive from forks. This checks it is one
       # Gradle published rather than one somebody edited.
-      - uses: gradle/actions/wrapper-validation@v4
+      - uses: gradle/actions/wrapper-validation@v6
 
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
 
-      - uses: gradle/actions/setup-gradle@v4
+      # The MIT-licensed cache. Version 6's default is a closed-source Gradle component under
+      # Gradle's Terms of Use.
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
 
       # Ahead of the builds: a compile error or a broken assertion should be
       # reported as such, not as a failure somewhere inside assembleRelease.

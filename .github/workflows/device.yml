@@ -42,7 +42,11 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - uses: gradle/actions/setup-gradle@v4
+      # The MIT-licensed cache. Version 6's default is a closed-source Gradle component under
+      # Gradle's Terms of Use.
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
 
       # Cold-booting an AVD is most of the runtime, and it is the same AVD
       # every night.
@@ -124,7 +128,9 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
 
       - name: Simple view tests
         uses: reactivecircus/android-emulator-runner@v2

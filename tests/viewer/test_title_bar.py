@@ -213,15 +213,20 @@ def test_go_to_page_in_a_word_document_puts_it_just_below_the_bar(opened, port):
     )
 
 
-def test_a_sheets_tabs_follow_the_bar_pixel_for_pixel(opened, port):
-    page = opened("xlsx.html", "budget.xlsx", top=BAR)
-    tabs_top = "() => getComputedStyle(document.getElementById('tabs')).top"
-    assert page.evaluate(tabs_top) == f"{BAR}px"
+def test_a_sheets_column_letters_follow_the_bar_pixel_for_pixel(opened, port, made):
+    """
+    Scrolled down, the letters are held under the bar, at the foot of what is left of it on screen,
+    which is when the bar goes up out of sight in the app.
+    """
+    page = opened("xlsx.html", big_sheet(made, 300), top=BAR)
+    head_top = "() => document.querySelector('#grid .vw-head').getBoundingClientRect().top"
+    page.evaluate("() => window.scrollTo(0, 2000)")
+    page.wait_for_function(f"() => Math.abs(({head_top})() - {BAR}) < 0.5", timeout=5000)
     channel = port()
 
-    for gone, held_at in (("20", "36px"), ("56", "0px"), ("12.5", "43.5px"), ("0", f"{BAR}px")):
+    for gone, held_at in (("20", 36), ("56", 0), ("12.5", 43.5), ("0", BAR)):
         channel.send("b" + gone)
-        page.wait_for_function(f"() => ({tabs_top})() === '{held_at}'", timeout=5000)
+        page.wait_for_function(f"() => Math.abs(({head_top})() - {held_at}) < 0.5", timeout=5000)
 
 
 def test_a_zoomed_out_page_hears_how_much_of_the_bar_has_gone_in_its_own_px(browser, server):

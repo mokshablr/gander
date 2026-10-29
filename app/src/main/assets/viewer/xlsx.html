@@ -5,80 +5,314 @@
 <!-- The policy in ViewerPolicy.kt, which says why each part is there. ViewerPolicyTest
      keeps this copy word for word the same as that one, in every page. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">
+<!-- Laid out at the phone's own width, a px a dp, and never zoomed by the WebView: the page zooms
+     the sheet itself, so that its headings and frozen panes stay on screen. See xlsx.js. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
 <title>Spreadsheet</title>
 <link rel="stylesheet" href="app.css">
 <style>
-  /* No viewport meta on this page, so the WebView lays out at its 980 CSS px default
-     and zooms that down to fit the screen. That shrinks the status card along with
-     everything else; app.css multiplies it back up by this. See the token there. */
-  :root { --vw-zoom: 2.75; }
+  :root {
+    --vw-z: 1;
+    --vw-type: 1;
+    /* Excel's own gridline grey, a shade warmer, at about 1.5:1 on white as Excel's is */
+    --vw-gridline: #D4D1CB;
+    --vw-head-ground: #F3F1EC;
+    --vw-head-ink: #5C574C;
+    --vw-head-line: #C9C3B6;
+    --vw-lit-ground: #F6DCD5;
+    --vw-bar-line: #CFC5B2;
+    --vw-freeze: #8F887A;
+  }
+
+  /* Pinches and double taps are the page's: see xlsx.js. One finger still scrolls as ever. */
+  html { touch-action: pan-x pan-y; }
 
   body { background: #ffffff; }
-  /* Held under as much of the title bar floating over the sheet as is on screen, which changes
-     as the bar follows the reader's scrolling */
-  #tabs {
+
+  /* As wide as the sheet, so the page scrolls across it as well as down */
+  #sheet { display: inline-block; min-width: 100%; vertical-align: top; }
+  #sheet.vw-moving { will-change: transform; }
+  #grid { position: relative; width: max-content; }
+
+  /* The column letters and frozen rows, held under as much of the title bar as is on screen. The
+     page's px are the zoom's in here, so the bar's height is divided by it. */
+  .vw-head {
     position: sticky;
     top: 0;
-    top: calc(var(--vw-top, 0px) - var(--vw-bar-gone, 0px));
-    z-index: 5;
+    top: calc((var(--vw-top, 0px) - var(--vw-bar-gone, 0px)) / var(--vw-z));
+    z-index: 3;
     display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    gap: 6px;
-    padding: 8px;
-    background: #ECE8DF;
-    border-bottom: 1px solid #CFC5B2;
+    width: max-content;
   }
+  /* A piece of the sheet, laid out only near the screen, so that a zoom lays out only what is seen */
+  .vw-p { display: flex; width: max-content; content-visibility: auto; }
+
+  /* The row numbers and frozen columns, held at the left while the rest scrolls under them. Text
+     running on past them is cut off at their edge, and carried on in the columns that scroll. */
+  .vw-tl { position: sticky; left: 0; z-index: 2; clip-path: inset(0 -1px 0 0); }
+  .vw-head .vw-tl { z-index: 4; }
+  [dir="rtl"] .vw-tl { left: auto; right: 0; clip-path: inset(0 0 0 -1px); }
+  /* Where frozen panes end, the line Excel draws */
+  .vw-tl.vw-freeze { box-shadow: 1px 0 0 var(--vw-freeze); }
+  [dir="rtl"] .vw-tl.vw-freeze { box-shadow: -1px 0 0 var(--vw-freeze); }
+  .vw-head.vw-freeze { box-shadow: 0 1px 0 var(--vw-freeze); }
+
+  table.vw-t {
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+    background: #ffffff;
+  }
+  .vw-t tr { height: var(--vw-rh, 20px); }
+  .vw-t td {
+    padding: 0 3px;
+    white-space: pre;
+    vertical-align: bottom;
+    line-height: 1.2;
+    border-right: 1px solid var(--vw-gridline);
+    border-bottom: 1px solid var(--vw-gridline);
+    color: #000000;
+  }
+  /* General alignment: numbers and dates to the right, true, false and errors in the middle */
+  .vw-t td.vw-n { text-align: right; }
+  .vw-t td.vw-m { text-align: center; }
+  /* A fill covers the gridlines round its cell, as in Excel; and so does text running on over them */
+  #grid td.vw-f { border-right-color: transparent; border-bottom-color: transparent; }
+  #grid td.vw-nr { border-right-color: transparent; }
+  #grid td.vw-nb { border-bottom-color: transparent; }
+  #grid.vw-nogrid td { border-right-color: transparent; border-bottom-color: transparent; }
+  /* Only a cell whose text is wider or taller than it is clipped: a clip on every cell kept one for
+     each in the WebView, which on a sheet of a million cells cost 50 MB and seconds */
+  #grid td.vw-cut { overflow: hidden; }
+  /* Text that runs on over the empty cells beside it, in a box as wide as they are */
+  #grid td.vw-sx { overflow: visible; padding: 0; }
+  .vw-sp { display: flex; white-space: pre; overflow: hidden; box-sizing: border-box; }
+  .vw-clip { overflow: hidden; }
+  /* Cut below and not across, so that text running on over the cells beside still shows */
+  .vw-cap { overflow-x: visible; overflow-y: clip; }
+  /* Text turned: up reads from the foot, down from the head, stacked a letter under the last */
+  .vw-up { writing-mode: vertical-rl; transform: rotate(180deg); display: inline-block; }
+  .vw-down { writing-mode: vertical-rl; display: inline-block; }
+  .vw-stack { writing-mode: vertical-rl; text-orientation: upright; display: inline-block; }
+  .vw-turn { display: inline-block; transform-origin: 0 100%; white-space: pre; }
+  /* A note's red corner, as Excel marks one */
+  #grid td.vw-cm {
+    background-image: linear-gradient(225deg, #D32F2F 5px, transparent 5px);
+    background-repeat: no-repeat;
+    background-position: top right;
+  }
+  /* A link reads as its cell's font says, which is blue and underlined where Excel made it */
+  #grid a { color: inherit; text-decoration: inherit; }
+
+  /* Column letters and row numbers, drawn from attributes so that no search finds them */
+  .vw-t th {
+    padding: 0 2px;
+    background: var(--vw-head-ground);
+    color: var(--vw-head-ink);
+    font: 400 12px/1 Roboto, sans-serif;
+    text-align: center;
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+    border-right: 1px solid var(--vw-head-line);
+    border-bottom: 1px solid var(--vw-head-line);
+  }
+  .vw-t th[data-n]::before { content: attr(data-n); }
+  .vw-t tr.vw-letters { height: 20px; }
+  /* Where rows or columns are hidden, a heavier line, as Excel draws one */
+  .vw-t th.vw-rh.vw-gap { box-shadow: inset 0 2px 0 var(--vw-head-line); }
+  .vw-t th.vw-ch.vw-gap { box-shadow: inset 2px 0 0 var(--vw-head-line); }
+  /* The selected cell, and its letters and number */
+  #grid td.vw-sel { outline: 2px solid var(--vw-accent); outline-offset: -2px; }
+  .vw-t th.vw-lit { background: var(--vw-lit-ground); color: var(--vw-accent); font-weight: 700; }
+
+  /* Pictures, charts and text boxes over the cells: see artBlock() in xlsx.js. Touches pass through
+     them to the cells, which stay the thing to tap. */
+  .vw-art { position: absolute; top: 0; inset-inline-start: 0; z-index: 1; pointer-events: none; }
+  .vw-art > * { position: absolute; box-sizing: border-box; }
+  .vw-art-text {
+    padding: 4px 6px;
+    overflow: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    background: #ffffff;
+    border: 1px solid #A39B8B;
+  }
+  /* Its words at its top left, where the chart starts, since a phone's screen often holds only that corner */
+  .vw-art-missing {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 8px 10px;
+    overflow: hidden;
+    background: rgba(243, 241, 236, 0.94);
+    border: 1px dashed #A39B8B;
+    color: #5C574C;
+    font: 400 12px/1.3 Roboto, sans-serif;
+  }
+  .vw-art-missing b { font-size: 14px; color: #1E1B15; }
+
+  /* A block of known height, which says what sizes inside the zoom read as: see seen() in xlsx.js */
+  .vw-probe { position: absolute; top: 0; left: 0; width: 1px; height: 100px; visibility: hidden; pointer-events: none; }
+
+  /* The sheets' tabs, at the foot of the screen as Excel and Google Sheets have them */
+  #tabs {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 6;
+    display: flex;
+    overflow-x: auto;
+    padding: 0 4px;
+    background: #F3F1EC;
+    border-top: 1px solid var(--vw-bar-line);
+    scrollbar-width: none;
+  }
+  #tabs[hidden] { display: none; }
   #tabs button {
     flex: 0 0 auto;
-    border: 1px solid #CFC5B2;
-    border-radius: 16px;
-    background: #ffffff;
-    color: #4D4636;
-    font-size: 13px;
-    padding: 6px 14px;
+    position: relative;
+    min-width: 48px;
+    min-height: 48px;
+    min-height: calc(48px * var(--vw-type));
+    max-width: 60vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 16px;
+    border: 0;
+    background: transparent;
+    color: #5C574C;
+    font: 500 14px Roboto, sans-serif;
+    font-size: calc(14px * var(--vw-type));
   }
   #tabs button.active {
-    background: var(--vw-accent);
-    border-color: var(--vw-accent);
-    color: var(--vw-accent-ink);
+    background: #ffffff;
+    color: var(--vw-ink);
+    font-weight: 700;
+    box-shadow: inset 0 -3px 0 var(--vw-accent);
   }
-  #sheet { padding: 8px; overflow: auto; }
-  #sheet table { border-collapse: collapse; font-size: 13px; }
-  #sheet td, #sheet th {
-    border: 1px solid #CFC5B2;
-    padding: 4px 8px;
-    white-space: pre;
-    min-width: 40px;
+  /* A tab given a colour in the workbook: a band of it along the tab's foot */
+  #tabs button.vw-coloured::after {
+    content: "";
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 6px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--vw-tab);
   }
-  /* The sheet's first row, which only the first of a large sheet's pieces has: see xlsx.js */
-  #sheet table.vw-top tr:first-child td { background: #F2EDE4; font-weight: 600; }
-  /* Each piece of a large sheet is a table with borders of its own. A later one sits a border's
-     width higher, so its top line lies on the bottom line of the piece above, as the rows of one
-     table share theirs: one line between pieces rather than two, and every row its own height. */
-  #sheet table.vw-more { margin-top: -1px; }
+  #tabs button.vw-coloured.active::after { bottom: 3px; }
 
-  /* A spreadsheet has no paper to be faithful to, unlike a Word page, so the whole
-     thing goes dark rather than just the surround. The rules are borrowed from the
-     app's night palette. The grid is #6B6250 and not the lighter outline tone: it
-     clears 3:1 against the ground so the structure is still legible, while staying
-     far enough behind the cell text not to compete with the numbers. */
+  /* The tapped cell, whole, above the tabs: as Excel's formula bar, at the foot within reach */
+  #cellbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 6;
+    max-height: 40vh;
+    overflow-y: auto;
+    padding: 6px 4px 8px 12px;
+    background: #ffffff;
+    border-top: 1px solid var(--vw-bar-line);
+    box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.08);
+    color: var(--vw-ink);
+    font: 400 15px/1.35 Roboto, sans-serif;
+    font-size: calc(15px * var(--vw-type));
+  }
+  #cellbar[hidden] { display: none; }
+  .vw-cb-top { display: flex; align-items: flex-start; }
+  .vw-cb-address {
+    flex: 0 0 auto;
+    min-width: 3.2em;
+    margin-right: 10px;
+    padding-top: 12px;
+    color: var(--vw-accent);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .vw-cb-text { flex: 1 1 auto; min-width: 0; padding-top: 12px; }
+  .vw-cb-value { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; -webkit-user-select: text; user-select: text; }
+  .vw-cb-value.vw-cb-none { color: var(--vw-head-ink); font-style: italic; }
+  .vw-cb-more > div { margin-top: 4px; color: var(--vw-head-ink); font-size: 0.87em; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; -webkit-user-select: text; user-select: text; }
+  .vw-cb-formula, .vw-cb-raw { font-family: "Roboto Mono", monospace; }
+  .vw-cb-label { font-weight: 700; margin-right: 6px; }
+  #cellbar button {
+    flex: 0 0 auto;
+    width: 48px;
+    height: 48px;
+    border: 0;
+    border-radius: 24px;
+    background: transparent;
+    color: var(--vw-head-ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #cellbar button svg { width: 22px; height: 22px; fill: currentColor; }
+  #cellbar button .vw-tick { display: none; }
+  #cellbar button.vw-done .vw-tick { display: block; }
+  #cellbar button.vw-done .vw-icon-copy { display: none; }
+  .vw-copy { position: fixed; top: 0; left: -9999px; opacity: 0; }
+
+  /*
+   * A spreadsheet has no paper to be faithful to, unlike a Word page, so the whole thing goes dark
+   * rather than just the surround, in the app's night palette. The gridlines are about 2:1 on the
+   * ground, a little more than Excel's dark sheets give theirs, to read on a phone in a dark room.
+   */
   @media (prefers-color-scheme: dark) {
+    :root {
+      --vw-gridline: #4D4636;
+      --vw-head-ground: #221F19;
+      --vw-head-ink: #B5AC9C;
+      --vw-head-line: #5A5242;
+      --vw-lit-ground: #4A2A22;
+      --vw-bar-line: #4D4636;
+      --vw-freeze: #8F887A;
+    }
     body { background: var(--vw-ground); }
-    #tabs { background: #221F19; border-bottom-color: #4D4636; }
-    #tabs button { background: var(--vw-card); border-color: #4D4636; color: var(--vw-ink); }
-    #sheet td, #sheet th { border-color: #6B6250; color: var(--vw-ink); }
-    #sheet table.vw-top tr:first-child td { background: var(--vw-card); }
+    table.vw-t { background: var(--vw-ground); }
+    .vw-t td { color: var(--vw-ink); }
+    #tabs { background: #221F19; }
+    #tabs button { color: var(--vw-head-ink); }
+    #tabs button.active { background: var(--vw-card); color: var(--vw-ink); }
+    #cellbar { background: var(--vw-card); box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.4); }
+    .vw-art-text { background: var(--vw-ground); color: var(--vw-ink); border-color: #5A5242; }
+    .vw-art-missing { background: rgba(34, 31, 25, 0.94); border-color: #5A5242; color: var(--vw-head-ink); }
+    .vw-art-missing b { color: var(--vw-ink); }
   }
 </style>
 <script src="lib/xlsx.full.min.js"></script>
 </head>
 <body>
 <div id="vw-status" class="vw-status vw-wait">Loading spreadsheet…</div>
-<div id="tabs" style="display:none"></div>
-<div id="sheet" data-vw-find></div>
+<div id="sheet" data-vw-find><div id="grid"></div></div>
+<div id="cellbar" role="region" aria-label="Selected cell" hidden>
+  <div class="vw-cb-top">
+    <div class="vw-cb-address" aria-label="Cell"></div>
+    <div class="vw-cb-text" aria-live="polite">
+      <div class="vw-cb-value"></div>
+      <div class="vw-cb-more"></div>
+    </div>
+    <button type="button" class="vw-cb-copy" aria-label="Copy">
+      <svg class="vw-icon-copy" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>
+      <svg class="vw-tick" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>
+    </button>
+    <button type="button" class="vw-cb-close" aria-label="Close">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4z"/></svg>
+    </button>
+  </div>
+</div>
+<div id="tabs" role="tablist" aria-label="Sheets" hidden></div>
 <script src="app.js"></script>
 <script src="find.js"></script>
+<script src="xlsx-tables.js"></script>
+<script src="xlsx-styles.js"></script>
+<script src="xlsx-rules.js"></script>
 <script src="xlsx.js"></script>
 </body>
 </html>

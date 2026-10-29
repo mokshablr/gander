@@ -609,7 +609,8 @@ open class ViewerActivity : AppCompatActivity() {
     /**
      * Back while a book's page has something for it to do first: its contents list or a
      * link's address to close, or the place the reader was at before a link took them to a
-     * note. The page says when there is: see [PortMessage.Covered].
+     * note. And while a sheet has a cell selected, whose bar Back puts away before it leaves.
+     * The page says when there is: see [PortMessage.Covered].
      *
      * Switched off as it fires rather than on the page's word that the thing has closed, so
      * a page that never answers cannot hold on to Back.
@@ -1412,7 +1413,9 @@ open class ViewerActivity : AppCompatActivity() {
                                 savePosition()
                             }
                         }
-                        is PortMessage.Covered -> if (book) coverBackCallback.isEnabled = said.on
+                        // A book's contents or a link's address over it, or a sheet's selected cell
+                        is PortMessage.Covered ->
+                            if (book || kind == FileKind.XLSX) coverBackCallback.isEnabled = said.on
                         is PortMessage.Reflows -> if (book) {
                             bookReflows = said.on
                             applyTextSize()
@@ -1626,8 +1629,13 @@ open class ViewerActivity : AppCompatActivity() {
              * floor is silently rewriting them there as well. But nothing has been
              * measured going wrong in those, and the way to find out is to look rather
              * than to change five viewers on the strength of one.
+             *
+             * A sheet as well, for its smallest type. It measures text on a canvas, which no
+             * floor reaches, to tell what fits a cell, and 5 point text drawn at the floor's 8 px
+             * came out a fifth wider than measured, spilling where Excel's fits. Its zoom is CSS
+             * zoom, which the floor leaves alone.
              */
-            if (kind == FileKind.PDF) minimumFontSize = 1
+            if (kind == FileKind.PDF || kind == FileKind.XLSX) minimumFontSize = 1
             /*
              * A book for another reason, and measured too. Its page writes its own words
              * smaller as the reader's text size goes up, so that the zoom brings them back
@@ -1642,6 +1650,9 @@ open class ViewerActivity : AppCompatActivity() {
                 minimumLogicalFontSize = 8
             }
             phoneTextZoom = textZoom
+            // A sheet takes the phone's text size as the zoom it opens at, cells and all, rather
+            // than as larger letters in columns the file sized for smaller ones: see the URL below
+            if (kind == FileKind.XLSX) textZoom = 100
         }
         book = kind == FileKind.EPUB
         if (book) {
@@ -1794,8 +1805,9 @@ open class ViewerActivity : AppCompatActivity() {
                     (if (resumeAt > 1) "&resume=$resumeAt" else "") +
                     (placeAt?.let { "&at=${it.chapter}.${it.past}" } ?: "") +
                     // The zoom the phone itself asks for, which a book's page keeps its
-                    // own words at whatever size the reader gives the book's
-                    (if (kind == FileKind.EPUB) "&type=$phoneTextZoom" else "") +
+                    // own words at whatever size the reader gives the book's, and a sheet
+                    // opens zoomed to
+                    (if (kind == FileKind.EPUB || kind == FileKind.XLSX) "&type=$phoneTextZoom" else "") +
                     // The room to leave at the top for the title bar floating over it
                     (documentChrome?.let { "&top=${it.heightDp()}" } ?: "") +
                     floor +

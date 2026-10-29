@@ -269,6 +269,17 @@ function vwDisarmLinks(root) {
   }
 }
 
+/*
+ * invert(1) hue-rotate(180deg), written out as pdf.html's #vw-invert has it. Night mode turns a
+ * colour over with this, so dark ink goes light and a blue heading stays blue: docx-night.js for a
+ * Word page and xlsx-styles.js for a sheet's own colours.
+ */
+var VW_NIGHT_MATRIX = [
+  [0.574, -1.430, -0.144, 1],
+  [-0.426, -0.430, -0.144, 1],
+  [-0.426, -1.430, 0.856, 1]
+];
+
 function vwDocUrl() {
   return "/doc/file" + (vwExt ? "." + vwExt : "");
 }
@@ -575,6 +586,12 @@ function vwFormatSize(bytes) {
   return (mb >= 10 ? Math.round(mb) : Math.round(mb * 10) / 10) + " MB";
 }
 
+/*
+ * Except ResizeObserver's notice that sizes changed again within a frame, which is no failure: the
+ * observer gets them in the next one. Chromium 102 sends it as a sheet with wrapped text opens, and
+ * the card covered a sheet that had drawn.
+ */
 window.onerror = function (message) {
+  if (/ResizeObserver loop/.test(String(message))) return;
   vwError("Something went wrong while rendering", String(message));
 };

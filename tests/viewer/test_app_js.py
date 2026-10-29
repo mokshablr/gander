@@ -106,6 +106,20 @@ def test_error_text_is_set_as_text_rather_than_markup(loaded):
     assert loaded.query_selector(".vw-error-detail img") is None
 
 
+def test_a_resize_observers_notice_of_sizes_left_for_the_next_frame_brings_no_card(loaded):
+    """
+    Chromium 102 sends the first as a sheet with wrapped text opens, over a sheet that drew;
+    newer Chromium words it the second way. Any other error still brings the card.
+    """
+    for notice in ("ResizeObserver loop limit exceeded",
+                   "ResizeObserver loop completed with undelivered notifications."):
+        loaded.evaluate("(m) => window.dispatchEvent(new ErrorEvent('error', { message: m }))", notice)
+    assert loaded.query_selector(".vw-error-title") is None
+    loaded.evaluate("() => window.dispatchEvent(new ErrorEvent('error', { message: 'TypeError: x is undefined' }))")
+    assert loaded.text_content(".vw-error-title") == "Something went wrong while rendering"
+    assert loaded.text_content(".vw-error-detail") == "TypeError: x is undefined"
+
+
 # ---------------------------------------------------------------------------
 # vwFormatJson: laying a minified .json file out over lines
 # ---------------------------------------------------------------------------

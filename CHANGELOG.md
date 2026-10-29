@@ -25,6 +25,29 @@
   which F-Droid flags.
 - A double tap zooms smoothly far down a long document, where the page jumped up and down as it
   zoomed.
+- Spreadsheets show their colours: filled cells, rows and columns, and coloured, bold, italic,
+  underlined or struck-through text, where every cell was drawn plain. In dark mode light fills go
+  dark and dark ones light, each keeping its colour, and text on them stays readable. An .xlsb or
+  .ods file is still drawn plain.
+- Conditional formatting shows: cells highlighted by a rule, colour scales, data bars, top and
+  bottom values, duplicates, and rules written as simple formulas. Icon sets, dates relative to
+  today and formulas over a range still don't.
+- A range formatted as a table shows in its style, with its header and stripes.
+- Pictures in a spreadsheet show where the workbook puts them, and so do text boxes. A chart shows
+  as a box with its title, where it would be, since Gander can't draw charts yet.
+- Spreadsheets look as they do in Excel: column letters and row numbers, columns and rows as wide
+  and tall as the workbook makes them, its fonts, borders and alignment, wrapped and turned text,
+  and text running on over empty cells beside it. Frozen rows and columns stay on screen, hidden
+  rows, columns and sheets stay hidden, and the tabs are at the foot of the screen. A workbook
+  opens on the sheet it was saved showing, where Gander always opened the first.
+- A spreadsheet opens at a size you can read, where it opened zoomed out with its text too small
+  to read. Pinch or double tap to zoom; the letters, numbers and frozen panes stay in place.
+- Tap a cell to see all of it in a bar above the tabs, with its formula or value, note and link,
+  and to copy it. Back closes the bar.
+- Numbers a workbook shows in red, such as losses, show in red. A number too wide for its column
+  shows with fewer decimals, as a power of ten such as 1.2E+08, or as ###, as in Excel, where its
+  first digits were cut off.
+- A CSV's columns are as wide as their text.
 
 ## 2.7 (2026-10-25)
 

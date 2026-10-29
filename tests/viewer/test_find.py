@@ -186,16 +186,6 @@ def test_matches_in_every_piece_of_a_large_sheet_on_the_page_are_highlighted(
     assert highlight_count(page, "vw-find") == 1
 
 
-def test_the_title_sheetjs_writes_around_a_sheet_is_not_searched(viewer, page, port):
-    """
-    sheet_to_html writes a whole HTML document unless told otherwise, title and all. The title
-    went into the page with the table, never shown, and a search for it counted one match.
-    """
-    p = opened(viewer, page, port, "xlsx.html", "budget.xlsx", "#sheet")
-    p.query("SheetJS Table Export")
-    assert p.wait_for_count(0, 0, done=True)
-
-
 def test_the_rest_of_a_long_text_file_is_searched_once_it_is_shown(viewer, page, port, made):
     """
     Past a page, a text file waits for Show more, and so does anything in it. Asked for, the

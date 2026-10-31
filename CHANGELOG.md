@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.8 (2026-10-31)
 
 - The home screen now says how to open a file from your file manager, with Open with > Gander,
   which only About said before: under the first screen's two buttons, and at the end of the list

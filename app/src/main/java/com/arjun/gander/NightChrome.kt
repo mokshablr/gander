@@ -3,6 +3,7 @@ package com.arjun.gander
 import android.content.Context
 import android.content.res.ColorStateList
 import android.content.res.Configuration
+import android.content.res.Resources
 import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.os.Build
@@ -81,6 +82,15 @@ internal class NightChrome(private val activity: AppCompatActivity) {
     private val phoneIsDark = (activity.resources.configuration.uiMode and
         Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
+    // The menu is built each time it opens, from the toolbar's theme as it is then. Night mode
+    // swaps that theme whole for one of these copies: from Android 14 a style laid again on a
+    // theme keeps the theme's cache key, so laying the app's theme back over the overlay left
+    // the menu the night background cached under that key.
+    private val menuTheme: Resources.Theme = toolbar.context.theme
+    private val menuAsPhone: Resources.Theme = copyOf(menuTheme)
+    private val menuAtNight: Resources.Theme =
+        copyOf(menuTheme).apply { applyStyle(R.style.ThemeOverlay_Gander_Menu_Night, true) }
+
     // MaterialToolbar turns its background colour into a shape tinted for its elevation. The
     // night one is a shape too, black and untinted, since a tint would lift it off the page.
     private val toolbarAsPhone: Drawable? = toolbar.background
@@ -110,14 +120,7 @@ internal class NightChrome(private val activity: AppCompatActivity) {
         val icons = ColorStateList.valueOf(p.onSurface)
         toolbar.menu.forEach { if (it.icon != null) it.iconTintList = icons }
         toolbar.overflowIcon?.let { toolbar.overflowIcon = it.mutate().apply { setTint(p.controlNormal) } }
-        // The menu is built again every time it opens, from the toolbar's theme as it is then.
-        // The app's own theme laid back over it undoes the overlay whole, text colour included.
-        if (!phoneIsDark) {
-            toolbar.context.theme.applyStyle(
-                if (night) R.style.ThemeOverlay_Gander_Menu_Night else R.style.Theme_Gander,
-                true
-            )
-        }
+        if (!phoneIsDark) menuTheme.setTo(if (night) menuAtNight else menuAsPhone)
 
         // Behind the status and navigation bars. From Android 15 the app draws under both and
         // the root's padding keeps its content clear, so what shows there is the root's own
@@ -207,6 +210,9 @@ internal class DialogBuilder(context: Context) : MaterialAlertDialogBuilder(cont
         }
     }
 }
+
+private fun copyOf(theme: Resources.Theme): Resources.Theme =
+    theme.resources.newTheme().apply { setTo(theme) }
 
 @ColorInt
 private fun color(context: Context, @AttrRes attr: Int): Int =

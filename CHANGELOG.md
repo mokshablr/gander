@@ -48,6 +48,8 @@
   shows with fewer decimals, as a power of ten such as 1.2E+08, or as ###, as in Excel, where its
   first digits were cut off.
 - A CSV's columns are as wide as their text.
+- With your phone set to light, the menu over a PDF or Word document can be read again once night
+  mode is off, where on Android 14 and newer it kept night mode's dark background under dark text.
 
 ## 2.7 (2026-10-25)
 

@@ -60,9 +60,9 @@
     </style>
 
     <!-- The viewer's overflow menu in the app's night colours, on a phone set to light.
-         NightChrome.kt lays this over the toolbar's theme when PDF night mode goes on, and lays
-         Theme.Gander back over it when it goes off. The menu is built again each time it opens
-         and reads these then. They are the roles it draws with, the container and the night
+         When PDF night mode goes on, NightChrome.kt gives the toolbar a copy of its theme with
+         this laid over it, and when it goes off a copy of its theme as it was. The menu is built
+         again each time it opens and reads these then. They are the roles it draws with, the container and the night
          mode checkbox, and its text, which Material's light theme sets to a grey of its own
          rather than to a role: the light theme's inverse text is the grey its night theme uses,
          so that is what a phone set to dark shows. -->

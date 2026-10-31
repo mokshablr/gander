@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
 import android.os.Looper
 import android.view.View
@@ -193,6 +194,40 @@ class NightChromeTest {
 
         assertThat(atNight.searchBar).isNotEqualTo(asPhone.searchBar)
         assertThat(viewer.parts()).isEqualTo(asPhone)
+    }
+
+    /** The overflow menu's background as it opens: the drawable a reader sees, not a theme role. */
+    private fun ViewerActivity.menuAsItOpens(): Int? {
+        val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
+        toolbar.showOverflowMenu()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertThat(toolbar.isOverflowMenuShowing).isTrue()
+        val popup = shadowOf(application).latestPopupWindow
+        toolbar.hideOverflowMenu()
+        shadowOf(Looper.getMainLooper()).idle()
+        return (popup.background as? GradientDrawable)?.color?.defaultColor
+    }
+
+    /**
+     * The menu itself, which the theme it is built from can't speak for: from Android 14 a menu
+     * opened at night left its dark background to the next one opened by day, under day text.
+     */
+    @Test
+    fun theMenuOpensAsThePhoneHasItAgainOnceNightModeIsOff() {
+        val viewer = open("six-pages.pdf")
+        val chrome = NightChrome(viewer)
+        val asPhone = viewer.menuAsItOpens()
+
+        chrome.show(true)
+        val atNight = viewer.menuAsItOpens()
+        chrome.show(false)
+        val offAgain = viewer.menuAsItOpens()
+        chrome.show(true)
+
+        assertThat(asPhone).isEqualTo(context.color(R.color.gander_surface_container))
+        assertThat(atNight).isEqualTo(night.color(R.color.gander_surface_container))
+        assertThat(offAgain).isEqualTo(asPhone)
+        assertThat(viewer.menuAsItOpens()).isEqualTo(atNight)
     }
 
     /** The night theme's warm near-black left a black page inside a lighter frame, issue #41. */

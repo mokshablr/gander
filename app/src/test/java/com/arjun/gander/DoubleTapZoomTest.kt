@@ -271,6 +271,25 @@ class DoubleTapZoomTest {
         assertThat(page.zoom).isLessThan(200f)
     }
 
+    /**
+     * A PDF pinched smaller than the screen zooms its own double tap, back to the fitted width,
+     * and the WebView is at its floor then as it is at the fitted width: zoomed here as well, the
+     * page would come back to its width under a WebView gone in to twice it.
+     */
+    @Test
+    fun whileThePageHasShrunkItsPagesADoubleTapIsLeftToIt() {
+        doubleTap.leftToPage = true
+        doubleTap(300f, 500f)
+
+        assertThat(page.zooms).isEqualTo(0)
+        assertThat(page.zoom).isEqualTo(1f)
+
+        doubleTap.leftToPage = false
+        doubleTap(300f, 500f)
+
+        assertThat(page.zoom).isWithin(0.01f).of(DOUBLE_TAP_ZOOM)
+    }
+
     // ---------------------------------------------------------------
     // What is not a double tap
     // ---------------------------------------------------------------

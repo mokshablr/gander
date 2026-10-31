@@ -28,14 +28,39 @@
 
   /* Turns off Chromium's own double tap zoom, which fits the block under the finger to the
      screen and so took a page, one block as wide as the screen, in by a fifth. The app zooms a
-     double tap itself, in DoubleTapZoom.kt, and would zoom twice without this line. A pinch and
-     a pan are as they were. */
+     double tap itself, in DoubleTapZoom.kt, and would zoom twice without this line. A pan is as
+     it was, and so is a pinch out; a pinch in at the fitted width, which the WebView can do
+     nothing with, is this page's: see the rule below. */
   html { touch-action: manipulation; }
+
+  /* While the pages are shrunk below the screen's width the pinch is this page's, not the
+     WebView's: see "Zooming out" in pdf.mjs. pan-x pan-y keeps Chromium's double tap off as
+     manipulation does, and its pinch too, so a pinch out grows the pages back without the
+     WebView zooming over them. One finger scrolls as ever. */
+  html.vw-shrunk { touch-action: pan-x pan-y; }
 
   /* The strip between two pages. One declaration, three consumers: .pg's margin draws
      it, .vw-gap bridges it so a selection can cross it, and PAGE_PITCH counts it into
-     the draw and keep bands. They disagreeing is a bug in each of those three ways. */
+     the draw and keep bands. They disagreeing is a bug in each of those three ways.
+     Each of the three multiplies it by --vw-shrink, so the column scales as one piece. */
   :root { --pg-gap: 8px; }
+
+  /*
+   * How wide a page is drawn, as a fraction of the layout width: 1 at the fitted width,
+   * down to the floor pdf.mjs sets when the reader pinches in past it, issue #52.
+   *
+   * The WebView will not zoom out below its content's width, and a page is as wide as
+   * the layout, so at the fitted width a pinch in had nowhere to go. Past it this page
+   * shrinks its pages itself: their width, the gap between them, the text layer's type
+   * and its hit boxes all read this one property, so the words stay over the picture at
+   * every size. Written on the root by pdf.mjs, and 1 until it is.
+   *
+   * A width rather than CSS zoom, deliberately. Below about Chromium 128 a zoomed
+   * element's rect leaves its zoom out, which docx-pages.js has to correct for, and this
+   * file reads rects in a dozen places. A width is layout, and every rect is right on
+   * every engine this page runs on.
+   */
+  :root { --vw-shrink: 1; }
 
   /*
    * Where the document sits when there is less of it than there is screen.
@@ -78,7 +103,16 @@
     flex-direction: column;
     justify-content: center;
   }
-  #pages > .pg { flex: none; }
+  #pages > .pg {
+    flex: none;
+    /* Shrunk pages: one column, centred by the auto margins pdf-pages.css gives a page */
+    width: calc(100% * var(--vw-shrink));
+    margin-bottom: calc(var(--pg-gap) * var(--vw-shrink));
+  }
+
+  /* While the fingers move the column is scaled as a picture, and laid out at the new
+     width once they lift: see settle() in pdf.mjs. */
+  #pages.vw-moving { will-change: transform; }
 
   /* Night mode is in pdf-pages.css. The picture on a page is turned over by recolour() in the
      module, against the filter at the top of the body. */
@@ -173,7 +207,7 @@
     top: 100%;
     left: 0;
     right: 0;
-    height: var(--pg-gap);
+    height: calc(var(--pg-gap) * var(--vw-shrink));
     /*
      * Selectable, and that is a guard rather than a statement of the default.
      *
@@ -269,9 +303,13 @@
 
     /* Read by the span rule below. --total-scale-factor is set per page in
        textLayerFor(); the other two exist because pdf.js's own stylesheet defines
-       the size and transform in terms of them. */
+       the size and transform in terms of them. Times --vw-shrink, since the box this
+       layer fills is that fraction of the width --total-scale-factor was worked out
+       for: pdf.js positions each span in percent, so the type is the one thing that
+       has to be told the page shrank. */
     --min-font-size: 1;
-    --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+    --text-scale-factor:
+      calc(var(--total-scale-factor) * var(--min-font-size) * var(--vw-shrink));
     --min-font-size-inv: calc(1 / var(--min-font-size));
   }
 

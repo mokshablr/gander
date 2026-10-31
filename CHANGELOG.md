@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- A PDF can be pinched smaller than the screen, down to a quarter of its width, so its pages
+  show as one column of small pages to find a place by, where a pinch stopped at the page's
+  width. Pinch out to bring them back to the screen's width, and again to zoom in past it as
+  before. A double tap on the small pages brings them back to the screen's width about the
+  place tapped. A document reopens at the screen's width (#52, thanks @XZY123lol).
+
 ## 2.8 (2026-10-31)
 
 - The home screen now says how to open a file from your file manager, with Open with > Gander,

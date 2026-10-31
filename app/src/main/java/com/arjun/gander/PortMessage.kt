@@ -100,6 +100,13 @@ internal sealed interface PortMessage {
 
     /** The reader asked on the card for the PDF's simple view. See [ViewerActivity.askForSimpleView]. */
     data object SimpleView : PortMessage
+
+    /**
+     * Whether a PDF's pages are pinched smaller than the screen's width, which the page draws
+     * itself since the WebView zooms out no further. While they are, a double tap is the page's,
+     * back to the fitted width: see [DoubleTapZoom.leftToPage].
+     */
+    data class Shrunk(val on: Boolean) : PortMessage
 }
 
 /**
@@ -119,6 +126,8 @@ internal fun parsePortMessage(data: String?): PortMessage? {
         "reflow 1" -> return PortMessage.Reflows(true)
         "reflow 0" -> return PortMessage.Reflows(false)
         "simple" -> return PortMessage.SimpleView
+        "shrunk 1" -> return PortMessage.Shrunk(true)
+        "shrunk 0" -> return PortMessage.Shrunk(false)
     }
     val said = data?.split(" ") ?: return null
     if (said.size != 3) return null

@@ -147,6 +147,27 @@ class PortMessageTest {
     }
 
     // ---------------------------------------------------------------
+    // Inbound: a PDF whose pages are pinched smaller than the screen
+    // ---------------------------------------------------------------
+
+    @Test
+    fun whetherThePagesAreShrunkIsRead() {
+        assertThat(parsePortMessage("shrunk 1")).isEqualTo(PortMessage.Shrunk(true))
+        assertThat(parsePortMessage("shrunk 0")).isEqualTo(PortMessage.Shrunk(false))
+    }
+
+    /** Two exact messages, as "locked" is one. */
+    @Test
+    fun onlyTheExactWordsSayThePagesAreShrunk() {
+        assertThat(parsePortMessage("shrunk 2")).isNull()
+        assertThat(parsePortMessage("shrunk")).isNull()
+        assertThat(parsePortMessage("shrunk 1 ")).isNull()
+        assertThat(parsePortMessage("Shrunk 1")).isNull()
+        assertThat(parsePortMessage("shrunk 0.5")).isNull()
+        assertThat(parsePortMessage("shrunk 1 0")).isNull()
+    }
+
+    // ---------------------------------------------------------------
     // Inbound: a book's place, what is open over it, and whether it reflows
     // ---------------------------------------------------------------
 

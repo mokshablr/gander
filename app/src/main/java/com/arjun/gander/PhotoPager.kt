@@ -96,6 +96,26 @@ internal class PhotoPager(
         announce(at)
     }
 
+    /**
+     * Takes [photo] out once Android has moved it to its trash, and shows the photo after it, or
+     * the one before where it was the last. False where it was the only photo, or isn't here,
+     * which leaves nothing to show.
+     */
+    fun drop(photo: Uri): Boolean {
+        val docId = DocumentsContract.getDocumentId(photo)
+        val at = photos.indexOfFirst { it.docId == docId }
+        if (at < 0 || photos.size < 2) return false
+        photos = photos.filterIndexed { i, _ -> i != at }
+        pages.notifyItemRemoved(at)
+        // The photo after it takes its number, so no page change comes to name it, or to play
+        // it if it moves
+        view.post {
+            announce(view.currentItem)
+            settle()
+        }
+        return true
+    }
+
     private fun uriOf(photo: ChildDoc): Uri = DocumentsContract.buildDocumentUriUsingTree(opened, photo.docId)
 
     private fun announce(position: Int) {

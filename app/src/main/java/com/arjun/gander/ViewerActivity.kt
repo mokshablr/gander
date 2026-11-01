@@ -1,6 +1,7 @@
 package com.arjun.gander
 
 import android.annotation.SuppressLint
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -43,6 +44,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -82,6 +86,7 @@ open class ViewerActivity : AppCompatActivity() {
         private const val STATE_ARCHIVE_CODE_PAGE = "archive_code_page"
         private const val STATE_SIMPLE_VIEW = "simple_view"
         private const val STATE_PHOTO = "photo"
+        private const val STATE_TRASHING = "trashing"
 
         /**
          * Opens a PDF in the simple view whatever the WebView, so that a phone pdf.js runs on can
@@ -196,6 +201,28 @@ open class ViewerActivity : AppCompatActivity() {
     }
 
     /**
+     * The photo Android's prompt was opened for, kept across the viewer being made again while the
+     * prompt is up, since the answer comes back without it.
+     */
+    private var trashing: Uri? = null
+
+    /** While the prompt is being got ready, when a second tap on Delete does nothing. */
+    private var askingToTrash = false
+
+    /**
+     * Whether the folder around a photo has been read. Delete waits for it, since a photo deleted
+     * before it would leave a viewer that knows of no other photo to show, and close.
+     */
+    private var photosListed = false
+
+    private val trashPrompt = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
+        val photo = trashing ?: return@registerForActivityResult
+        trashing = null
+        // A no moves nothing and needs no word
+        if (it.resultCode == RESULT_OK) afterTrashPrompt(photo)
+    }
+
+    /**
      * The picker outlives the activity if Android reclaims the process while it is
      * open, and the callback is handed the destination but never the source, so
      * without this the save comes back to a null source and silently does nothing.
@@ -208,6 +235,7 @@ open class ViewerActivity : AppCompatActivity() {
         playerScreen?.save(outState)
         outState.putBoolean(STATE_SIMPLE_VIEW, simpleAsked)
         photoPager?.let { outState.putString(STATE_PHOTO, it.shown.toString()) }
+        outState.putString(STATE_TRASHING, trashing?.toString())
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -220,6 +248,7 @@ open class ViewerActivity : AppCompatActivity() {
         pageIndicator.setOnClickListener { askForPage() }
 
         copySource = savedInstanceState?.getString(STATE_COPY_SOURCE)?.let(Uri::parse)
+        trashing = savedInstanceState?.getString(STATE_TRASHING)?.toUri()
         simpleAsked = savedInstanceState?.getBoolean(STATE_SIMPLE_VIEW) == true
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
@@ -420,8 +449,8 @@ open class ViewerActivity : AppCompatActivity() {
     }
 
     /**
-     * Share, Save a copy and Show in file manager, for the file on show, which a swipe through a
-     * folder's photos changes.
+     * Share, Save a copy, Show in file manager and Delete, for the file on show, which a swipe
+     * through a folder's photos changes.
      */
     private fun pointActionsAt(toolbar: MaterialToolbar, uri: Uri, name: String, ext: String, mime: String?) {
         toolbar.menu.findItem(R.id.action_share).setOnMenuItemClickListener {
@@ -450,7 +479,56 @@ open class ViewerActivity : AppCompatActivity() {
                 true
             }
         }
+
+        // Only among a folder's photos, where photos are gone through one after another to keep
+        // or delete. A photo from Recents would leave its entry behind.
+        toolbar.menu.findItem(R.id.action_delete).apply {
+            isVisible = photoPager != null && photosListed && mayTrash(uri)
+            setOnMenuItemClickListener {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) askToTrash(uri)
+                true
+            }
+        }
     }
+
+    /**
+     * Asks Android to move [photo] to its trash, which it does once the person says yes in its own
+     * prompt. See PhotoTrash.kt.
+     */
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun askToTrash(photo: Uri) {
+        if (askingToTrash || trashing != null) return
+        askingToTrash = true
+        offMain({ request: PendingIntent? ->
+            askingToTrash = false
+            // Swiped on or left while the prompt was got ready, it would ask about a photo off screen
+            if (!showing(photo)) return@offMain
+            if (request == null) return@offMain cantTrash()
+            trashing = photo
+            runCatching { trashPrompt.launch(IntentSenderRequest.Builder(request).build()) }.onFailure {
+                trashing = null
+                cantTrash()
+            }
+        }) { app -> trashRequest(app, photo) }
+    }
+
+    /**
+     * After a yes in Android's prompt, the photo leaves the viewer once it has left its folder.
+     * The viewer closes where nothing is left to show: after the only photo, or when it was made
+     * again while the prompt was up, around the photo that has now gone.
+     */
+    private fun afterTrashPrompt(photo: Uri) = offMain({ there: Boolean ->
+        if (there) return@offMain cantTrash()
+        Toast.makeText(this, R.string.photo_trashed, Toast.LENGTH_SHORT).show()
+        if (photoPager?.drop(photo) != true) finish()
+    }) { app -> stillThere(app.contentResolver, photo) }
+
+    private fun cantTrash() = Toast.makeText(this, R.string.photo_not_trashed, Toast.LENGTH_SHORT).show()
+
+    /** Whether [photo] is the one on screen, with the viewer in front. */
+    private fun showing(photo: Uri): Boolean =
+        !isFinishing && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) &&
+            photoPager?.shown?.let(DocumentsContract::getDocumentId) == DocumentsContract.getDocumentId(photo)
 
     /**
      * Turning a document's pages over for reading in the dark: a PDF's since issue #19,
@@ -1591,7 +1669,13 @@ open class ViewerActivity : AppCompatActivity() {
         pageIndicator.isClickable = false
         container.addView(pager.view, matchParent())
         offMain({ found: Pair<List<ChildDoc>, Int>? ->
+            photosListed = true
             found?.let { (photos, at) -> pager.fill(photos, at) }
+            // No fill names a photo alone in its folder, so its Delete comes in here. Not once
+            // the page has gone, taking the folder's photos with it.
+            if (pager.view.parent != null) {
+                findViewById<MaterialToolbar>(R.id.toolbar).menu.findItem(R.id.action_delete).isVisible = mayTrash(pager.shown)
+            }
         }) { app -> photosAround(app.contentResolver, uri, Settings.sortOrder(app)) }
     }
 
@@ -1615,6 +1699,8 @@ open class ViewerActivity : AppCompatActivity() {
             pageTotal = of
             setPageIndicatorText()
             showPageIndicator()
+            // One photo left after a delete, which has no count to show
+            if (of < 2) pageFader.hideNow()
         }
     }
 
@@ -1950,6 +2036,8 @@ open class ViewerActivity : AppCompatActivity() {
         goneMenu.findItem(R.id.action_night_mode)?.isVisible = false
         // And Print, which has no document to print until Reload brings it back
         goneMenu.findItem(R.id.action_print)?.isVisible = false
+        // And Delete, whose photos were in the page that has gone, which a moving one plays in
+        goneMenu.findItem(R.id.action_delete)?.isVisible = false
         // A book's two speak to the page that has gone as well: Contents would do nothing,
         // and Text size would change the stored size with nothing on screen to show for it.
         // Its page can no longer answer Back either.

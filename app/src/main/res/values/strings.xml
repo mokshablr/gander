@@ -180,6 +180,11 @@
     <string name="save_copy">Save a copy</string>
     <string name="save_copy_done">Copy saved</string>
     <string name="save_copy_failed">The copy could not be saved</string>
+    <!-- A photo in a folder added in Gander, which Android moves to its bin after its own prompt.
+         Bin is the word Android's British English uses, as Gander's English is British. -->
+    <string name="delete_photo">Delete</string>
+    <string name="photo_trashed">Moved to the bin</string>
+    <string name="photo_not_trashed">The photo could not be moved to the bin</string>
     <string name="print">Print</string>
     <string name="print_locked">This PDF has a password, so Android can\'t print it</string>
     <string name="print_failed">This file can\'t be printed</string>

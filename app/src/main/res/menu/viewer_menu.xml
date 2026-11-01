@@ -41,6 +41,16 @@
         android:icon="@drawable/ic_share"
         android:title="@string/share_file"
         app:showAsAction="ifRoom" />
+    <!-- A photo in a folder added in Gander, from Android 11, where Android moves it to its trash
+         after its own prompt. The bin is the one the home screen's swipe uncovers, tinted here as
+         the share icon is. Issue #75. -->
+    <item
+        android:id="@+id/action_delete"
+        android:icon="@drawable/ic_delete"
+        android:title="@string/delete_photo"
+        android:visible="false"
+        app:iconTint="?attr/colorOnSurface"
+        app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_save_copy"
         android:title="@string/save_copy"

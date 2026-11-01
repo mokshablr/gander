@@ -1,5 +1,6 @@
 package com.arjun.gander
 
+import android.app.Activity
 import android.app.Application
 import android.content.ComponentName
 import android.content.Context
@@ -11,6 +12,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Looper
 import android.provider.DocumentsContract
+import android.provider.MediaStore
 import android.webkit.CookieManager
 import android.webkit.WebMessage
 import android.webkit.WebResourceRequest
@@ -46,6 +48,7 @@ import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowActivity
 import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowSystemClock
 import org.robolectric.shadows.ShadowToast
@@ -1311,6 +1314,286 @@ class ViewerActivityTest {
         assertThat(viewer.get().findViewById<TextView>(R.id.pageIndicator).visibility)
             .isEqualTo(android.view.View.GONE)
         assertThat(viewer.container().andInside().filterIsInstance<SubsamplingScaleImageView>()).hasSize(1)
+    }
+
+    // ---------------------------------------------------------------
+    // Deleting a photo in a folder's photos (#75)
+    // ---------------------------------------------------------------
+
+    private lateinit var docs: FakeDocumentsProvider
+    private lateinit var media: FakeMediaStore
+
+    /** A folder on the phone's own storage, which Android's trash reaches, of three photos its media store lists. */
+    private fun dcim(): Uri {
+        docs = FakeDocumentsProvider.install(EXTERNAL_STORAGE_AUTHORITY)
+            .folder(
+                "primary:DCIM", "DCIM",
+                ChildDoc("primary:DCIM/a.jpg", "a.jpg", "image/jpeg", 10, 1_000),
+                ChildDoc("primary:DCIM/b.jpg", "b.jpg", "image/jpeg", 20, 2_000),
+                ChildDoc("primary:DCIM/c.png", "c.png", "image/png", 30, 3_000),
+            )
+            .contents("primary:DCIM/a.jpg", Fixtures.bytes("exif-1.jpg"))
+            .contents("primary:DCIM/b.jpg", Fixtures.bytes("exif-1.jpg"))
+            .contents("primary:DCIM/c.png", Fixtures.bytes("tiny.png"))
+        val tree = FakeDocumentsProvider.treeUri("primary:DCIM", EXTERNAL_STORAGE_AUTHORITY)
+        media = FakeMediaStore.install()
+        listOf("a.jpg", "b.jpg", "c.png").forEachIndexed { i, name ->
+            media.entry(DocumentsContract.buildDocumentUriUsingTree(tree, "primary:DCIM/$name"), 11L + i)
+        }
+        return tree
+    }
+
+    private fun ActivityController<ViewerActivity>.deleteItem() =
+        get().findViewById<MaterialToolbar>(R.id.toolbar).menu.findItem(R.id.action_delete)
+
+    /** Taps Delete, and gives back the prompt Android was asked to open, if any was. */
+    private fun ActivityController<ViewerActivity>.tapDelete(): ShadowActivity.IntentSenderRequest? {
+        get().findViewById<MaterialToolbar>(R.id.toolbar).menu.performIdentifierAction(R.id.action_delete, 0)
+        shadowOf(Looper.getMainLooper()).idle()
+        return shadowOf(get()).lastIntentSenderRequest
+    }
+
+    /** Hands back the prompt's answer, as Android does once a button in it is tapped. */
+    private fun ActivityController<ViewerActivity>.answer(prompt: ShadowActivity.IntentSenderRequest, result: Int) {
+        assertThat(get().activityResultRegistry.dispatchResult(prompt.requestCode, result, null)).isTrue()
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    /** Deletes [docId]: the prompt said yes to, and the photo moved out of its folder. */
+    private fun ActivityController<ViewerActivity>.delete(docId: String) {
+        val prompt = tapDelete()!!
+        docs.remove(docId)
+        answer(prompt, Activity.RESULT_OK)
+    }
+
+    @Test
+    fun aDeletedPhotoGoesToAndroidsTrashAndTheNextOneShows() {
+        val viewer = openedFrom(dcim(), "primary:DCIM/b.jpg")
+        assertThat(viewer.deleteItem().isVisible).isTrue()
+
+        viewer.delete("primary:DCIM/b.jpg")
+
+        // Asked for by its entry among the pictures, under the number Android gave it among all files
+        val (asked, values) = media.trashRequests.single()
+        assertThat(asked).containsExactly(MediaStore.Images.Media.getContentUri(FakeMediaStore.VOLUME, 12))
+        assertThat(values!!.getAsInteger(MediaStore.MediaColumns.IS_TRASHED)).isEqualTo(1)
+        assertThat(viewer.get().photoPager!!.names).containsExactly("a.jpg", "c.png").inOrder()
+        assertThat(viewer.title()).isEqualTo("c.png")
+        assertThat(viewer.get().findViewById<TextView>(R.id.pageIndicator).text.toString()).isEqualTo("2/2")
+        assertThat(ShadowToast.getTextOfLatestToast()).isEqualTo(context.getString(R.string.photo_trashed))
+    }
+
+    /** A no needs no word. Android answers yes after a move that failed too, which only looking catches. */
+    @Test
+    fun aPhotoStaysWhenThePromptIsTurnedDownOrNothingMoves() {
+        val viewer = openedFrom(dcim(), "primary:DCIM/b.jpg")
+
+        viewer.answer(viewer.tapDelete()!!, Activity.RESULT_CANCELED)
+        assertThat(viewer.get().photoPager!!.names).containsExactly("a.jpg", "b.jpg", "c.png").inOrder()
+        assertThat(ShadowToast.shownToastCount()).isEqualTo(0)
+
+        viewer.answer(viewer.tapDelete()!!, Activity.RESULT_OK)
+        assertThat(viewer.get().photoPager!!.names).containsExactly("a.jpg", "b.jpg", "c.png").inOrder()
+        assertThat(viewer.title()).isEqualTo("b.jpg")
+        assertThat(ShadowToast.getTextOfLatestToast()).isEqualTo(context.getString(R.string.photo_not_trashed))
+    }
+
+    @Test
+    fun deletingTheLastPhotoShowsTheOneBeforeAndDeletingTheOnlyOneClosesTheViewer() {
+        val viewer = openedFrom(dcim(), "primary:DCIM/c.png")
+
+        viewer.delete("primary:DCIM/c.png")
+        assertThat(viewer.title()).isEqualTo("b.jpg")
+        viewer.delete("primary:DCIM/b.jpg")
+        assertThat(viewer.title()).isEqualTo("a.jpg")
+        // One photo has no count to show
+        assertThat(viewer.get().findViewById<TextView>(R.id.pageIndicator).visibility)
+            .isEqualTo(android.view.View.GONE)
+        // Each time for the photo on screen
+        assertThat(media.trashRequests.map { it.first.single() }).containsExactly(
+            MediaStore.Images.Media.getContentUri(FakeMediaStore.VOLUME, 13),
+            MediaStore.Images.Media.getContentUri(FakeMediaStore.VOLUME, 12),
+        ).inOrder()
+
+        viewer.delete("primary:DCIM/a.jpg")
+        assertThat(viewer.get().isFinishing).isTrue()
+    }
+
+    /** Only among a folder's photos, and only where Android's trash reaches. */
+    @Test
+    fun deleteIsOfferedOnlyAmongAFoldersPhotosOnThePhonesStorage() {
+        assertThat(openedFrom(dcim(), "primary:DCIM/a.jpg").deleteItem().isVisible).isTrue()
+        // A folder another app keeps, whose files Android's media store doesn't list
+        assertThat(openedFrom(picsFolder(), "pics/b.jpg").deleteItem().isVisible).isFalse()
+        // A photo opened alone, from anywhere, the phone's storage too
+        assertThat(open("exif-1.jpg").deleteItem().isVisible).isFalse()
+        val picked = DocumentsContract.buildDocumentUri(EXTERNAL_STORAGE_AUTHORITY, "primary:DCIM/a.jpg")
+        assertThat(viewFromGander(picked, "image/jpeg").deleteItem().isVisible).isFalse()
+    }
+
+    /** The folder's photos were in the page a moving one plays in, and Delete goes with that page. */
+    @Test
+    fun deleteGoesWithARendererThatHasGone() {
+        FakeDocumentsProvider.install(EXTERNAL_STORAGE_AUTHORITY)
+            .folder(
+                "primary:Clips", "Clips",
+                ChildDoc("primary:Clips/m.webp", "m.webp", "image/webp", 1, 1),
+                ChildDoc("primary:Clips/s.jpg", "s.jpg", "image/jpeg", 1, 2),
+            )
+            .contents("primary:Clips/m.webp", Fixtures.bytes("moving.webp"))
+            .contents("primary:Clips/s.jpg", Fixtures.bytes("exif-1.jpg"))
+        val tree = FakeDocumentsProvider.treeUri("primary:Clips", EXTERNAL_STORAGE_AUTHORITY)
+        val viewer = openedFrom(tree, "primary:Clips/m.webp")
+        assertThat(viewer.deleteItem().isVisible).isTrue()
+
+        val web = viewer.webViews().single()
+        web.webViewClient.onRenderProcessGone(web, rendererReclaimed())
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertThat(viewer.deleteItem().isVisible).isFalse()
+    }
+
+    /**
+     * A file the media store doesn't count as a picture, such as one in a folder holding a .nomedia
+     * file, gets a word and no prompt, since the prompt would take it and then move nothing.
+     */
+    @Test
+    fun aPhotoAndroidCannotTrashSaysSoWithoutAPrompt() {
+        val tree = dcim()
+        media.entry(
+            DocumentsContract.buildDocumentUriUsingTree(tree, "primary:DCIM/b.jpg"), 12,
+            MediaStore.Files.FileColumns.MEDIA_TYPE_NONE,
+        )
+        val viewer = openedFrom(tree, "primary:DCIM/b.jpg")
+
+        assertThat(viewer.tapDelete()).isNull()
+        assertThat(media.trashRequests).isEmpty()
+        assertThat(ShadowToast.getTextOfLatestToast()).isEqualTo(context.getString(R.string.photo_not_trashed))
+    }
+
+    /** The answer can come back to a viewer made again while the prompt was up, which has to know what was asked. */
+    @Test
+    fun aDeleteAnsweredAfterTheViewerIsMadeAgainStillCounts() {
+        val viewer = openedFrom(dcim(), "primary:DCIM/b.jpg")
+        val prompt = viewer.tapDelete()!!
+        val saved = Bundle().also { viewer.saveInstanceState(it) }
+        docs.remove("primary:DCIM/b.jpg")
+
+        val again = Robolectric.buildActivity(ViewerActivity::class.java, viewer.intent)
+        again.get().documentLoader = Executor { it.run() }
+        again.setup(saved)
+        shadowOf(Looper.getMainLooper()).idle()
+        again.answer(prompt, Activity.RESULT_OK)
+
+        // Made again around a photo that has gone, it has no folder around it to show
+        assertThat(ShadowToast.getTextOfLatestToast()).isEqualTo(context.getString(R.string.photo_trashed))
+        assertThat(again.get().isFinishing).isTrue()
+    }
+
+    /**
+     * The viewer for [docId] in [tree], with what it asks off the main thread held back, as a
+     * phone's storage is slower than the first layout. Run the held work with [runHeld].
+     */
+    private fun openedHeld(tree: Uri, docId: String): Pair<ActivityController<ViewerActivity>, MutableList<Runnable>> {
+        val held = mutableListOf<Runnable>()
+        val viewer = Robolectric.buildActivity(
+            ViewerActivity::class.java,
+            Intent()
+                .setComponent(ComponentName(context, ViewerActivity.INTERNAL_VIEWER))
+                .setData(DocumentsContract.buildDocumentUriUsingTree(tree, docId))
+        )
+        viewer.get().documentLoader = Executor { held += it }
+        viewer.setup()
+        shadowOf(Looper.getMainLooper()).idle()
+        return viewer to held
+    }
+
+    private fun ActivityController<ViewerActivity>.runHeld(held: MutableList<Runnable>) {
+        while (held.isNotEmpty()) held.removeAt(0).run()
+        shadowOf(Looper.getMainLooper()).idle()
+        get().documentLoader = Executor { it.run() }
+    }
+
+    /** Delete waits for the folder, since a photo deleted before it would close a viewer that knows no others. */
+    @Test
+    fun deleteWaitsForTheFolderToBeRead() {
+        val (viewer, held) = openedHeld(dcim(), "primary:DCIM/b.jpg")
+        assertThat(viewer.deleteItem().isVisible).isFalse()
+
+        viewer.runHeld(held)
+
+        assertThat(viewer.deleteItem().isVisible).isTrue()
+    }
+
+    /** No fill names a photo alone in its folder, so nothing but the folder's arrival brings its Delete in. */
+    @Test
+    fun aPhotoAloneInItsFolderCanBeDeletedAndTheViewerCloses() {
+        docs = FakeDocumentsProvider.install(EXTERNAL_STORAGE_AUTHORITY)
+            .folder("primary:One", "One", ChildDoc("primary:One/x.jpg", "x.jpg", "image/jpeg", 1, 1))
+            .contents("primary:One/x.jpg", Fixtures.bytes("exif-1.jpg"))
+        val tree = FakeDocumentsProvider.treeUri("primary:One", EXTERNAL_STORAGE_AUTHORITY)
+        media = FakeMediaStore.install().entry(DocumentsContract.buildDocumentUriUsingTree(tree, "primary:One/x.jpg"), 31)
+        val (viewer, held) = openedHeld(tree, "primary:One/x.jpg")
+        assertThat(viewer.deleteItem().isVisible).isFalse()
+
+        viewer.runHeld(held)
+        assertThat(viewer.deleteItem().isVisible).isTrue()
+        viewer.delete("primary:One/x.jpg")
+
+        assertThat(viewer.get().isFinishing).isTrue()
+    }
+
+    /** Swiped on while the prompt was being got ready, it would ask about a photo no longer on screen. */
+    @Test
+    fun noPromptOpensForAPhotoSwipedPast() {
+        val viewer = openedFrom(dcim(), "primary:DCIM/b.jpg")
+        viewer.get().findViewById<MaterialToolbar>(R.id.toolbar).menu.performIdentifierAction(R.id.action_delete, 0)
+        // The request is ready, and not yet handed back to the main thread
+        viewer.get().photoPager!!.view.setCurrentItem(2, false)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertThat(shadowOf(viewer.get()).lastIntentSenderRequest).isNull()
+        assertThat(ShadowToast.shownToastCount()).isEqualTo(0)
+        // Delete is for the photo on screen now
+        viewer.delete("primary:DCIM/c.png")
+        assertThat(viewer.get().photoPager!!.names).containsExactly("a.jpg", "b.jpg").inOrder()
+    }
+
+    /** A second tap while the first is got ready, or while its prompt is up, opens no second prompt. */
+    @Test
+    fun aSecondTapOnDeleteOpensNoSecondPrompt() {
+        val viewer = openedFrom(dcim(), "primary:DCIM/b.jpg")
+        val menu = viewer.get().findViewById<MaterialToolbar>(R.id.toolbar).menu
+
+        menu.performIdentifierAction(R.id.action_delete, 0)
+        menu.performIdentifierAction(R.id.action_delete, 0)
+        shadowOf(Looper.getMainLooper()).idle()
+        menu.performIdentifierAction(R.id.action_delete, 0)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertThat(media.trashRequests).hasSize(1)
+    }
+
+    /** The photo after takes the deleted one's number, so no page change comes to play it if it moves. */
+    @Test
+    fun aMovingPhotoThatTakesTheDeletedOnesPlacePlays() {
+        docs = FakeDocumentsProvider.install(EXTERNAL_STORAGE_AUTHORITY)
+            .folder(
+                "primary:Clips", "Clips",
+                ChildDoc("primary:Clips/a.jpg", "a.jpg", "image/jpeg", 1, 1),
+                ChildDoc("primary:Clips/m.webp", "m.webp", "image/webp", 1, 2),
+            )
+            .contents("primary:Clips/a.jpg", Fixtures.bytes("exif-1.jpg"))
+            .contents("primary:Clips/m.webp", Fixtures.bytes("moving.webp"))
+        val tree = FakeDocumentsProvider.treeUri("primary:Clips", EXTERNAL_STORAGE_AUTHORITY)
+        media = FakeMediaStore.install().entry(DocumentsContract.buildDocumentUriUsingTree(tree, "primary:Clips/a.jpg"), 21)
+        val viewer = openedFrom(tree, "primary:Clips/a.jpg")
+        assertThat(viewer.webViews()).isEmpty()
+
+        viewer.delete("primary:Clips/a.jpg")
+
+        assertThat(viewer.title()).isEqualTo("m.webp")
+        assertThat(shadowOf(viewer.webViews().single()).lastLoadedUrl).contains("viewer/imgweb.html?name=m.webp")
     }
 
     // ---------------------------------------------------------------

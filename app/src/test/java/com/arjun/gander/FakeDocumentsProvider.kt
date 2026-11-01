@@ -26,19 +26,30 @@ internal class FakeDocumentsProvider : ContentProvider() {
     companion object {
         const val AUTHORITY = "test.documents"
 
-        fun install(): FakeDocumentsProvider =
+        /** Under [authority], which can be the phone's own storage's, where Android's trash reaches. */
+        fun install(authority: String = AUTHORITY): FakeDocumentsProvider =
             Robolectric.buildContentProvider(FakeDocumentsProvider::class.java)
-                .create(AUTHORITY)
+                .create(authority)
                 .get()
 
-        fun treeUri(docId: String = "root"): Uri =
-            DocumentsContract.buildTreeDocumentUri(AUTHORITY, docId)
+        fun treeUri(docId: String = "root", authority: String = AUTHORITY): Uri =
+            DocumentsContract.buildTreeDocumentUri(authority, docId)
     }
 
     /** Folder document id to the entries inside it. */
     private val folders = mutableMapOf<String, MutableList<ChildDoc>>()
     private val labels = mutableMapOf<String, String>()
     private val contents = mutableMapOf<String, ByteArray>()
+
+    /** Entries taken away, which a query for no longer finds. */
+    private val gone = mutableSetOf<String>()
+
+    /** Takes [docId] out of its folder, as Android's trash does to a photo it moves. */
+    fun remove(docId: String) = apply {
+        folders.values.forEach { children -> children.removeAll { it.docId == docId } }
+        contents.remove(docId)
+        gone += docId
+    }
 
     fun folder(docId: String, label: String, vararg children: ChildDoc) = apply {
         folders[docId] = children.toMutableList()
@@ -61,13 +72,20 @@ internal class FakeDocumentsProvider : ContentProvider() {
         selection: String?,
         selectionArgs: Array<out String>?,
         sortOrder: String?
-    ): Cursor {
+    ): Cursor? {
         val columns = projection ?: arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
 
         // A children query names the parent in the last path segment; a single
         // document query names the document itself.
         val isChildren = uri.pathSegments.contains("children")
         val docId = DocumentsContract.getDocumentId(uri)
+        // As Android's storage answers for a file that has gone. Asked through a folder it was
+        // given, it can no longer tell the file was in it, and throws, as FileSystemProvider's
+        // isChildDocument does.
+        if (!isChildren && docId in gone) {
+            if (DocumentsContract.isTreeUri(uri)) throw IllegalArgumentException("Failed to determine if $docId is a child")
+            return null
+        }
 
         val rows = if (isChildren) {
             folders[docId].orEmpty()

@@ -7,6 +7,11 @@
   how many it is (#75, thanks @0xlne, and #71, thanks @DEWE-ex). Opened with Open a file, from
   Recents or from another app, a photo still opens alone, since Android then shares only that one
   file with Gander.
+- A photo opened from a folder you added in Gander can be deleted with the bin in the title bar,
+  from Android 11 (#75, thanks @0xlne). Android asks first, in its own prompt, then moves the photo
+  to its bin, where it can be restored for 30 days, on a Samsung phone from Gallery's Recycle bin,
+  and the next photo shows. Gander still only reads the folder. A photo in a folder with a .nomedia
+  file in it can't be deleted this way, since Android doesn't list it as a photo.
 - A PDF can be pinched smaller than the screen, down to a quarter of its width, so its pages
   show as one column of small pages to find a place by, where a pinch stopped at the page's
   width. Pinch out to bring them back to the screen's width, and again to zoom in past it as

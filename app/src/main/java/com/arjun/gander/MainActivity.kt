@@ -690,30 +690,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun folderRows(crumb: Crumb, filters: Set<String>): Screen {
-        val children = mutableListOf<ChildDoc>()
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
-            crumb.treeUri, crumb.docId
-        )
-        runCatching {
-            contentResolver.query(
-                childrenUri,
-                arrayOf(
-                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                    DocumentsContract.Document.COLUMN_MIME_TYPE,
-                    DocumentsContract.Document.COLUMN_SIZE,
-                    DocumentsContract.Document.COLUMN_LAST_MODIFIED
-                ),
-                null, null, null
-            )?.use { c ->
-                while (c.moveToNext()) {
-                    children += ChildDoc(
-                        c.getString(0), c.getString(1) ?: "?", c.getString(2) ?: "",
-                        c.getLong(3), c.getLong(4)
-                    )
-                }
-            }
-        }
+        val children = childrenOf(contentResolver, crumb.treeUri, crumb.docId).orEmpty()
 
         val sortOrder = Settings.sortOrder(this)
         val (dirs, files) = orderChildren(children, sortOrder)

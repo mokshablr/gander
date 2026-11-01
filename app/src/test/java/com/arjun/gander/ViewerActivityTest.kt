@@ -1174,6 +1174,146 @@ class ViewerActivityTest {
     }
 
     // ---------------------------------------------------------------
+    // Swiping through a folder's photos (#75)
+    // ---------------------------------------------------------------
+
+    /** A folder, pics, holding photos, one that moves, a text file and a folder, each a different age. */
+    private fun picsFolder(): Uri {
+        FakeDocumentsProvider.install()
+            .folder(
+                "pics", "pics",
+                ChildDoc("pics/b.jpg", "b.jpg", "image/jpeg", 30, 3_000),
+                ChildDoc("pics/a.png", "a.png", "image/png", 10, 1_000),
+                ChildDoc("pics/notes.txt", "notes.txt", "text/plain", 5, 5_000),
+                ChildDoc("pics/old", "old", MIME_DIR, 0, 0),
+                ChildDoc("pics/c.webp", "c.webp", "image/webp", 20, 4_000),
+                ChildDoc("pics/d.webp", "d.webp", "image/webp", 40, 2_000),
+            )
+            .folder("pics/old", "old")
+            .contents("pics/b.jpg", Fixtures.bytes("exif-1.jpg"))
+            .contents("pics/a.png", Fixtures.bytes("tiny.png"))
+            .contents("pics/c.webp", Fixtures.bytes("still.webp"))
+            .contents("pics/d.webp", Fixtures.bytes("moving.webp"))
+            .contents("pics/notes.txt", "milk".toByteArray())
+        return FakeDocumentsProvider.treeUri("pics")
+    }
+
+    private fun ActivityController<ViewerActivity>.title(): String =
+        get().findViewById<MaterialToolbar>(R.id.toolbar).title.toString()
+
+    private fun ActivityController<ViewerActivity>.swipeTo(photo: Int) {
+        get().photoPager!!.view.setCurrentItem(photo, false)
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    private fun android.view.View.andInside(): List<android.view.View> =
+        listOf(this) + ((this as? android.view.ViewGroup)?.let { group ->
+            (0 until group.childCount).flatMap { group.getChildAt(it).andInside() }
+        } ?: emptyList())
+
+    /** The WebViews anywhere in the viewer, a page of the folder's photos included. */
+    private fun ActivityController<ViewerActivity>.webViews(): List<WebView> =
+        container().andInside().filterIsInstance<WebView>()
+
+    @Test
+    fun aPhotoFromAnAddedFolderSwipesToTheFoldersOtherPhotos() {
+        val viewer = openedFrom(picsFolder(), "pics/b.jpg")
+        val pager = viewer.get().photoPager!!
+        assertThat(pager.names).containsExactly("a.png", "b.jpg", "c.webp", "d.webp").inOrder()
+        assertThat(pager.view.currentItem).isEqualTo(1)
+        assertThat(viewer.title()).isEqualTo("b.jpg")
+
+        viewer.swipeTo(2)
+
+        assertThat(viewer.title()).isEqualTo("c.webp")
+        val readout = viewer.get().findViewById<TextView>(R.id.pageIndicator)
+        assertThat(readout.text.toString()).isEqualTo("3/4")
+        assertThat(readout.contentDescription.toString()).isEqualTo("Photo 3 of 4")
+        assertThat(readout.isClickable).isFalse()
+    }
+
+    @Test
+    fun theFoldersPhotosComeInTheOrderTheHomeScreenIsSortedIn() {
+        Settings.setSortOrder(context, Settings.SortOrder.NEWEST)
+        val pager = openedFrom(picsFolder(), "pics/b.jpg").get().photoPager!!
+        assertThat(pager.names).containsExactly("c.webp", "b.jpg", "d.webp", "a.png").inOrder()
+        assertThat(pager.view.currentItem).isEqualTo(1)
+    }
+
+    @Test
+    fun shareAndSaveACopyGoWithThePhotoOnScreen() {
+        val tree = picsFolder()
+        val viewer = openedFrom(tree, "pics/b.jpg")
+        viewer.swipeTo(0)
+        val menu = viewer.get().findViewById<MaterialToolbar>(R.id.toolbar).menu
+
+        menu.performIdentifierAction(R.id.action_share, 0)
+        val chooser = shadowOf(viewer.get()).nextStartedActivity
+        val send = IntentCompat.getParcelableExtra(chooser, Intent.EXTRA_INTENT, Intent::class.java)!!
+        assertThat(IntentCompat.getParcelableExtra(send, Intent.EXTRA_STREAM, Uri::class.java))
+            .isEqualTo(DocumentsContract.buildDocumentUriUsingTree(tree, "pics/a.png"))
+        assertThat(send.type).isEqualTo("image/png")
+
+        menu.performIdentifierAction(R.id.action_save_copy, 0)
+        val save = Bundle().also { viewer.saveInstanceState(it) }
+        assertThat(save.getString("copy_source"))
+            .isEqualTo(DocumentsContract.buildDocumentUriUsingTree(tree, "pics/a.png").toString())
+    }
+
+    /** Opened any other way, Android shares that one photo with Gander and no more. */
+    @Test
+    fun aPhotoFromAnywhereElseHasNothingBesideIt() {
+        assertThat(open("exif-1.jpg").get().photoPager).isNull()
+        assertThat(viewFromGander(FixtureProvider.uriFor("exif-1.jpg")).get().photoPager).isNull()
+        // Nor one another app hands over from inside a folder it was given
+        val handed = view(DocumentsContract.buildDocumentUriUsingTree(picsFolder(), "pics/b.jpg"), "image/jpeg")
+        assertThat(handed.get().photoPager).isNull()
+    }
+
+    @Test
+    fun thePhotoSwipedToIsTheOneShownWhenTheViewerIsMadeAgain() {
+        val viewer = openedFrom(picsFolder(), "pics/b.jpg")
+        viewer.swipeTo(2)
+        val saved = Bundle().also { viewer.saveInstanceState(it) }
+
+        val again = Robolectric.buildActivity(ViewerActivity::class.java, viewer.intent)
+        again.get().documentLoader = Executor { it.run() }
+        again.setup(saved)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertThat(again.title()).isEqualTo("c.webp")
+        assertThat(again.get().photoPager!!.view.currentItem).isEqualTo(2)
+    }
+
+    /** Playing takes the viewer's one WebView, so only the picture on screen plays. */
+    @Test
+    fun aMovingPictureInTheFolderPlaysOnlyWhileItIsOnScreen() {
+        val viewer = openedFrom(picsFolder(), "pics/b.jpg")
+        assertThat(viewer.webViews()).isEmpty()
+
+        viewer.swipeTo(3)
+        val playing = viewer.webViews()
+        assertThat(playing).hasSize(1)
+        assertThat(shadowOf(playing[0]).lastLoadedUrl).contains("viewer/imgweb.html?name=d.webp")
+
+        viewer.swipeTo(2)
+        assertThat(viewer.webViews().map { shadowOf(it).lastLoadedUrl }).isEmpty()
+        assertThat(shadowOf(playing[0]).wasDestroyCalled()).isTrue()
+    }
+
+    @Test
+    fun aPhotoAloneInItsFolderShowsNoCount() {
+        FakeDocumentsProvider.install()
+            .folder("solo", "solo", ChildDoc("solo/x.jpg", "x.jpg", "image/jpeg", 1, 1))
+            .contents("solo/x.jpg", Fixtures.bytes("exif-1.jpg"))
+        val viewer = openedFrom(FakeDocumentsProvider.treeUri("solo"), "solo/x.jpg")
+        assertThat(viewer.get().photoPager!!.count).isEqualTo(1)
+        assertThat(viewer.get().findViewById<TextView>(R.id.pageIndicator).visibility)
+            .isEqualTo(android.view.View.GONE)
+        assertThat(viewer.container().andInside().filterIsInstance<SubsamplingScaleImageView>()).hasSize(1)
+    }
+
+    // ---------------------------------------------------------------
     // The boundary around the page
     // ---------------------------------------------------------------
 

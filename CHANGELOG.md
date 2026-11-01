@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- A photo opened from a folder you added in Gander swipes to the folder's other photos, in the
+  order you sorted the folder in Gander, by name, date or size, and a readout says which photo of
+  how many it is (#75, thanks @0xlne, and #71, thanks @DEWE-ex). Opened with Open a file, from
+  Recents or from another app, a photo still opens alone, since Android then shares only that one
+  file with Gander.
+
 ## 2.8 (2026-10-31)
 
 - The home screen now says how to open a file from your file manager, with Open with > Gander,

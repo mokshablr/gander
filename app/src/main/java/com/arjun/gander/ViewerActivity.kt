@@ -81,6 +81,7 @@ open class ViewerActivity : AppCompatActivity() {
         private const val STATE_ARCHIVE_FOLDER = "archive_folder"
         private const val STATE_ARCHIVE_CODE_PAGE = "archive_code_page"
         private const val STATE_SIMPLE_VIEW = "simple_view"
+        private const val STATE_PHOTO = "photo"
 
         /**
          * Opens a PDF in the simple view whatever the WebView, so that a phone pdf.js runs on can
@@ -175,6 +176,13 @@ open class ViewerActivity : AppCompatActivity() {
     /** The double tap of a document's pages or a picture in the WebView. See [DoubleTapZoom]. */
     private var doubleTapZoom: DoubleTapZoom? = null
 
+    /** The photos of the folder a photo was opened from, a swipe apart. Read by tests. */
+    internal var photoPager: PhotoPager? = null
+        private set
+
+    /** Whether the page readout counts a folder's photos rather than a document's pages. */
+    private var countsPhotos = false
+
     private val createDocument = CreateTypedDocument()
 
     /** Writes the open file wherever the reader points the picker. See [SaveCopy]. */
@@ -199,6 +207,7 @@ open class ViewerActivity : AppCompatActivity() {
         outState.putString(STATE_ARCHIVE_CODE_PAGE, archiveBrowser?.codePage)
         playerScreen?.save(outState)
         outState.putBoolean(STATE_SIMPLE_VIEW, simpleAsked)
+        photoPager?.let { outState.putString(STATE_PHOTO, it.shown.toString()) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -228,9 +237,12 @@ open class ViewerActivity : AppCompatActivity() {
             finish()
             return
         }
+        // A photo swiped to in a folder's photos is the one to show again, not the one opened
+        val swipedTo = savedInstanceState?.getString(STATE_PHOTO)?.toUri()
+            ?.takeIf { fromGander && handed != null && inSameTree(it, handed) }
         // The shared-text file is written here, from text the sender handed over, so it
         // is Gander's own URI but never one another app chose.
-        val uri = handed ?: sharedTextUri()
+        val uri = swipedTo ?: handed ?: sharedTextUri()
         if (uri == null) {
             finish()
             return
@@ -258,7 +270,11 @@ open class ViewerActivity : AppCompatActivity() {
 
         fun show(kind: FileKind) {
             when (kind) {
-                FileKind.IMAGE -> showPicture(container, uri, name, ext)
+                FileKind.IMAGE, FileKind.IMAGE_WEB -> when {
+                    fromGander && DocumentsContract.isTreeUri(uri) -> showPhotos(container, uri, name, mime)
+                    kind == FileKind.IMAGE -> showPicture(container, uri, name, ext)
+                    else -> showWeb(container, uri, kind, name, ext)
+                }
                 FileKind.PLAYER -> playerScreen = PlayerScreen(
                     this, nightChrome, ::touchExplorationOn, ::applySystemBarInsets, savedInstanceState,
                     failed = { showWeb(container, uri, FileKind.UNSUPPORTED, name, ext) },
@@ -399,6 +415,15 @@ open class ViewerActivity : AppCompatActivity() {
         textSizeItem = toolbar.menu.findItem(R.id.action_text_size).apply {
             setOnMenuItemClickListener { askForTextSize(); true }
         }
+        setUpPrint(toolbar, kind, uri, name)
+        pointActionsAt(toolbar, uri, name, ext, mime)
+    }
+
+    /**
+     * Share, Save a copy and Show in file manager, for the file on show, which a swipe through a
+     * folder's photos changes.
+     */
+    private fun pointActionsAt(toolbar: MaterialToolbar, uri: Uri, name: String, ext: String, mime: String?) {
         toolbar.menu.findItem(R.id.action_share).setOnMenuItemClickListener {
             shareFile(uri, ext, mime)
             true
@@ -416,8 +441,6 @@ open class ViewerActivity : AppCompatActivity() {
             }
             true
         }
-
-        setUpPrint(toolbar, kind, uri, name)
 
         val folder = containingFolder(uri)
         toolbar.menu.findItem(R.id.action_open_folder).apply {
@@ -791,8 +814,10 @@ open class ViewerActivity : AppCompatActivity() {
             pill.text = getString(R.string.scroll_position, percent)
             return
         }
-        pill.contentDescription =
-            getString(R.string.page_indicator_spoken, pageAt, pageTotal)
+        pill.contentDescription = getString(
+            if (countsPhotos) R.string.photo_indicator_spoken else R.string.page_indicator_spoken,
+            pageAt, pageTotal
+        )
         pill.text = getString(R.string.page_indicator, pageAt, pageTotal)
     }
 
@@ -1517,39 +1542,78 @@ open class ViewerActivity : AppCompatActivity() {
      * over even the first bytes.
      */
     private fun showPicture(container: FrameLayout, uri: Uri, name: String, ext: String) {
-        val mayMove = ext == "webp" || ext == "png"
-        offMain({ (moves, rotation): Pair<Boolean, Int> ->
-            if (moves) showWeb(container, uri, FileKind.IMAGE_WEB, name, ext)
-            else showImage(container, uri, name, ext, rotation)
-        }) { app ->
-            val moves = mayMove &&
-                runCatching { app.contentResolver.openInputStream(uri)?.use(::isAnimated) }.getOrNull() == true
-            moves to if (moves) 0 else Thumbs.exifRotation(app.contentResolver, uri)
-        }
+        offMain({ look: PhotoPager.Look ->
+            if (look.moves) showWeb(container, uri, FileKind.IMAGE_WEB, name, ext)
+            else showImage(container, uri, name, ext, look.rotation)
+        }) { app -> pictureLook(app.contentResolver, uri, ext) }
     }
 
     private fun showImage(container: FrameLayout, uri: Uri, name: String, ext: String, rotation: Int) {
-        val imageView = SubsamplingScaleImageView(this)
-        imageView.contentDescription = name
-        imageView.setBackgroundColor(Color.BLACK)
-        imageView.setMinimumScaleType(SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE)
-        imageView.maxScale = 12f
-        // The library's own double tap went to a picture pixel a dp, nine times a phone's photo
-        // and a small picture not at all, so it goes to twice the fit as a page's does
-        imageView.setDoubleTapZoomDuration(DOUBLE_TAP_MS)
-        imageView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> fitDoubleTap(imageView) }
-        imageView.orientation = rotation
-        imageView.setOnImageEventListener(object : SubsamplingScaleImageView.DefaultOnImageEventListener() {
-            override fun onReady() = fitDoubleTap(imageView)
-
-            override fun onImageLoadError(e: Exception) {
-                // Some formats decode fine in the WebView even when the region decoder gives up
-                container.removeAllViews()
-                showWeb(container, uri, FileKind.IMAGE_WEB, name, ext)
-            }
-        })
+        val imageView = photoView(name, rotation) {
+            // Some formats decode fine in the WebView even when the region decoder gives up
+            container.removeAllViews()
+            showWeb(container, uri, FileKind.IMAGE_WEB, name, ext)
+        }
         container.addView(imageView, matchParent())
         imageView.setImage(ImageSource.uri(uri))
+    }
+
+    /** The tiling view for a still photo, turned by [rotation], which calls [failed] when it can't draw it. */
+    private fun photoView(name: String, rotation: Int, failed: () -> Unit) = SubsamplingScaleImageView(this).apply {
+        contentDescription = name
+        setBackgroundColor(Color.BLACK)
+        setMinimumScaleType(SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE)
+        maxScale = 12f
+        // The library's own double tap went to a picture pixel a dp, nine times a phone's photo
+        // and a small picture not at all, so it goes to twice the fit as a page's does
+        setDoubleTapZoomDuration(DOUBLE_TAP_MS)
+        addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> fitDoubleTap(this) }
+        orientation = rotation
+        setOnImageEventListener(object : SubsamplingScaleImageView.DefaultOnImageEventListener() {
+            override fun onReady() = fitDoubleTap(this@apply)
+
+            override fun onImageLoadError(e: Exception) = failed()
+        })
+    }
+
+    /**
+     * A photo opened from a folder added in Gander, with the folder's other photos a swipe away.
+     * The photo opened shows at once, and the others are put either side once the folder is read.
+     */
+    private fun showPhotos(container: FrameLayout, uri: Uri, name: String, mime: String?) {
+        val opened = ChildDoc(DocumentsContract.getDocumentId(uri), name, mime.orEmpty(), 0, 0)
+        val pager = PhotoPager(this, uri, opened, photoHost)
+        photoPager = pager
+        countsPhotos = true
+        // The readout counts photos, and has no page to go to
+        pageIndicator.isClickable = false
+        container.addView(pager.view, matchParent())
+        offMain({ found: Pair<List<ChildDoc>, Int>? ->
+            found?.let { (photos, at) -> pager.fill(photos, at) }
+        }) { app -> photosAround(app.contentResolver, uri, Settings.sortOrder(app)) }
+    }
+
+    private val photoHost = object : PhotoPager.Host {
+        override fun look(uri: Uri, ext: String, then: (PhotoPager.Look) -> Unit) =
+            offMain(then) { app -> pictureLook(app.contentResolver, uri, ext) }
+
+        override fun still(name: String, rotation: Int, failed: () -> Unit) = photoView(name, rotation, failed)
+
+        override fun play(frame: FrameLayout, uri: Uri, name: String, ext: String) =
+            showWeb(frame, uri, FileKind.IMAGE_WEB, name, ext)
+
+        override fun stopPlaying() = dropWeb()
+
+        override fun shown(photo: ChildDoc, uri: Uri, at: Int, of: Int) {
+            val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
+            toolbar.title = photo.name
+            val ext = photo.name.substringAfterLast('.', "").lowercase()
+            pointActionsAt(toolbar, uri, photo.name, ext, photo.mime.ifEmpty { null })
+            pageAt = at + 1
+            pageTotal = of
+            setPageIndicatorText()
+            showPageIndicator()
+        }
     }
 
     /** Twice the picture as it fits the view now, which changes as the phone turns. */
@@ -1833,6 +1897,13 @@ open class ViewerActivity : AppCompatActivity() {
      * in its place: its renderer has gone, or the simple view's has.
      */
     private fun dropPage(container: FrameLayout, didCrash: Boolean) {
+        if (webView == null) return
+        dropWeb()
+        showRendererGone(container, didCrash)
+    }
+
+    /** Takes the WebView out and lets it go: its renderer has gone, or a swipe took its picture off screen. */
+    private fun dropWeb() {
         val view = webView ?: return
         // A zoom still on its way would go on calling a WebView that has gone
         doubleTapZoom?.cancel()
@@ -1840,7 +1911,6 @@ open class ViewerActivity : AppCompatActivity() {
         webView = null
         (view.parent as? ViewGroup)?.removeView(view)
         view.destroy()
-        showRendererGone(container, didCrash)
     }
 
     /**

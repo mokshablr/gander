@@ -1,5 +1,9 @@
 package com.arjun.gander
 
+import android.content.ContentResolver
+import android.net.Uri
+import android.provider.DocumentsContract
+
 /**
  * What the home screen shows for a file, and in what order.
  *
@@ -131,6 +135,31 @@ internal data class ChildDoc(
 )
 
 internal const val MIME_DIR = "vnd.android.document/directory"
+
+/**
+ * What [folder] holds, read through the grant on the tree [tree] belongs to, or null where its
+ * provider can't say. The home screen lists a folder with this, and the photo viewer the photos
+ * beside the one it opened.
+ */
+internal fun childrenOf(resolver: ContentResolver, tree: Uri, folder: String): List<ChildDoc>? = runCatching {
+    resolver.query(
+        DocumentsContract.buildChildDocumentsUriUsingTree(tree, folder),
+        arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
+            DocumentsContract.Document.COLUMN_SIZE,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED
+        ),
+        null, null, null
+    )?.use { c ->
+        buildList {
+            while (c.moveToNext()) {
+                add(ChildDoc(c.getString(0), c.getString(1) ?: "?", c.getString(2) ?: "", c.getLong(3), c.getLong(4)))
+            }
+        }
+    }
+}.getOrNull()
 
 /**
  * A folder listing split into directories and files, sorted according to [sortOrder].

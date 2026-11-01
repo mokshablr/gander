@@ -91,6 +91,8 @@
     <!-- Spoken form, for the same reason match_count has one: a screen reader reads
          "12/357" as a fraction -->
     <string name="page_indicator_spoken">Page %1$d of %2$d</string>
+    <!-- The same readout over a folder's photos, which are swiped through rather than paged -->
+    <string name="photo_indicator_spoken">Photo %1$d of %2$d</string>
     <string name="go_to_page">Go to page</string>
     <!-- Turns the page itself dark, which the phone's own dark mode deliberately does
          not: a document is paper and stays white at midnight. Named for what it is for

@@ -244,7 +244,9 @@ function unwant(slot) {
   if (slot.state === "queued") {
     var i = queue.indexOf(slot);
     if (i >= 0) queue.splice(i, 1);
-    slot.state = "blank";
+    /* A page keeping its old picture while it waited for a new one has left the band,
+       so nobody is looking at it any more and the picture goes with it. */
+    if (slot.held) blank(slot); else slot.state = "blank";
   } else if (slot.state === "drawing" && slot.task) {
     slot.task.cancel();
   }
@@ -274,6 +276,14 @@ function release(slot) {
 function blank(slot) {
   slot.canvas.width = 0;
   slot.canvas.height = 0;
+  /* And the replacement on its way, if the render was cancelled part way: it never
+     reached the document and still holds its backing store until this zeroes it. */
+  if (slot.fresh) {
+    slot.fresh.width = 0;
+    slot.fresh.height = 0;
+    slot.fresh = null;
+  }
+  slot.held = false;
   slot.state = "blank";
   slot.unscaled = null;
   /* The mode goes with the bitmap it describes: a blank slot has not been drawn in
@@ -600,18 +610,18 @@ function recolour(ctx, keep) {
 /*
  * The reader turned night mode on or off.
  *
- * Every page holding a bitmap drawn in the other mode is given up and asked for again,
- * rather than filtered a second time to put it back. The matrix is its own inverse on
- * paper, but a saturated colour clamps on the way out and does not come back: red at
- * 200,30,30 wants 1.265 of a red channel and gets 1.0, and a second pass returns
- * something else. Draw it again.
+ * Every page holding a bitmap drawn in the other mode is asked for again, rather than
+ * filtered a second time to put it back. The matrix is its own inverse on paper, but a
+ * saturated colour clamps on the way out and does not come back: red at 200,30,30 wants
+ * 1.265 of a red channel and gets 1.0, and a second pass returns something else. Draw it
+ * again, through redraw(), so a page on screen keeps its picture until the new one lands.
  *
  * Pages part-way through a render are left where they are. draw() reconciles them when
  * they land, which is also what makes toggling twice in a second come out right: the
  * mode is read again at the end of every render, so the last one the reader chose wins
  * however many are in flight behind it.
  *
- * Tiles come back on their own. blank() drops the one a page is holding, and draw()
+ * Tiles come back on their own. redraw() drops the one a page is holding, and draw()
  * asks for a new one as it finishes.
  */
 function setNight(on) {
@@ -620,9 +630,48 @@ function setNight(on) {
   document.documentElement.classList.toggle("vw-night", on);
   for (var i = 0; i < slots.length; i++) {
     var s = slots[i];
-    if (s.state === "drawn" && s.mode !== inverted) { blank(s); want(s); }
+    if (s.state === "drawn" && s.mode !== inverted) redraw(s, true);
   }
   pump();
+}
+
+/*
+ * Ask for a drawn page again, in the mode or at the width it is shown now, without the
+ * reader watching it go blank.
+ *
+ * A page on screen keeps the picture it has, which the stylesheet stretches to its box's
+ * new size, until draw() has the replacement; draw() paints that into a canvas of its own
+ * and swaps it in whole. Measured on a phone before this, a pinch settling past the fitted
+ * width took every page on screen to white in one frame and filled the column back in
+ * over about 200 ms, and a double tap back did the same at its end. A page off screen is
+ * released as before, since nobody is looking at it and the band asks for it again if it
+ * comes back; [ask] asks here instead, for the callers whose band will not.
+ *
+ * What is held is bounded by the screen. The old picture goes the moment the new one
+ * lands, and goes with the page if it leaves the band first, in unwant() and the failure
+ * path of draw(), so a fling across a column of held pages holds nothing for long.
+ */
+function redraw(slot, ask) {
+  if (slot.state !== "drawn") return;
+  if (!onScreen(slot)) {
+    blank(slot);
+    if (ask) want(slot);
+    return;
+  }
+  dropTile(slot);
+  slot.held = true;
+  slot.state = "queued";
+  queue.push(slot);
+}
+
+/* Whether any of a page's box is inside the visual viewport. The box is in layout
+   coordinates, and the visual viewport's offset and height are in the same space. */
+function onScreen(slot) {
+  var vv = window.visualViewport;
+  var r = slot.box.getBoundingClientRect();
+  var top = vv ? vv.offsetTop : 0;
+  var bottom = vv ? top + vv.height : window.innerHeight;
+  return r.bottom > top && r.top < bottom;
 }
 
 function draw(slot) {
@@ -669,9 +718,19 @@ function draw(slot) {
     scale *= within(unscaled.width * scale, unscaled.height * scale, BASE_MAX_PIXELS);
     /* clone rather than a second getViewport: the same matrix, already built. */
     var viewport = unscaled.clone({ scale: scale });
-    var canvas = slot.canvas;
+    /*
+     * Drawn into a canvas of its own, outside the document, and swapped for the page's
+     * canvas once it is finished, the way a tile is. Sizing a canvas clears it, and
+     * pdf.js paints it white before its first operator, so a page drawn again in place
+     * showed as white filling in from the top for as long as the render took: at the
+     * end of a double tap back to the fitted width, every page on screen at once. The
+     * page keeps whatever it was showing until the swap, which is the old picture
+     * stretched for a page redraw() held, and white paper for a page not drawn before.
+     */
+    var canvas = document.createElement("canvas");
     canvas.width = viewport.width;
     canvas.height = viewport.height;
+    slot.fresh = canvas;
     /* Held rather than asked for twice: recolour() below wants the same context, and
        getContext is a lookup on every call for a handle that never changes. */
     var ctx = canvas.getContext("2d");
@@ -702,23 +761,38 @@ function draw(slot) {
       }
       slot.mode = mode;
       slot.shrink = at;
+      /* The swap, in one step: the finished picture goes in and the old one's backing
+         store is dropped, so the page shows exactly one picture on every frame. */
+      var old = slot.canvas;
+      slot.box.replaceChild(canvas, old);
+      old.width = 0;
+      old.height = 0;
+      slot.canvas = canvas;
+      slot.fresh = null;
+      var held = slot.held;
+      slot.held = false;
+      /* A held page's words are already where they belong. The text layer is laid out for
+         the fitted width and follows --vw-shrink, so only the picture needed drawing again,
+         and leaving the layer alone keeps a selection or a search hit on it through the
+         redraw. */
+      if (held && slot.layer) return;
       return textLayerFor(slot, page, unscaled.clone({ scale: cssScale }));
     });
   }).then(function () {
     slot.state = "drawn";
     /*
      * Night mode moved while this was being drawn, so the picture that just arrived is
-     * of the wrong one. Give it up and ask again; the mode is read afresh at the top of
-     * draw(), so this converges however many times the reader taps. A pinch that moved
-     * the pages well away from the width this was drawn for is the same case.
+     * of the wrong one. Ask for it again, keeping this one up meanwhile; the mode is read
+     * afresh at the top of draw(), so this converges however many times the reader taps.
+     * A pinch that moved the pages well away from the width this was drawn for is the
+     * same case.
      *
      * Here rather than in setNight() because a render in flight cannot be told to change
      * its mind, and cancelling it would put this page down the same failure path a fling
      * uses, which is the hottest one in the file and not somewhere to add a special case.
      */
     if (slot.mode !== inverted || !sizedForNow(slot)) {
-      blank(slot);
-      want(slot);
+      redraw(slot, true);
       return;
     }
     /* A page can come back after being released with a search still running, so
@@ -730,7 +804,8 @@ function draw(slot) {
        event is going to say so: they are holding still, waiting for this. */
     scheduleRefine();
   }, function () {
-    /* Cancelled or genuinely broken. Both end the same way: nothing held, and free
+    /* Cancelled or genuinely broken. Both end the same way: nothing held, the picture
+       on its way thrown away with whatever the page was keeping up meanwhile, and free
        to be asked for again if the reader comes back to it. */
     blank(slot);
   }).then(function () {
@@ -1216,16 +1291,14 @@ function settle(s, at, y) {
   var watched = slots.length > 1;
   if (watched) observePages();
   /*
-   * Pages drawn for a width well away from this one are given up. The observers just
-   * built ask again for those in the band, at the new size, and leave the rest blank:
-   * asking here would draw pages the band no longer reaches, only to cancel them. A
-   * page part-way through a render is reconciled when it lands, as night mode's are.
+   * Pages drawn for a width well away from this one are asked for again at the new size.
+   * Those on screen keep their picture until the new one lands, see redraw(); the rest
+   * are released, and the observers just built ask again for those in the band: asking
+   * here would draw pages the band no longer reaches, only to cancel them. A page
+   * part-way through a render is reconciled when it lands, as night mode's are.
    */
   for (var i = 0; i < slots.length; i++) {
-    if (slots[i].state === "drawn" && !sizedForNow(slots[i])) {
-      blank(slots[i]);
-      if (!watched) want(slots[i]);
-    }
+    if (slots[i].state === "drawn" && !sizedForNow(slots[i])) redraw(slots[i], !watched);
   }
   pump();
   /* The page under the middle of the screen is likely another one now, and the sharp
@@ -2652,7 +2725,10 @@ if (!vwPdfBlocked) {
         var slot = {
           n: i, box: box, canvas: c, text: tl,
           state: "blank", mode: null, shrink: null, pictures: null, task: null, page: null,
-          layer: null, unscaled: null, tile: null, pending: null
+          layer: null, unscaled: null, tile: null, pending: null,
+          /* The picture being drawn to replace this page's, until it does, and whether
+             the page is keeping an old picture up while it waits: see redraw(). */
+          fresh: null, held: false
         };
         /* The observers are handed elements and need the slot back. Hanging it on
            the element beats writing a data attribute and parsing it out again on

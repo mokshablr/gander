@@ -34,12 +34,17 @@ PAGE_WIDTHS = f"() => {PAGES}.map(pg => pg.getBoundingClientRect().width)"
 PAGE_LEFTS = f"() => {PAGES}.map(pg => pg.getBoundingClientRect().left)"
 FIRST_TOP = "() => document.querySelector('#pages .pg').getBoundingClientRect().top"
 
-# Every bitmap held, as the sum of width times height over the page canvases of the slots
-# that hold one. The tiles are counted too, since they are canvases under #pages as well.
+# Every bitmap held, as the sum of width times height over every canvas under #pages that
+# has been sized, tiles and pictures kept up through a redraw included, plus each
+# replacement still being drawn outside the document. A canvas at the HTML default of
+# 300 by 150 has never been touched and holds no backing store.
 BITMAP_PIXELS = f"""() => {PAGES}.reduce((sum, pg) => {{
   const s = pg._slot;
-  if (!s || (s.state !== 'drawn' && s.state !== 'drawing')) return sum;
-  return sum + [...pg.querySelectorAll('canvas')].reduce((t, c) => t + c.width * c.height, 0);
+  const shown = [...pg.querySelectorAll('canvas')]
+    .filter(c => !(c.width === 300 && c.height === 150))
+    .reduce((t, c) => t + c.width * c.height, 0);
+  const coming = s && s.fresh ? s.fresh.width * s.fresh.height : 0;
+  return sum + shown + coming;
 }}, 0)"""
 
 # The slots holding a bitmap or about to: everything the bands have asked for.
@@ -429,6 +434,135 @@ def test_the_bitmap_held_at_the_floor_is_no_more_than_at_the_fitted_width(viewer
 
     print(f"canvas pixels held, peak over a walk: {at_fit} at the fitted width, {at_floor} at the floor")
     assert at_floor <= at_fit, f"{at_floor} px held at the floor against {at_fit} at the fitted width"
+
+
+# ---------------------------------------------------------------------------
+# What the reader sees on every frame of a change of width
+# ---------------------------------------------------------------------------
+
+# Dispatches a gesture one event per animation frame and samples the page on every frame
+# until it has settled: the column laid out, and nothing queued or drawing, for three
+# frames running. A sample is the pages on screen, each with the width of its canvas, its
+# slot's state, the night setting its bitmap was drawn in, which is null while it holds no
+# finished bitmap, and whether it is keeping a picture from before, with the document's
+# scroll width and the column's fraction beside them.
+FRAMES = """([events, most]) => new Promise(done => {
+  const target = document.querySelector('#pages .pg') || document.body;
+  const touch = (id, x, y) => new Touch({ identifier: id, target, clientX: x, clientY: y,
+                                          pageX: x + scrollX, pageY: y + scrollY });
+  const send = (e) => {
+    const touches = e.fingers.map((f, i) => touch(i + 1, f[0], f[1]));
+    const held = e.type === 'touchend' ? [] : touches;
+    target.dispatchEvent(new TouchEvent(e.type, { touches: held, targetTouches: held,
+      changedTouches: touches, bubbles: true, cancelable: true }));
+  };
+  const pages = () => [...document.querySelectorAll('#pages .pg')];
+  const sample = () => {
+    const vv = visualViewport;
+    const top = vv.offsetTop, bottom = top + vv.height;
+    const shown = pages().filter(pg => {
+      const r = pg.getBoundingClientRect(); return r.bottom > top && r.top < bottom; });
+    return {
+      pages: shown.map(pg => {
+        const s = pg._slot, c = pg.querySelector('canvas:not(.tile)');
+        return { n: s.n, width: c.width, state: s.state, mode: s.mode, held: !!s.held }; }),
+      scrollWidth: document.scrollingElement.scrollWidth,
+      moving: document.getElementById('pages').classList.contains('vw-moving'),
+      shrink: vwPdfShrink(),
+    };
+  };
+  const frames = [];
+  let i = 0, still = 0;
+  const tick = () => {
+    frames.push(sample());
+    if (i < events.length) {
+      send(events[i++]);
+    } else {
+      const settled = !frames[frames.length - 1].moving &&
+        pages().every(pg => pg._slot.state === 'blank' || pg._slot.state === 'drawn');
+      still = settled ? still + 1 : 0;
+    }
+    if (still >= 3 || frames.length >= most) return done(frames);
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+})"""
+
+
+def two_fingers(x, y, apart):
+    return [[x - apart / 2, y], [x + apart / 2, y]]
+
+
+def pinch_events(x, y, from_apart, to_apart, steps=12):
+    """A pinch about ([x], [y]), one event per frame: down, [steps] moves, up."""
+    events = [{"type": "touchstart", "fingers": two_fingers(x, y, from_apart)}]
+    for i in range(1, steps + 1):
+        apart = from_apart + (to_apart - from_apart) * i / steps
+        events.append({"type": "touchmove", "fingers": two_fingers(x, y, apart)})
+    events.append({"type": "touchend", "fingers": two_fingers(x, y, to_apart)})
+    return events
+
+
+def tap_events(x, y, times=2):
+    """[times] taps at ([x], [y]), each a frame down and a frame up."""
+    events = []
+    for _ in range(times):
+        events.append({"type": "touchstart", "fingers": [[x, y]]})
+        events.append({"type": "touchend", "fingers": [[x, y]]})
+    return events
+
+
+def frames(page, events, most=900):
+    sampled = page.evaluate(FRAMES, [events, most])
+    assert len(sampled) < most, "the page never settled"
+    return sampled
+
+
+def blank_frames(sampled):
+    """
+    Every page on screen, on every frame, that showed no finished picture: a canvas
+    released to nothing, or one sized for a render that has not landed in it yet.
+    """
+    return [
+        (i, p) for i, f in enumerate(sampled) for p in f["pages"]
+        if p["width"] == 0 or (p["width"] > 300 and p["mode"] is None)
+    ]
+
+
+@pytest.mark.parametrize("gesture,ends_at", [
+    ("a pinch in past the fitted width", 0.5),
+    ("a pinch out back to the fitted width", 1),
+    ("a double tap back to the fitted width", 1),
+])
+def test_a_page_on_screen_keeps_a_picture_through_every_frame_of_a_redraw(viewer, page, gesture, ends_at):
+    """
+    A pinch that settles at another width asks for every page on screen again, and so
+    does the double tap back. The old picture has to stay up, stretched to the new size,
+    until the new one is finished and swapped in whole: released first, or drawn in place,
+    the column shows white for as long as the renders take, which on a phone was every
+    page on screen going blank in one frame and filling back in over about 200 ms.
+    """
+    viewer("pdf.html", "forty-pages.pdf")
+    wait_for_pdf(page)
+    wait_for_band(page)
+    if gesture.startswith("a pinch in"):
+        events = pinch_events(490, 800, 400, 200)
+    elif gesture.startswith("a pinch out"):
+        shrink_to(page, FLOOR)
+        wait_for_band(page)
+        events = pinch_events(490, 800, 100, 400)
+    else:
+        shrink_to(page, 0.3)
+        wait_for_band(page)
+        events = tap_events(490, 800)
+
+    sampled = frames(page, events)
+
+    assert sampled[-1]["shrink"] == pytest.approx(ends_at)
+    assert any(p["state"] != "drawn" for f in sampled for p in f["pages"]), (
+        "no page on screen was drawn again, so this proved nothing")
+    bad = blank_frames(sampled)
+    assert bad == [], f"pages on screen with no finished picture, by frame: {bad[:12]}"
 
 
 # ---------------------------------------------------------------------------

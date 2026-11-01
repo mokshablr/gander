@@ -17,6 +17,9 @@
   width. Pinch out to bring them back to the screen's width, and again to zoom in past it as
   before. A double tap on the small pages brings them back to the screen's width about the
   place tapped. A document reopens at the screen's width (#52, thanks @XZY123lol).
+- A presentation full of photos needs much less memory to open, where on a phone with little
+  memory it could stop the viewer with an error (reported in a Play review). The slide reader
+  now writes out each picture in one go rather than a few characters at a time.
 
 ## 2.8 (2026-10-31)
 

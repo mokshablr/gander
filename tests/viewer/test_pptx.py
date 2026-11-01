@@ -1,11 +1,14 @@
 """pptx.html: PPTXjs, which reports nothing and is polled instead."""
 
+import base64
 import io
+import random
 import re
 import zipfile
 
 import pytest
 from PIL import Image
+from playwright.sync_api import Error as PlaywrightError
 
 from helpers import status_text, wait_until_done
 
@@ -720,3 +723,96 @@ def test_a_slide_keeps_its_own_background(viewer, page):
     wait_for_deck(page, 3)
     colour = ground(page, 2)
     assert all(abs(a - b) <= 4 for a, b in zip(colour, (0x1F, 0x38, 0x64))), colour
+
+
+# ---------------------------------------------------------------------------
+# Pictures, which PPTXjs writes out as data: URLs: see base64ArrayBuffer in lib/pptx/pptxjs.js
+# ---------------------------------------------------------------------------
+
+def photo(size, comment=0):
+    """A JPEG of noise, which compresses about as badly as a photo, made [comment] bytes longer."""
+    noise = Image.frombytes("RGB", (size, size), random.Random(size).randbytes(size * size * 3))
+    out = io.BytesIO()
+    noise.save(out, "JPEG", quality=90, **({"comment": b"x" * comment} if comment else {}))
+    return out.getvalue()
+
+
+def deck_with_pictures(made, fixture_path, name, pictures, copies=1, slides=(1,)):
+    """
+    deck.pptx with [pictures] added to each of [slides], each one [copies] times. The copies
+    point at one part, so the file stays small while PPTXjs still encodes each one.
+    """
+    with zipfile.ZipFile(fixture_path("deck.pptx")) as z:
+        parts = {part: z.read(part) for part in z.namelist()}
+    image = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+    for i, data in enumerate(pictures):
+        parts[f"ppt/media/picture{i}.jpeg"] = data
+    for s in slides:
+        rels = parts[f"ppt/slides/_rels/slide{s}.xml.rels"].decode()
+        rels = rels.replace("</Relationships>", "".join(
+            f'<Relationship Id="rIdPicture{i}" Type="{image}" Target="../media/picture{i}.jpeg"/>'
+            for i in range(len(pictures))) + "</Relationships>")
+        pics = []
+        for i in range(len(pictures)):
+            for _ in range(copies):
+                n = len(pics)
+                pics.append(
+                    f'<p:pic><p:nvPicPr><p:cNvPr id="{100 + n}" name="Picture {n}"/><p:cNvPicPr/>'
+                    f'<p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rIdPicture{i}"/>'
+                    '<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm>'
+                    f'<a:off x="{n % 8 * 1100000}" y="{2700000 + n // 8 % 4 * 1000000}"/>'
+                    '<a:ext cx="1000000" cy="1000000"/></a:xfrm><a:prstGeom prst="rect">'
+                    '<a:avLst/></a:prstGeom></p:spPr></p:pic>')
+        slide = parts[f"ppt/slides/slide{s}.xml"].decode()
+        parts[f"ppt/slides/slide{s}.xml"] = slide.replace(
+            "</p:spTree>", "".join(pics) + "</p:spTree>").encode()
+        parts[f"ppt/slides/_rels/slide{s}.xml.rels"] = rels.encode()
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        for part, data in parts.items():
+            z.writestr(part, data)
+    return made(name, out.getvalue())
+
+
+def test_a_picture_is_written_out_byte_for_byte(viewer, page, made, fixture_path):
+    """
+    Pictures whose lengths leave 0, 1 and 2 over when cut into threes, two of them longer than
+    the 32 KB pieces the encoder takes at a time and one shorter, against Python's base64.
+    """
+    pictures = [next(p for p in (photo(300, n) for n in (1, 2, 3)) if len(p) % 3 == left)
+                for left in (0, 1, 2)] + [photo(24)]
+    assert min(len(p) for p in pictures[:3]) > 2 * 0x8000 and len(pictures[3]) < 0x8000
+    viewer("pptx.html", deck_with_pictures(made, fixture_path, "pictures.pptx", pictures))
+    wait_for_deck(page, 3)
+    written = page.eval_on_selector_all("#result img", "all => all.map(i => i.getAttribute('src'))")
+    assert sorted(written) == sorted(
+        "data:image/jpeg;base64," + base64.b64encode(p).decode() for p in pictures)
+
+
+def test_a_deck_of_photos_opens_on_a_small_javascript_heap(launch_browser, server, made, fixture_path):
+    """
+    A phone with little memory gives the renderer a small JavaScript heap. For these 38 MB of
+    photos upstream's encoder needed about 480 MB of it and Gander's about 120, so the cap sits
+    halfway between, where upstream's crashes the renderer.
+    """
+    deck = deck_with_pictures(made, fixture_path, "photos.pptx", [photo(1000)], copies=14,
+                              slides=(1, 2, 3))
+    browser = launch_browser(args=["--js-flags=--max-old-space-size=240"])
+    try:
+        page = browser.new_page(viewport={"width": 360, "height": 640})
+        crashed = []
+        page.on("crash", lambda _: crashed.append(True))
+        server.show(deck)
+        page.goto(server.url("pptx.html"))
+        try:
+            page.wait_for_function(
+                "() => document.querySelectorAll('#result img').length >= 42"
+                " || document.querySelector('.vw-error')",
+                timeout=60000,
+            )
+        except PlaywrightError:
+            assert not crashed, "the renderer crashed, out of memory"
+            raise
+        assert page.query_selector(".vw-error") is None, status_text(page)
+    finally:
+        browser.close()

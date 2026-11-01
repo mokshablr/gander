@@ -26,7 +26,7 @@ commit.
 | `xlsx.full.min.js` | SheetJS Community Edition | 0.20.3 | Apache-2.0 | https://git.sheetjs.com/sheetjs/sheetjs |
 | `marked.umd.js` | marked | 18.1.1 | MIT | https://github.com/markedjs/marked |
 | `purify.min.js` | DOMPurify | 3.4.17 | Apache-2.0 or MPL-2.0 dual | https://github.com/cure53/DOMPurify |
-| `pptx/pptxjs.js` | PPTXjs | 1.21.1, with one change (below) | MIT | https://github.com/meshesha/PPTXjs |
+| `pptx/pptxjs.js` | PPTXjs | 1.21.1, with two changes (below) | MIT | https://github.com/meshesha/PPTXjs |
 | `pptx/divs2slides.js` | divs2slides (PPTXjs) | 1.3.2 | MIT | https://github.com/meshesha/PPTXjs |
 | `pptx/filereader.js` | FileReader.js (PPTXjs bundle) | 0.99 | MIT | https://github.com/meshesha/PPTXjs |
 | `pptx/jquery.min.js` | jQuery | 1.11.3 | MIT | https://github.com/jquery/jquery |
@@ -188,19 +188,28 @@ prints on two sheets, or if its footer moves in print.
 is not. `drawLrTbAcross` can go once a release reads `lrTb` as horizontal text; 0.4.1,
 which is upstream's c533f38 (21 September 2026), still reads it as vertical.
 
-## PPTXjs's one change
+## PPTXjs's two changes
 
-`pptx/pptxjs.js` is upstream's 1.21.1 with two catches added for issue #48, each marked
-`Gander, #48`. One is in `processNodesInSlide`, which every shape comes through, a group's
-members and a layout's or master's included; the other is around each chart nv.d3 draws
-once the slides are built. A shape or chart PPTXjs throws on is left out and the rest of the
-deck drawn, where the throw put the error card up in place of every slide, and
-`window.vwLeftOut` lists what was left out. The first catch keeps the shape's place as an
-empty block marked with what it was (`missingPlace`), and the second marks the chart's own
-box, so that `pptx.js` can put a box there saying what is missing. The change is
-`scripts/pptxjs.patch`, which `fetch-viewer-libs.sh` applies after each fetch, stopping if
-upstream's file has moved under it. Everything else is still put right from outside, in
-`pptx.js`, as the package opens. `test_pptx.py` fails if either catch goes, or either mark.
+`pptx/pptxjs.js` is upstream's 1.21.1 with two changes, both in `scripts/pptxjs.patch`, which
+`fetch-viewer-libs.sh` applies after each fetch, stopping if upstream's file has moved under
+it. Everything else is still put right from outside, in `pptx.js`, as the package opens.
+
+The first is two catches added for issue #48, each marked `Gander, #48`. One is in
+`processNodesInSlide`, which every shape comes through, a group's members and a layout's or
+master's included; the other is around each chart nv.d3 draws once the slides are built. A
+shape or chart PPTXjs throws on is left out and the rest of the deck drawn, where the throw
+put the error card up in place of every slide, and `window.vwLeftOut` lists what was left
+out. The first catch keeps the shape's place as an empty block marked with what it was
+(`missingPlace`), and the second marks the chart's own box, so that `pptx.js` can put a box
+there saying what is missing. `test_pptx.py` fails if either catch goes, or either mark.
+
+The second, marked `Gander:`, is `base64ArrayBuffer`, which writes each picture out as the
+text of a data: URL. Upstream added four characters at a time, so each picture became a chain
+of short strings, and PPTXjs holds every slide's pictures before it draws any. A deck of
+photos then needed many times its pictures' size in memory, and the viewer crashed on phones
+with little of it. Gander's version hands the bytes to `btoa` in 32 KB pieces and returns the
+same text. `test_pptx.py` checks that text against Python's base64, and opens a deck of
+photos under a small JavaScript heap.
 
 Upstream's `js/dingbat.js` is not shipped. PPTXjs looks a Wingdings 2 or 3 bullet up in its
 global `dingbat_unicode` and throws when there is none, and many of the characters upstream's

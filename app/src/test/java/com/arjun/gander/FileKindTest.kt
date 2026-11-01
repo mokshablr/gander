@@ -349,6 +349,8 @@ class FileKindTest {
         assertThat(FileKind.isUnknown(UNSUPPORTED, "xyz")).isTrue()
         assertThat(FileKind.isUnknown(UNSUPPORTED, "")).isTrue()
         assertThat(FileKind.isUnknown(UNSUPPORTED, "ppt")).isFalse()
+        assertThat(FileKind.isUnknown(UNSUPPORTED, "pps")).isFalse()
+        assertThat(FileKind.isUnknown(UNSUPPORTED, "pot")).isFalse()
         assertThat(FileKind.isUnknown(TEXT, "xyz")).isFalse()
         assertThat(FileKind.isUnknown(PLAYER, "mp4")).isFalse()
     }

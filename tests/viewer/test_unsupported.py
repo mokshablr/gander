@@ -1,5 +1,7 @@
 """unsupported.html: the last resort, and the way out of it."""
 
+import pytest
+
 
 def test_the_file_is_named(viewer, page):
     viewer("unsupported.html", "unknown.xyz")
@@ -7,13 +9,16 @@ def test_the_file_is_named(viewer, page):
     assert page.text_content("#fname").strip() == "unknown.xyz"
 
 
-def test_legacy_powerpoint_gets_an_explanation_of_its_own(viewer, page):
+@pytest.mark.parametrize("ext", ["ppt", "pps", "pot"])
+def test_legacy_powerpoint_gets_an_explanation_of_its_own(viewer, page, ext):
     """
-    .ppt is the one Office format Gander deliberately does not open, now that
-    .doc has a reader of its own, so it is told why rather than just refused.
+    Old binary PowerPoint, as a deck, a slide show or a template, is the one Office format
+    Gander deliberately does not open, now that .doc has a reader of its own, so it is told
+    why rather than just refused.
     """
-    viewer("unsupported.html", "unknown.xyz", name="slides.ppt", ext="ppt")
+    viewer("unsupported.html", "unknown.xyz", name=f"slides.{ext}", ext=ext)
     page.wait_for_selector("#hint", timeout=10000)
+    assert f"(.{ext})" in page.text_content("#hint")
     assert ".pptx" in page.text_content("#hint")
 
 

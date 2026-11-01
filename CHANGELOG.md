@@ -20,6 +20,8 @@
 - A presentation full of photos needs much less memory to open, where on a phone with little
   memory it could stop the viewer with an error (reported in a Play review). The slide reader
   now writes out each picture in one go rather than a few characters at a time.
+- An old PowerPoint slide show (.pps) or template (.pot) now says it opens once saved again as
+  .pptx, as a .ppt already did.
 
 ## 2.8 (2026-10-31)
 

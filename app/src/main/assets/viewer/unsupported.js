@@ -1,8 +1,10 @@
 document.getElementById("fname").textContent = vwName;
 var hint = document.getElementById("hint");
-if (vwExt === "ppt") {
+// A slide show (.pps) and a template (.pot) are in the same old binary format as a .ppt
+if (vwExt === "ppt" || vwExt === "pps" || vwExt === "pot") {
   hint.textContent =
-    "This is a legacy Office format (.ppt). If you re-save it as .pptx, Gander can display it.";
+    "This is a legacy Office format (." + vwExt + "). If you re-save it as .pptx, " +
+    "Gander can display it.";
 } else {
   // Nothing useful to add; leave the card to the action below
   hint.style.display = "none";

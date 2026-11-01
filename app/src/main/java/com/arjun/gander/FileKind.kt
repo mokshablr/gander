@@ -182,10 +182,10 @@ enum class FileKind(val page: String) {
         fun isAudioExt(ext: String) = ext in audioExt
 
         /**
-         * Files with no viewer that the card has advice for, in unsupported.js: a .ppt is
-         * told to be saved as .pptx. Read as text they would lose it.
+         * Files with no viewer that the card has advice for, in unsupported.js: a .ppt, .pps
+         * or .pot is told to be saved as .pptx. Read as text they would lose it.
          */
-        val advisedExt = setOf("ppt")
+        val advisedExt = setOf("ppt", "pps", "pot")
 
         /**
          * Whether a file is one Gander has no viewer for and nothing to say about. These

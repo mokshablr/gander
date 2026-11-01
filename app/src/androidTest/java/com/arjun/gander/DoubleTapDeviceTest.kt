@@ -68,6 +68,30 @@ class DoubleTapDeviceTest {
         zoomsInAboutThePlaceTappedAndBack("icon.svg", IMAGE_SHOWN)
 
     /**
+     * A PDF pinched smaller than the screen draws its pages small itself, since the WebView zooms
+     * out no further, and a double tap then is the page's, back to the fitted width. The page says
+     * so over the channel, and what only a device shows is the app standing aside: a WebView that
+     * zoomed this tap too would end at twice the width over pages drawn at it.
+     */
+    @Test
+    fun aPdfPinchedSmallerThanTheScreenComesBackOnADoubleTapWithoutTheWebViewZooming() {
+        open("six-pages.pdf").use { scenario ->
+            WebViewProbe.await(scenario, PDF_DRAWN, "six-pages.pdf to be drawn")
+            assertThat(WebViewProbe.eval(scenario, ZOOM)).isEqualTo("100")
+
+            WebViewProbe.eval(scenario, "vwPdfShrink(0.5)")
+            WebViewProbe.await(scenario, "vwPdfShrink() === 0.5", "the pages to shrink", 10_000)
+            // The page's word that it has shrunk reaches the app on its main thread, a little
+            // after the page has said so to the probe
+            Thread.sleep(500)
+
+            onView(isAssignableFrom(WebView::class.java)).perform(doubleTapOffCentre)
+            WebViewProbe.await(scenario, "vwPdfShrink() === 1", "the pages to come back", 10_000)
+            assertThat(WebViewProbe.eval(scenario, ZOOM)).isEqualTo("100")
+        }
+    }
+
+    /**
      * A sheet's page zooms itself, so its column letters and frozen panes stay on screen, and says
      * how far: the WebView itself never zooms. What only a device shows is that a real double tap
      * reaches the page through the app's touch handling, and that the WebView does not zoom too.

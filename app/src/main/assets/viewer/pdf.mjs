@@ -244,7 +244,9 @@ function unwant(slot) {
   if (slot.state === "queued") {
     var i = queue.indexOf(slot);
     if (i >= 0) queue.splice(i, 1);
-    slot.state = "blank";
+    /* A page keeping its old picture while it waited for a new one has left the band,
+       so nobody is looking at it any more and the picture goes with it. */
+    if (slot.held) blank(slot); else slot.state = "blank";
   } else if (slot.state === "drawing" && slot.task) {
     slot.task.cancel();
   }
@@ -274,6 +276,14 @@ function release(slot) {
 function blank(slot) {
   slot.canvas.width = 0;
   slot.canvas.height = 0;
+  /* And the replacement on its way, if the render was cancelled part way: it never
+     reached the document and still holds its backing store until this zeroes it. */
+  if (slot.fresh) {
+    slot.fresh.width = 0;
+    slot.fresh.height = 0;
+    slot.fresh = null;
+  }
+  slot.held = false;
   slot.state = "blank";
   slot.unscaled = null;
   /* The mode goes with the bitmap it describes: a blank slot has not been drawn in
@@ -284,6 +294,7 @@ function blank(slot) {
      describe, rather than leaving a slot holding something about a page it is no longer
      showing. */
   slot.mode = null;
+  slot.shrink = null;
   slot.pictures = null;
 
   /*
@@ -599,18 +610,18 @@ function recolour(ctx, keep) {
 /*
  * The reader turned night mode on or off.
  *
- * Every page holding a bitmap drawn in the other mode is given up and asked for again,
- * rather than filtered a second time to put it back. The matrix is its own inverse on
- * paper, but a saturated colour clamps on the way out and does not come back: red at
- * 200,30,30 wants 1.265 of a red channel and gets 1.0, and a second pass returns
- * something else. Draw it again.
+ * Every page holding a bitmap drawn in the other mode is asked for again, rather than
+ * filtered a second time to put it back. The matrix is its own inverse on paper, but a
+ * saturated colour clamps on the way out and does not come back: red at 200,30,30 wants
+ * 1.265 of a red channel and gets 1.0, and a second pass returns something else. Draw it
+ * again, through redraw(), so a page on screen keeps its picture until the new one lands.
  *
  * Pages part-way through a render are left where they are. draw() reconciles them when
  * they land, which is also what makes toggling twice in a second come out right: the
  * mode is read again at the end of every render, so the last one the reader chose wins
  * however many are in flight behind it.
  *
- * Tiles come back on their own. blank() drops the one a page is holding, and draw()
+ * Tiles come back on their own. redraw() drops the one a page is holding, and draw()
  * asks for a new one as it finishes.
  */
 function setNight(on) {
@@ -619,9 +630,48 @@ function setNight(on) {
   document.documentElement.classList.toggle("vw-night", on);
   for (var i = 0; i < slots.length; i++) {
     var s = slots[i];
-    if (s.state === "drawn" && s.mode !== inverted) { blank(s); want(s); }
+    if (s.state === "drawn" && s.mode !== inverted) redraw(s, true);
   }
   pump();
+}
+
+/*
+ * Ask for a drawn page again, in the mode or at the width it is shown now, without the
+ * reader watching it go blank.
+ *
+ * A page on screen keeps the picture it has, which the stylesheet stretches to its box's
+ * new size, until draw() has the replacement; draw() paints that into a canvas of its own
+ * and swaps it in whole. Measured on a phone before this, a pinch settling past the fitted
+ * width took every page on screen to white in one frame and filled the column back in
+ * over about 200 ms, and a double tap back did the same at its end. A page off screen is
+ * released as before, since nobody is looking at it and the band asks for it again if it
+ * comes back; [ask] asks here instead, for the callers whose band will not.
+ *
+ * What is held is bounded by the screen. The old picture goes the moment the new one
+ * lands, and goes with the page if it leaves the band first, in unwant() and the failure
+ * path of draw(), so a fling across a column of held pages holds nothing for long.
+ */
+function redraw(slot, ask) {
+  if (slot.state !== "drawn") return;
+  if (!onScreen(slot)) {
+    blank(slot);
+    if (ask) want(slot);
+    return;
+  }
+  dropTile(slot);
+  slot.held = true;
+  slot.state = "queued";
+  queue.push(slot);
+}
+
+/* Whether any of a page's box is inside the visual viewport. The box is in layout
+   coordinates, and the visual viewport's offset and height are in the same space. */
+function onScreen(slot) {
+  var vv = window.visualViewport;
+  var r = slot.box.getBoundingClientRect();
+  var top = vv ? vv.offsetTop : 0;
+  var bottom = vv ? top + vv.height : window.innerHeight;
+  return r.bottom > top && r.top < bottom;
 }
 
 function draw(slot) {
@@ -630,6 +680,9 @@ function draw(slot) {
   /* The mode this bitmap is being drawn in, which is not necessarily the mode by the
      time it lands. Read once here and compared once at the end. */
   var mode = inverted;
+  /* And the width this bitmap is drawn for, the same way: read once here, and compared
+     at the end against where a pinch has moved it to since. */
+  var at = shrink;
   return doc.getPage(slot.n).then(function (page) {
     slot.page = page;
 
@@ -658,13 +711,26 @@ function draw(slot) {
      * did change the canvas scale, and that is still the way to break this.
      */
     var cssScale = PAGE_WIDTH / unscaled.width;
-    var scale = cssScale * baseScale();
+    /* Times the shrink, so a page is drawn at the size it is shown and a column of small
+       pages costs a fraction of what a column of fitted ones does. The text layer below
+       is not: its viewport is the fitted width, and the stylesheet shrinks the type. */
+    var scale = cssScale * at * baseScale();
     scale *= within(unscaled.width * scale, unscaled.height * scale, BASE_MAX_PIXELS);
     /* clone rather than a second getViewport: the same matrix, already built. */
     var viewport = unscaled.clone({ scale: scale });
-    var canvas = slot.canvas;
+    /*
+     * Drawn into a canvas of its own, outside the document, and swapped for the page's
+     * canvas once it is finished, the way a tile is. Sizing a canvas clears it, and
+     * pdf.js paints it white before its first operator, so a page drawn again in place
+     * showed as white filling in from the top for as long as the render took: at the
+     * end of a double tap back to the fitted width, every page on screen at once. The
+     * page keeps whatever it was showing until the swap, which is the old picture
+     * stretched for a page redraw() held, and white paper for a page not drawn before.
+     */
+    var canvas = document.createElement("canvas");
     canvas.width = viewport.width;
     canvas.height = viewport.height;
+    slot.fresh = canvas;
     /* Held rather than asked for twice: recolour() below wants the same context, and
        getContext is a lookup on every call for a handle that never changes. */
     var ctx = canvas.getContext("2d");
@@ -694,22 +760,39 @@ function draw(slot) {
         recolour(ctx, quads.filter(function (q, i) { return slot.pictures[i]; }));
       }
       slot.mode = mode;
+      slot.shrink = at;
+      /* The swap, in one step: the finished picture goes in and the old one's backing
+         store is dropped, so the page shows exactly one picture on every frame. */
+      var old = slot.canvas;
+      slot.box.replaceChild(canvas, old);
+      old.width = 0;
+      old.height = 0;
+      slot.canvas = canvas;
+      slot.fresh = null;
+      var held = slot.held;
+      slot.held = false;
+      /* A held page's words are already where they belong. The text layer is laid out for
+         the fitted width and follows --vw-shrink, so only the picture needed drawing again,
+         and leaving the layer alone keeps a selection or a search hit on it through the
+         redraw. */
+      if (held && slot.layer) return;
       return textLayerFor(slot, page, unscaled.clone({ scale: cssScale }));
     });
   }).then(function () {
     slot.state = "drawn";
     /*
      * Night mode moved while this was being drawn, so the picture that just arrived is
-     * of the wrong one. Give it up and ask again; the mode is read afresh at the top of
-     * draw(), so this converges however many times the reader taps.
+     * of the wrong one. Ask for it again, keeping this one up meanwhile; the mode is read
+     * afresh at the top of draw(), so this converges however many times the reader taps.
+     * A pinch that moved the pages well away from the width this was drawn for is the
+     * same case.
      *
      * Here rather than in setNight() because a render in flight cannot be told to change
      * its mind, and cancelling it would put this page down the same failure path a fling
      * uses, which is the hottest one in the file and not somewhere to add a special case.
      */
-    if (slot.mode !== inverted) {
-      blank(slot);
-      want(slot);
+    if (slot.mode !== inverted || !sizedForNow(slot)) {
+      redraw(slot, true);
       return;
     }
     /* A page can come back after being released with a search still running, so
@@ -721,7 +804,8 @@ function draw(slot) {
        event is going to say so: they are holding still, waiting for this. */
     scheduleRefine();
   }, function () {
-    /* Cancelled or genuinely broken. Both end the same way: nothing held, and free
+    /* Cancelled or genuinely broken. Both end the same way: nothing held, the picture
+       on its way thrown away with whatever the page was keeping up meanwhile, and free
        to be asked for again if the reader comes back to it. */
     blank(slot);
   }).then(function () {
@@ -983,7 +1067,10 @@ function refine() {
 
   var k = liveScale();
   var i;
-  if (!(k > baseScale() * TILE_GATE)) {
+  /* Shrunk pages are drawn at the size they are shown and the WebView is at its floor, so
+     there is nothing a tile could sharpen; said outright rather than left to the gate, so
+     that no tile is ever drawn over a column of small pages. */
+  if (shrink < 1 || !(k > baseScale() * TILE_GATE)) {
     /* Back at a zoom the page bitmaps cover on their own. A walk of every slot rather
        than a register of which ones are tiled: it is a property read per page, against
        the layout read per page that this function exists to avoid. */
@@ -1098,6 +1185,312 @@ function scheduleRefine() {
 }
 
 /*
+ * Zooming out past the page's width, issue #52.
+ *
+ * Everything above zooms in. The WebView draws this page, and it will not zoom out below
+ * the width of its content; a page is as wide as the layout, so at the fitted width the
+ * pinch stopped. To go smaller the page shrinks its pages itself: #pages is laid out at
+ * --vw-shrink of the layout width and centred, and every page fills it, one column, the
+ * way Chrome's own viewer and Jetpack's show a document pinched small. The gap, the type
+ * in the text layer and the hit boxes padRows() writes all read the same property, so
+ * the words stay over the picture.
+ *
+ * Who owns a pinch is decided by where the WebView is. At the fitted width it sits at its
+ * floor, and a pinch in can move it no further, so this page takes that pinch and shrinks
+ * the column; a pinch out from there is the WebView's, as before. While the pages are
+ * shrunk html.vw-shrunk sets touch-action to pan-x pan-y, so the WebView pinches nothing
+ * and a pinch out is this page's, up to the fitted width and no further. touch-action is
+ * read when a gesture begins, so the pinch that brings the pages back to the fitted width
+ * ends there, and it is the next one that zooms in. The sheet in xlsx.js owns its pinch
+ * the same way; what is new here is the handover.
+ *
+ * None of this is remembered between openings. A document reopens at its fitted width, at
+ * the page it was left at.
+ */
+
+/*
+ * The least a page may be shrunk to, as a fraction of the fitted width.
+ *
+ * A quarter puts an A4 page at about 100 dp wide on a phone, five or six of them down the
+ * screen, which is what the reporter's example from Chrome showed and what a column of
+ * pages is for: finding a place in a document by the shape of its pages, since no type is
+ * readable at this size. Smaller than that a page is a thumbnail with no shape left to
+ * recognise, and a double tap has further to bring it back. The sheet's floor is the same
+ * number.
+ */
+var SHRINK_LEAST = 0.25;
+
+/* The fraction the pages are laid out at now. 1 at the fitted width. */
+var shrink = 1;
+
+/*
+ * Whether a page's bitmap is near enough the size it is shown at to keep.
+ *
+ * A quarter short reads as blur, which is the argument beside TILE_GATE; a quarter over is
+ * the same number of pixels held for nothing. Inside that band a pinch costs no redraw, so
+ * a reader who takes the pages in by a tenth and back does not watch the column go white.
+ */
+function sizedForNow(slot) {
+  var r = slot.shrink / shrink;
+  return r < TILE_GATE && r > 1 / TILE_GATE;
+}
+
+/*
+ * Whether the WebView is at its floor, showing the whole of the layout's width. It is
+ * there at the fitted width and whenever the pages are shrunk, and anywhere else a pinch
+ * is the WebView's to magnify. Measured rather than remembered, so a rotation that moves
+ * the floor has nothing to update.
+ */
+function atFloor() {
+  var vv = window.visualViewport;
+  return !vv || !(vv.width > 0) || vv.width >= window.innerWidth - 0.5;
+}
+
+/* Where the column of pages begins on the screen, which a shrink scales everything from. */
+function columnTop() {
+  return (slots.length ? slots[0].box : pages).getBoundingClientRect().top;
+}
+
+/* How far down the column, in the fitted page's px, the screen's [y] falls. */
+function under(y) {
+  return (y - columnTop()) / shrink;
+}
+
+/* A dp in this page's px: the layout's width over what the screen shows of it, as app.js
+   measures the title bar. The slops below are in dp, since a finger is. */
+function perDp() {
+  var vv = window.visualViewport;
+  var across = vv && vv.scale > 0 ? vv.width * vv.scale : 0;
+  return across > 0 && window.innerWidth > 0 ? window.innerWidth / across : 1;
+}
+
+function setShrink(s) {
+  shrink = Math.min(1, Math.max(SHRINK_LEAST, s));
+  document.documentElement.style.setProperty("--vw-shrink", String(shrink));
+  document.documentElement.classList.toggle("vw-shrunk", shrink < 1);
+}
+
+/*
+ * Lay the pages out at [s], with the column's [at] (from under()) still at the screen's
+ * [y], and put everything that depends on the width right.
+ *
+ * The scroll is measured after the layout rather than worked out before it. Chromium's
+ * scroll anchoring may move the view as the column changes height, and whatever it did
+ * is in the measurement.
+ */
+function settle(s, at, y) {
+  pages.style.transform = "";
+  pages.style.transformOrigin = "";
+  pages.classList.remove("vw-moving");
+  var was = shrink;
+  setShrink(s);
+  window.scrollBy(0, columnTop() + at * shrink - y);
+  if (shrink === was) return;
+
+  /* The bands, in pages as they are drawn now. A document of one page has no bands and
+     is never observed, so its page is asked for again here. */
+  var watched = slots.length > 1;
+  if (watched) observePages();
+  /*
+   * Pages drawn for a width well away from this one are asked for again at the new size.
+   * Those on screen keep their picture until the new one lands, see redraw(); the rest
+   * are released, and the observers just built ask again for those in the band: asking
+   * here would draw pages the band no longer reaches, only to cancel them. A page
+   * part-way through a render is reconciled when it lands, as night mode's are.
+   */
+  for (var i = 0; i < slots.length; i++) {
+    if (slots[i].state === "drawn" && !sizedForNow(slots[i])) redraw(slots[i], !watched);
+  }
+  pump();
+  /* The page under the middle of the screen is likely another one now, and the sharp
+     patches, if any were up, have nothing left to sharpen. A scroll of nought says
+     neither, so both are said here. */
+  schedulePageReport();
+  scheduleRefine();
+  if ((was < 1) !== (shrink < 1)) reportShrunk();
+}
+
+/*
+ * Tells the app whether the pages are shrunk, so a double tap is zoomed by whichever of
+ * the two should. The app zooms a double tap at the fitted width, in DoubleTapZoom.kt,
+ * and while the pages are shrunk this page does, back to the fitted width; the WebView
+ * is at its floor either way, so from the app's side the two look the same. One word and
+ * one digit, read as exactly that in PortMessage.kt, and sent as the pages cross the
+ * fitted width. The app starts from the pages at that width, so a port arriving to find
+ * them there is told nothing, and one arriving to find them shrunk is told so.
+ */
+function reportShrunk() {
+  if (!searchPort) return;
+  if (shrink < 1) searchPort.postMessage("shrunk 1");
+  else if (reportedShrunk) searchPort.postMessage("shrunk 0");
+  reportedShrunk = shrink < 1;
+}
+
+/* Whether the app was last told the pages are shrunk. */
+var reportedShrunk = false;
+
+var pinch = null;
+
+function apart(e) {
+  var a = e.touches[0], b = e.touches[1];
+  return Math.max(1, Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY));
+}
+
+function between(e) {
+  return (e.touches[0].clientY + e.touches[1].clientY) / 2;
+}
+
+/* Two fingers down. Whose pinch this is cannot be known yet: it is the WebView's until it
+   turns out to be moving in a direction the WebView can do nothing with. */
+function startPinch(e) {
+  finishAnimation();
+  pinch = {
+    apart: apart(e), from: shrink, to: shrink, taken: false,
+    at: 0, y0: between(e), y: between(e), sy: window.scrollY
+  };
+}
+
+function movePinch(e) {
+  var g = pinch;
+  var d = apart(e);
+  var y = between(e);
+  if (!g.taken) {
+    /*
+     * Still the WebView's: it is zoomed in and this pinch is magnifying the screen, or
+     * the pages are at the fitted width and the fingers are spreading, which it zooms.
+     * Measured from here, so that if it comes back to its floor with the fingers still
+     * closing, the column takes over from where the fingers are rather than jumping to
+     * where they began.
+     */
+    if (!atFloor() || (shrink >= 1 && d >= g.apart)) {
+      g.apart = d; g.y0 = y; g.sy = window.scrollY;
+      return;
+    }
+    g.taken = true;
+    g.at = under(y);
+    /* About the middle across, since a column laid out at its new width is centred, and
+       about the fingers down the screen, which settle() then holds to. */
+    pages.style.transformOrigin = "50% " + (y - pages.getBoundingClientRect().top) + "px";
+    pages.classList.add("vw-moving");
+  }
+  g.y = y;
+  g.to = Math.min(1, Math.max(SHRINK_LEAST, g.from * d / g.apart));
+  /* The WebView may pan the page with the fingers as well, which the picture must not
+     count twice. */
+  var ty = y - g.y0 + window.scrollY - g.sy;
+  /* #pages is as wide as the column, so this scale takes it to g.to of the layout's width
+     at most: a picture wider than the layout has the WebView zooming out to fit it, see
+     the rule for #pages in pdf.html. */
+  pages.style.transform = "translate(0px," + ty + "px) scale(" + (g.to / g.from) + ")";
+}
+
+function endPinch() {
+  var g = pinch;
+  pinch = null;
+  if (g.taken) settle(g.to, g.at, g.y);
+}
+
+/*
+ * A double tap while the pages are shrunk, which this page zooms back to the fitted width
+ * about the place tapped. At the fitted width a double tap is the app's: see reportShrunk.
+ * The slops are in dp, as the app's gesture detector has them.
+ */
+var DOUBLE_TAP_MS = 250;
+var DOUBLE_TAP_GAP_MS = 300;
+var DOUBLE_TAP_SLOP_DP = 40;
+var TAP_SLOP_DP = 12;
+var tap = null;
+var lastTap = null;
+
+document.addEventListener("touchstart", function (e) {
+  if (!doc || !slots.length) return;
+  if (e.touches.length === 2) {
+    tap = lastTap = null;
+    startPinch(e);
+  } else if (e.touches.length === 1 && !pinch && shrink < 1 && pages.contains(e.target)) {
+    finishAnimation();
+    tap = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+  } else {
+    tap = lastTap = null;
+  }
+}, { passive: true });
+
+document.addEventListener("touchmove", function (e) {
+  if (pinch && e.touches.length === 2) {
+    movePinch(e);
+  } else if (tap && e.touches.length === 1 &&
+      Math.abs(e.touches[0].clientX - tap.x) + Math.abs(e.touches[0].clientY - tap.y) >
+      TAP_SLOP_DP * perDp()) {
+    tap = null;
+  }
+}, { passive: true });
+
+function touchEnded(e) {
+  if (pinch && e.touches.length < 2) {
+    endPinch();
+    return;
+  }
+  if (!tap || e.touches.length) return;
+  var now = Date.now();
+  if (now - tap.t > DOUBLE_TAP_GAP_MS) { tap = null; return; }
+  if (lastTap && now - lastTap.t < DOUBLE_TAP_GAP_MS &&
+      Math.abs(tap.x - lastTap.x) + Math.abs(tap.y - lastTap.y) < DOUBLE_TAP_SLOP_DP * perDp()) {
+    lastTap = null;
+    zoomTo(1, tap.y, DOUBLE_TAP_MS);
+  } else {
+    lastTap = { x: tap.x, y: tap.y, t: now };
+  }
+  tap = null;
+}
+document.addEventListener("touchend", touchEnded, { passive: true });
+document.addEventListener("touchcancel", function (e) {
+  tap = lastTap = null;
+  if (pinch && e.touches.length < 2) endPinch();
+}, { passive: true });
+
+var animation = null;
+
+function finishAnimation() {
+  if (!animation) return;
+  var a = animation;
+  animation = null;
+  cancelAnimationFrame(a.frame);
+  settle(a.to, a.at, a.y);
+}
+
+/* Shrinks the pages to [s] about the screen's [y], over [ms]: at once when that is nought. */
+function zoomTo(s, y, ms) {
+  finishAnimation();
+  if (!slots.length) return;
+  s = Math.min(1, Math.max(SHRINK_LEAST, s));
+  var at = under(y);
+  if (!ms) { settle(s, at, y); return; }
+  pages.style.transformOrigin = "50% " + (y - pages.getBoundingClientRect().top) + "px";
+  pages.classList.add("vw-moving");
+  var from = shrink, start = null;
+  animation = { to: s, at: at, y: y, frame: 0 };
+  function step(t) {
+    if (!animation) return;
+    if (start === null) start = t;
+    var f = Math.min(1, (t - start) / ms);
+    /* Decelerating, and by ratio, so the pages grow at an even rate rather than fastest
+       at the start, as DoubleTapZoom.kt has it */
+    var eased = 1 - (1 - f) * (1 - f);
+    pages.style.transform = "scale(" + Math.pow(s / from, eased) + ")";
+    if (f >= 1) { finishAnimation(); return; }
+    animation.frame = requestAnimationFrame(step);
+  }
+  animation.frame = requestAnimationFrame(step);
+}
+
+/* For the tests, and for a device test, which can only say what the page says. */
+window.vwPdfShrink = function (s, y) {
+  if (s === undefined) return shrink;
+  zoomTo(s, y === undefined ? window.innerHeight / 2 : y, 0);
+  return shrink;
+};
+
+/*
  * Lay the words of a page over the picture of it.
  *
  * The viewport handed in here is at CSS scale, not the canvas's device scale; see
@@ -1199,6 +1592,16 @@ function padRows(container, divs) {
    */
   var mfs = parseFloat(container.style.getPropertyValue("--min-font-size")) || 1;
 
+  /*
+   * Every distance below is measured on the page as it stands and written for the page
+   * at its fitted width, times --vw-shrink, so the hit boxes follow a pinch that shrinks
+   * the pages without this running again over every drawn page. The layer fills a box
+   * laid out at that fraction of PAGE_WIDTH, so its own width says what the fraction is,
+   * a pinch still in progress and scaling the column as a picture included.
+   */
+  var drawnAt = layer.width / PAGE_WIDTH || 1;
+  function fitted(px) { return "calc(" + px.toFixed(2) + "px * var(--vw-shrink))"; }
+
   /* Read every rect before writing any padding. Interleaving the two makes the browser
      lay the page out again on each span, which on a dense page is hundreds of times. */
   var boxes = [];
@@ -1231,8 +1634,9 @@ function padRows(container, divs) {
   for (var j = 0; j < boxes.length; j++) {
     var b = boxes[j];
     /* A new row when this span starts below the one before it. Two spans on the same
-       line share a top to within rounding, so the tolerance is small and absolute. */
-    if (!row || b.top - row.top > 2) {
+       line share a top to within rounding, so the tolerance is small and absolute, in
+       the fitted page's px. */
+    if (!row || b.top - row.top > 2 * drawnAt) {
       row = { top: b.top, bottom: b.bottom, items: [b] };
       rows.push(row);
     } else {
@@ -1254,7 +1658,7 @@ function padRows(container, divs) {
      * this exists to prevent, and it was measured failing at exactly that spot with a
      * cap of two line-heights.
      */
-    var up = v ? (here.top - rows[v - 1].bottom) / 2 : here.top - layer.top;
+    var up = (v ? (here.top - rows[v - 1].bottom) / 2 : here.top - layer.top) / drawnAt;
     var floor = (v + 1 < rows.length)
       ? here.bottom + (rows[v + 1].top - here.bottom) / 2
       : layer.bottom;
@@ -1272,16 +1676,16 @@ function padRows(container, divs) {
       /* Down to its row's share of the gap, measured from this span's own bottom: a row
          can mix type sizes, a heading beside a caption, and padding each item the same
          amount from where it happens to end leaves a sliver under every short one. */
-      var down = floor - it.bottom;
-      if (down > 0.5) style.paddingBottom = (down * mfs).toFixed(2) + "px";
+      var down = (floor - it.bottom) / drawnAt;
+      if (down > 0.5) style.paddingBottom = fitted(down * mfs);
       if (up > 0.5) {
-        style.paddingTop = (up * mfs).toFixed(2) + "px";
+        style.paddingTop = fitted(up * mfs);
         /* Cancels the padding so the glyphs stay where pdf.js put them: the box top
            moves up by exactly what the padding pushes the text down by. Not scaled,
            where the padding above it is, because the two are in different spaces: a
            margin moves the box before the transform is applied, and the padding is
            measured inside a box the transform has already shrunk. */
-        style.marginTop = (-up).toFixed(2) + "px";
+        style.marginTop = fitted(-up);
       }
       /*
        * Sideways to the next span along the row, and to the page edge at its ends.
@@ -1294,15 +1698,15 @@ function padRows(container, divs) {
        * were fixed.
        */
       var until = (x + 1 < across.length) ? across[x + 1].left : layer.right;
-      var reach = until - it.right;
-      if (reach > 1) style.paddingRight = (reach / it.sx).toFixed(2) + "px";
+      var reach = (until - it.right) / drawnAt;
+      if (reach > 1) style.paddingRight = fitted(reach / it.sx);
     }
 
     var first = across[0];
-    var leftNeed = first.left - layer.left;
+    var leftNeed = (first.left - layer.left) / drawnAt;
     if (leftNeed > 1) {
-      first.el.style.paddingLeft = (leftNeed / first.sx).toFixed(2) + "px";
-      first.el.style.marginLeft = (-leftNeed).toFixed(2) + "px";
+      first.el.style.paddingLeft = fitted(leftNeed / first.sx);
+      first.el.style.marginLeft = fitted(-leftNeed);
     }
   }
 }
@@ -1949,6 +2353,7 @@ window.addEventListener("message", function (e) {
      reason openSearchChannel replays a query typed before there was anywhere to send it. */
   reportPage();
   reportLocked();
+  reportShrunk();
 });
 
 /* One letter of command, then the rest is payload. A query is arbitrary text and
@@ -2251,20 +2656,34 @@ function vwFailure(e) {
  * meant a page leaving the band was never heard about again. Being told when a page
  * goes away is the whole basis of cancelling and releasing, so the guarantee has
  * moved into the slot state instead: want() ignores anything not blank.
+ *
+ * Both are built again when a pinch settles the pages at another width. A margin is
+ * fixed when an observer is made, and the bands are counted in pages as the pages are
+ * drawn now: at a quarter of the width a page is a quarter as tall, and a band left in
+ * fitted pages would hold four times as many of them. Every target is reported once as
+ * it is observed, so the new pair wants what is in the new band and releases what is
+ * outside it with nothing else having to walk the slots.
  */
+var draws = null;
+var keeps = null;
+
 function observePages() {
-  var draws = new IntersectionObserver(function (entries) {
+  if (draws) draws.disconnect();
+  if (keeps) keeps.disconnect();
+  var pitch = PAGE_PITCH * shrink;
+
+  draws = new IntersectionObserver(function (entries) {
     entries.forEach(function (e) {
       if (e.isIntersecting) want(e.target._slot); else unwant(e.target._slot);
     });
     pump();
-  }, { rootMargin: Math.round(DRAW_PAGES * PAGE_PITCH) + "px 0px" });
+  }, { rootMargin: Math.round(DRAW_PAGES * pitch) + "px 0px" });
 
-  var keeps = new IntersectionObserver(function (entries) {
+  keeps = new IntersectionObserver(function (entries) {
     entries.forEach(function (e) {
       if (!e.isIntersecting) release(e.target._slot);
     });
-  }, { rootMargin: Math.round(KEEP_PAGES * PAGE_PITCH) + "px 0px" });
+  }, { rootMargin: Math.round(KEEP_PAGES * pitch) + "px 0px" });
 
   slots.forEach(function (slot) {
     draws.observe(slot.box);
@@ -2309,8 +2728,11 @@ if (!vwPdfBlocked) {
         box.appendChild(gap);
         var slot = {
           n: i, box: box, canvas: c, text: tl,
-          state: "blank", mode: null, pictures: null, task: null, page: null, layer: null,
-          unscaled: null, tile: null, pending: null
+          state: "blank", mode: null, shrink: null, pictures: null, task: null, page: null,
+          layer: null, unscaled: null, tile: null, pending: null,
+          /* The picture being drawn to replace this page's, until it does, and whether
+             the page is keeping an old picture up while it waits: see redraw(). */
+          fresh: null, held: false
         };
         /* The observers are handed elements and need the slot back. Hanging it on
            the element beats writing a data attribute and parsing it out again on

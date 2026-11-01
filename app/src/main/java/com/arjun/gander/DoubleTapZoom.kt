@@ -74,6 +74,13 @@ internal class DoubleTapZoom(context: Context, private val surface: ZoomSurface)
     private var downY = 0f
     private var still = false
 
+    /**
+     * Whether the page zooms a double tap itself, as a PDF does while its pages are pinched
+     * smaller than the screen: the WebView is at its floor then, as at the fitted width, so only
+     * the page can tell the two apart, and it says so over the channel. See [PortMessage.Shrunk].
+     */
+    var leftToPage = false
+
     private val taps = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
         // The second tap, start to finish. A finger that goes down and drags is the WebView's
         // one-finger zoom, and a mouse's double click selects a word.
@@ -112,6 +119,7 @@ internal class DoubleTapZoom(context: Context, private val surface: ZoomSurface)
     }
 
     private fun zoomAbout(x: Float, y: Float) {
+        if (leftToPage) return
         val from = zoom() ?: return
         val to = doubleTapTarget(from)
         val began = ZoomStart(surface)

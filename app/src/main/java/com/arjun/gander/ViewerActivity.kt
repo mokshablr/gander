@@ -1447,6 +1447,8 @@ open class ViewerActivity : AppCompatActivity() {
                         }
                         // Only the card that has the button may ask
                         PortMessage.SimpleView -> if (kind == FileKind.PDF && cardOffersSimple) askForSimpleView()
+                        // Only a PDF shrinks its pages, and zooms its own double tap while they are
+                        is PortMessage.Shrunk -> if (kind == FileKind.PDF) doubleTapZoom?.leftToPage = said.on
                         // Anything else came from the document rather than from
                         // the renderer, and is dropped without a word.
                         null -> Unit

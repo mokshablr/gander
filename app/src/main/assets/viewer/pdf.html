@@ -51,9 +51,9 @@
    *
    * The WebView will not zoom out below its content's width, and a page is as wide as
    * the layout, so at the fitted width a pinch in had nowhere to go. Past it this page
-   * shrinks its pages itself: their width, the gap between them, the text layer's type
-   * and its hit boxes all read this one property, so the words stay over the picture at
-   * every size. Written on the root by pdf.mjs, and 1 until it is.
+   * shrinks its pages itself: the column's width, the gap between the pages, the text
+   * layer's type and its hit boxes all read this one property, so the words stay over
+   * the picture at every size. Written on the root by pdf.mjs, and 1 until it is.
    *
    * A width rather than CSS zoom, deliberately. Below about Chromium 128 a zoomed
    * element's rect leaves its zoom out, which docx-pages.js has to correct for, and this
@@ -102,11 +102,23 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
+    /*
+     * The column itself is what shrinks, centred, and every page fills it. The shrink
+     * goes on the column rather than on each page because the column is also what a
+     * pinch scales as a picture while the fingers move, and the picture must never be
+     * wider than the layout: the WebView fits a document wider than its layout, as
+     * overview mode fits a wide page, so a pinch out from shrunk pages that scaled the
+     * full-width column past the layout's edge had the WebView zooming out to fit it,
+     * frame for frame, and snapping back when the fingers lifted. Measured in landscape
+     * on a phone, 0.81 at the fitted width down to 0.41 and back. A column as wide as
+     * its pages, scaled by at most the fitted width over the shrunk one, reaches the
+     * layout's width and never passes it.
+     */
+    width: calc(100% * var(--vw-shrink));
+    margin: 0 auto;
   }
   #pages > .pg {
     flex: none;
-    /* Shrunk pages: one column, centred by the auto margins pdf-pages.css gives a page */
-    width: calc(100% * var(--vw-shrink));
     margin-bottom: calc(var(--pg-gap) * var(--vw-shrink));
   }
 

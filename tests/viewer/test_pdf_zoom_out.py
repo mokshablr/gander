@@ -565,6 +565,34 @@ def test_a_page_on_screen_keeps_a_picture_through_every_frame_of_a_redraw(viewer
     assert bad == [], f"pages on screen with no finished picture, by frame: {bad[:12]}"
 
 
+@pytest.mark.parametrize("gesture", ["a pinch out to the fitted width", "a double tap back"])
+def test_the_live_picture_never_makes_the_document_wider_than_the_layout(viewer, page, gesture):
+    """
+    While the fingers move, and through the double tap's animation, the column is scaled
+    as a picture. The WebView fits a document wider than its layout, so a picture past the
+    layout's edge had it zooming out mid-gesture and snapping back on release, which showed
+    in landscape on a phone. The scroll width is the document's width, and it must not
+    move on any frame.
+    """
+    viewer("pdf.html", "forty-pages.pdf")
+    wait_for_pdf(page)
+    shrink_to(page, 0.3)
+    wait_for_band(page)
+    layout = page.evaluate("() => innerWidth")
+    assert page.evaluate("() => document.scrollingElement.scrollWidth") == layout
+
+    if gesture.startswith("a pinch"):
+        events = pinch_events(490, 800, 120, 400)
+    else:
+        events = tap_events(490, 800)
+    sampled = frames(page, events)
+
+    assert sampled[-1]["shrink"] == 1
+    assert any(f["moving"] for f in sampled), "the column was never scaled as a picture"
+    wide = [(i, f["scrollWidth"]) for i, f in enumerate(sampled) if f["scrollWidth"] != layout]
+    assert wide == [], f"the document grew past the layout's {layout} px, by frame: {wide[:12]}"
+
+
 # ---------------------------------------------------------------------------
 # What must keep working while the pages are small
 # ---------------------------------------------------------------------------

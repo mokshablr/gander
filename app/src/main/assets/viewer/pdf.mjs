@@ -1189,10 +1189,11 @@ function scheduleRefine() {
  *
  * Everything above zooms in. The WebView draws this page, and it will not zoom out below
  * the width of its content; a page is as wide as the layout, so at the fitted width the
- * pinch stopped. To go smaller the page shrinks its pages itself: each .pg is laid out at
- * --vw-shrink of the layout width and centred, one column, the way Chrome's own viewer and
- * Jetpack's show a document pinched small. The gap, the type in the text layer and the hit
- * boxes padRows() writes all read the same property, so the words stay over the picture.
+ * pinch stopped. To go smaller the page shrinks its pages itself: #pages is laid out at
+ * --vw-shrink of the layout width and centred, and every page fills it, one column, the
+ * way Chrome's own viewer and Jetpack's show a document pinched small. The gap, the type
+ * in the text layer and the hit boxes padRows() writes all read the same property, so
+ * the words stay over the picture.
  *
  * Who owns a pinch is decided by where the WebView is. At the fitted width it sits at its
  * floor, and a pinch in can move it no further, so this page takes that pinch and shrinks
@@ -1377,6 +1378,9 @@ function movePinch(e) {
   /* The WebView may pan the page with the fingers as well, which the picture must not
      count twice. */
   var ty = y - g.y0 + window.scrollY - g.sy;
+  /* #pages is as wide as the column, so this scale takes it to g.to of the layout's width
+     at most: a picture wider than the layout has the WebView zooming out to fit it, see
+     the rule for #pages in pdf.html. */
   pages.style.transform = "translate(0px," + ty + "px) scale(" + (g.to / g.from) + ")";
 }
 

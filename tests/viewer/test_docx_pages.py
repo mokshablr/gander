@@ -620,6 +620,70 @@ def test_a_tab_that_cannot_be_lined_up_leaves_the_document_open(viewer, page):
     assert len(seen) > 3
 
 
+# ---------------------------------------------------------------------------
+# Tabs beside a floating picture; make_fixtures.py says what the file holds
+# ---------------------------------------------------------------------------
+
+FLOAT = "word-tabs-beside-float.docx"
+
+# Where each "Label N" tab ends, in points from its paragraph's left edge, at the page's own size
+LABEL_TABS = """() => {
+  document.querySelector('.docx-wrapper').style.setProperty('--vw-page-zoom', '1');
+  return [...document.querySelectorAll('.docx-wrapper p')].filter(p => /^Label \\d/.test(p.textContent)).map(p => {
+    const box = p.getBoundingClientRect(), style = getComputedStyle(p);
+    const left = box.left + parseFloat(style.paddingLeft) + parseFloat(style.borderLeftWidth);
+    return (p.querySelector('.docx-tab-stop').getBoundingClientRect().right - left) * 0.75;
+  });
+}"""
+
+# How long the paragraph beside the picture is, in repetitions of its two words; which labels
+# move from beside the picture to below it as it grows depends on the fonts and on this
+BESIDE_LENGTHS = [6, 8, 10, 12, 16]
+
+
+def beside_float(made, fixture_path, repetitions):
+    """FLOAT with the paragraph beside the picture saying "gauge reading" [repetitions] times."""
+    words = " ".join(["gauge reading"] * 10).encode()
+    if repetitions == 10:
+        return FLOAT
+    return remade(made, fixture_path, FLOAT, {
+        "word/document.xml": swap(words, " ".join(["gauge reading"] * repetitions).encode()),
+    })
+
+
+@pytest.mark.parametrize("repetitions", BESIDE_LENGTHS)
+def test_a_tab_beside_a_floating_picture_reaches_its_stop(viewer, page, made, fixture_path, repetitions):
+    """
+    A line beside a float starts after it, so a tab there sits further from its paragraph's
+    left edge. Lined up in rounds, the first label's tab was read beside the picture, then the
+    paragraph above it grew by a line as its own tab was set, and the label dropped below the
+    picture with the plan made beside it, so its tab ended at 110pt where its stop is at 216pt.
+    In points, each label's tab ends at its stop, plus the no-break space it is drawn as.
+    """
+    open_word(viewer, page, beside_float(made, fixture_path, repetitions))
+    ends = page.evaluate(LABEL_TABS)
+    assert len(ends) == 8
+    for end in ends:
+        assert abs(end - 216) <= 6, ends
+
+
+@pytest.mark.parametrize("repetitions", BESIDE_LENGTHS)
+def test_tabs_beside_a_float_line_up_as_docx_previews_own_pass_lines_them_up(
+    viewer, page, made, fixture_path, repetitions
+):
+    """
+    docx-preview's own pass reads each tab after every tab before it is set, so it reads a
+    label's tab wherever the paragraph above has left it. The copy has to put every one of the
+    file's nine tabs where that pass puts it, however long the paragraph beside the picture is.
+    """
+    page.add_init_script(KEEP_RENDERERS)
+    open_word(viewer, page, beside_float(made, fixture_path, repetitions))
+    seen = page.evaluate(UPSTREAM_TABS)
+    assert seen["count"] == 9
+    assert seen["ours"] == seen["theirs"]
+    assert sum(1 for _, style in seen["ours"] if "word-spacing" in (style or "")) == 9
+
+
 NOTES_SEEN = """() => [...document.querySelectorAll('.docx-wrapper > section.docx')].map(s => ({
   lines: [...s.querySelectorAll(':scope > article')].map(a => a.innerText).join('\\n')
     .split('\\n').map(l => l.trim()).filter(Boolean),

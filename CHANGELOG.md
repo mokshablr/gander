@@ -22,6 +22,10 @@
   now writes out each picture in one go rather than a few characters at a time.
 - An old PowerPoint slide show (.pps) or template (.pot) now says it opens once saved again as
   .pptx, as a .ppt already did.
+- In a Word document, a tab on a line just below a picture the text wraps around, such as a
+  logo at the top of a form, now reaches its tab stop. Since 2.7 it could fall short, with the
+  text after it out of line with the rows below, when the paragraph beside the picture grew by
+  a line as its own tab was lined up.
 
 ## 2.8 (2026-10-31)
 

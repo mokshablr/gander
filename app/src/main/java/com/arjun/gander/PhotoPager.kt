@@ -10,7 +10,6 @@ import android.widget.FrameLayout
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.davemorrissey.labs.subscaleview.ImageSource
-import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 
 /**
  * A photo from a folder added in Gander, with the folder's other photos a swipe away, in the order
@@ -31,8 +30,11 @@ internal class PhotoPager(
         /** Hands [then] whether the picture at [uri] moves and its turn, asked off the main thread. */
         fun look(uri: Uri, ext: String, then: (Look) -> Unit)
 
-        /** The tiling view for a still photo, which calls [failed] when it can't draw it. */
-        fun still(name: String, rotation: Int, failed: () -> Unit): SubsamplingScaleImageView
+        /** The tiling view for the still photo at [uri], which calls [failed] when it can't draw it. */
+        fun still(uri: Uri, name: String, rotation: Int, failed: () -> Unit): StillPhotoView
+
+        /** The photo on screen has come to be drawn by the tiling view, or has stopped being. */
+        fun stillChanged()
 
         /** Puts the page that plays a moving picture into [frame]. */
         fun play(frame: FrameLayout, uri: Uri, name: String, ext: String)
@@ -85,6 +87,9 @@ internal class PhotoPager(
     /** The photo on screen. */
     val shown: Uri get() = uriOf(photos[view.currentItem.coerceIn(photos.indices)])
 
+    /** The tiling view drawing the photo on screen, or null where it isn't drawn by one. */
+    val stillShown: StillPhotoView? get() = pageAt(view.currentItem)?.still
+
     /** Puts the folder's other photos either side of the one opened, which stays on screen. */
     fun fill(all: List<ChildDoc>, at: Int) {
         if (photos.size != 1 || all.size < 2 || all.getOrNull(at)?.docId != photos[0].docId) return
@@ -125,11 +130,13 @@ internal class PhotoPager(
 
     private fun onScreen(photo: ChildDoc) = photos.getOrNull(view.currentItem)?.docId == photo.docId
 
+    private fun pageAt(position: Int) =
+        (view.getChildAt(0) as RecyclerView).findViewHolderForAdapterPosition(position) as? Page
+
     /** Once the pages have come to rest, the one on screen plays if it moves, and only that one. */
     private fun settle() {
         if (view.scrollState != ViewPager2.SCROLL_STATE_IDLE) return
-        val here = (view.getChildAt(0) as RecyclerView)
-            .findViewHolderForAdapterPosition(view.currentItem) as? Page
+        val here = pageAt(view.currentItem)
         if (playing != null && playing !== here) stop()
         val photo = here?.photo ?: return
         if (here.moves && playing == null && onScreen(photo)) {
@@ -152,6 +159,9 @@ internal class PhotoPager(
         /** Whether its picture needs the page that plays it, rather than the tiling view. */
         var moves = false
 
+        /** The tiling view drawing its photo, once there is one. */
+        var still: StillPhotoView? = null
+
         fun bind(next: ChildDoc) {
             clear()
             photo = next
@@ -162,15 +172,17 @@ internal class PhotoPager(
                 // Swiped past, and drawing another photo by now
                 if (photo !== next) return@look
                 if (look.moves) return@look needsPlaying()
-                val still = host.still(next.name, look.rotation) {
+                val drawn = host.still(uri, next.name, look.rotation) {
                     // Some formats decode in the WebView where the region decoder gives up
                     if (photo === next) {
                         clearStill()
                         needsPlaying()
                     }
                 }
-                frame.addView(still, MATCH)
-                still.setImage(ImageSource.uri(uri))
+                still = drawn
+                frame.addView(drawn, MATCH)
+                drawn.setImage(ImageSource.uri(uri))
+                if (onScreen(next)) host.stillChanged()
             }
         }
 
@@ -188,8 +200,11 @@ internal class PhotoPager(
         }
 
         private fun clearStill() {
-            for (i in 0 until frame.childCount) (frame.getChildAt(i) as? SubsamplingScaleImageView)?.recycle()
+            val had = still != null
+            still?.recycle()
+            still = null
             frame.removeAllViews()
+            if (had && photo?.let(::onScreen) == true) host.stillChanged()
         }
     }
 

@@ -185,6 +185,8 @@
     <string name="delete_photo">Delete</string>
     <string name="photo_trashed">Moved to the bin</string>
     <string name="photo_not_trashed">The photo could not be moved to the bin</string>
+    <!-- Turns the photo on screen a quarter turn clockwise, to look at. The file stays as it is. -->
+    <string name="rotate_photo">Rotate</string>
     <string name="print">Print</string>
     <string name="print_locked">This PDF has a password, so Android can\'t print it</string>
     <string name="print_failed">This file can\'t be printed</string>

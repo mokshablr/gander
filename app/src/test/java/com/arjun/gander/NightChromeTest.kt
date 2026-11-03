@@ -174,7 +174,8 @@ class NightChromeTest {
     @Test
     fun nightModeLeavesTheOtherFormatsAsThePhoneHasThem() {
         Settings.setNight(context, true)
-        for (fixture in listOf("plain.txt", "letter.odt", "notes.md", "tiny.png")) {
+        // A photo is dark around whatever night mode says, as a video is: see OverChromeTest
+        for (fixture in listOf("plain.txt", "letter.odt", "notes.md", "bracket.stl")) {
             val parts = open(fixture).parts()
             assertThat(parts.behindTheBars).isEqualTo(context.color(R.color.gander_surface))
             assertThat(parts.searchBar).isEqualTo(context.color(R.color.gander_surface))

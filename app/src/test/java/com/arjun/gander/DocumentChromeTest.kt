@@ -136,10 +136,11 @@ class DocumentChromeTest {
     /** Material tints a bar deeper for every elevation under it, and floating is not one. */
     @Test
     fun theBarKeepsTheColourItHasOverEveryOtherFile() {
-        val photo = open("tiny.png").get()
+        // The card for a file Gander cannot read, whose bar sits above it
+        val card = open("opaque.xyz").get()
         val viewer = pdf()
         fun MaterialToolbar.surface() = (background as MaterialShapeDrawable).resolvedTintColor
-        assertThat(viewer.toolbar.surface()).isEqualTo(photo.toolbar.surface())
+        assertThat(viewer.toolbar.surface()).isEqualTo(card.toolbar.surface())
     }
 
     @Test
@@ -151,9 +152,13 @@ class DocumentChromeTest {
         )
         documents.forEach { assertWithMessage(it).that(open(it).get().floats).isTrue() }
 
-        // A photo, a picture drawn by a page, a model, a sound, a zip and a file Gander cannot read
-        val others = listOf("tiny.png", "anim.gif", "bracket.stl", "tone.wav", "archive.zip", "opaque.xyz")
+        // A model, a zip and a file Gander cannot read
+        val others = listOf("bracket.stl", "archive.zip", "opaque.xyz")
         others.forEach { assertWithMessage(it).that(open(it).get().floats).isFalse() }
+        // A photo, a picture drawn by a page and a sound float theirs over the picture, as a video
+        // does, and it never slides away as a document's does: see OverChromeTest
+        val pictures = listOf("tiny.png", "anim.gif", "tone.wav")
+        pictures.forEach { assertWithMessage(it).that(open(it).get().documentChrome).isNull() }
     }
 
     @Test
@@ -462,7 +467,8 @@ class DocumentChromeTest {
 
     @Test
     fun theCardForARendererThatHasGoneHasItsBarAboveIt() {
-        val sound = open("tone.wav").get()
+        // The card for a file Gander cannot read, whose bar sits above it
+        val card = open("opaque.xyz").get()
         val viewer = pdf()
         viewer.swipeTo(600)
 
@@ -474,7 +480,7 @@ class DocumentChromeTest {
         val parts = listOf<(ViewerActivity) -> View>({ it.toolbar }, { it.searchBar }, { it.saveProgress })
         parts.forEach { part ->
             assertThat(part(viewer).parent).isSameInstanceAs(viewer.root)
-            assertThat(viewer.root.indexOfChild(part(viewer))).isEqualTo(sound.root.indexOfChild(part(sound)))
+            assertThat(viewer.root.indexOfChild(part(viewer))).isEqualTo(card.root.indexOfChild(part(card)))
         }
         assertThat(viewer.toolbar.translationY).isEqualTo(0f)
         assertThat(viewer.toolbar.visibility).isEqualTo(View.VISIBLE)

@@ -94,14 +94,16 @@ class VideoChromeTest {
         assertThat(viewer.toolbar.background).isNull()
     }
 
+    /** A track's transport is a layout of Gander's own, with no full screen button in it to show. */
     @Test
-    fun aSoundKeepsItsTitleBarAboveIt() {
+    fun aSoundHasNoFullScreenButton() {
         val viewer = open(FixtureProvider.uriFor("tone.wav")).get()
-        assertThat(viewer.toolbar.parent).isSameInstanceAs(viewer.root)
-        // Its transport is a layout of Gander's own, with no full screen button in it to show
         val button: View? = viewer.player.findViewById(androidx.media3.ui.R.id.exo_fullscreen)
         assertThat(button?.visibility ?: View.GONE).isNotEqualTo(View.VISIBLE)
     }
+
+    /** The card for a file Gander can't open, with its title bar above it: where a video that will not play ends up. */
+    private fun card(): ViewerActivity = open(FixtureProvider.uriNamed("opaque.xyz", "slides.ppt")).get()
 
     private val statusBar = Insets.of(0, 63, 0, 0)
     private val navigationBar = Insets.of(0, 0, 0, 126)
@@ -421,16 +423,17 @@ class VideoChromeTest {
 
     @Test
     fun aVideoThatWillNotPlayGetsTheViewerBackAsEveryOtherFileHasIt() {
-        val sound = open(FixtureProvider.uriFor("tone.wav")).get()
+        val card = card()
         val viewer = unplayable()
 
+        assertThat(card.toolbar.parent).isSameInstanceAs(card.root)
         assertThat(viewer.toolbar.parent).isSameInstanceAs(viewer.root)
-        assertThat(viewer.root.indexOfChild(viewer.toolbar)).isEqualTo(sound.root.indexOfChild(sound.toolbar))
+        assertThat(viewer.root.indexOfChild(viewer.toolbar)).isEqualTo(card.root.indexOfChild(card.toolbar))
         assertThat(viewer.root.indexOfChild(viewer.saveProgress))
-            .isEqualTo(sound.root.indexOfChild(sound.saveProgress))
-        assertThat(viewer.toolbar.surface()).isEqualTo(sound.toolbar.surface())
-        assertThat(viewer.toolbar.titleColour()).isEqualTo(sound.toolbar.titleColour())
-        assertThat(viewer.toolbar.elevation).isEqualTo(sound.toolbar.elevation)
+            .isEqualTo(card.root.indexOfChild(card.saveProgress))
+        assertThat(viewer.toolbar.surface()).isEqualTo(card.toolbar.surface())
+        assertThat(viewer.toolbar.titleColour()).isEqualTo(card.toolbar.titleColour())
+        assertThat(viewer.toolbar.elevation).isEqualTo(card.toolbar.elevation)
         assertThat(viewer.requestedOrientation).isEqualTo(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
         // And it keeps clear of the bars again
         ViewCompat.dispatchApplyWindowInsets(viewer.root, bars(shown = true))
@@ -442,10 +445,10 @@ class VideoChromeTest {
     @Config(sdk = [34])
     @Suppress("DEPRECATION")
     fun belowAndroid15TheBarsAreSeeThroughOverAVideoAndPutBackAfter() {
-        val sound = open(FixtureProvider.uriFor("tone.wav")).get()
-        assertThat(sound.window.statusBarColor).isNotEqualTo(Color.TRANSPARENT)
+        val card = card()
+        assertThat(card.window.statusBarColor).isNotEqualTo(Color.TRANSPARENT)
 
         assertThat(video().get().window.statusBarColor).isEqualTo(Color.TRANSPARENT)
-        assertThat(unplayable().window.statusBarColor).isEqualTo(sound.window.statusBarColor)
+        assertThat(unplayable().window.statusBarColor).isEqualTo(card.window.statusBarColor)
     }
 }

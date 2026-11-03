@@ -36,10 +36,14 @@
         android:title="@string/night_mode"
         android:visible="false"
         app:showAsAction="never" />
+    <!-- A photo the tiling view draws, turned a quarter turn clockwise for each tap, to look at.
+         Issue #71. A phone's bar has room for two buttons beside the menu, so a photo's own two,
+         Rotate and Delete, come before Share, which goes into the menu when both are there. -->
     <item
-        android:id="@+id/action_share"
-        android:icon="@drawable/ic_share"
-        android:title="@string/share_file"
+        android:id="@+id/action_rotate"
+        android:icon="@drawable/ic_rotate"
+        android:title="@string/rotate_photo"
+        android:visible="false"
         app:showAsAction="ifRoom" />
     <!-- A photo in a folder added in Gander, from Android 11, where Android moves it to its trash
          after its own prompt. The bin is the one the home screen's swipe uncovers, tinted here as
@@ -50,6 +54,11 @@
         android:title="@string/delete_photo"
         android:visible="false"
         app:iconTint="?attr/colorOnSurface"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/action_share"
+        android:icon="@drawable/ic_share"
+        android:title="@string/share_file"
         app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_save_copy"

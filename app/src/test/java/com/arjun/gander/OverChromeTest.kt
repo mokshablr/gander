@@ -305,8 +305,10 @@ class OverChromeTest {
     @Test
     fun aTrackThatWillNotPlayGetsItsTitleBarBackAboveTheCard() {
         val viewer = open(FixtureProvider.uriNamed("plain.txt", "broken.mp3"))
-        // The player reads on a thread of its own and reports back on the main one
-        repeat(100) {
+        // The player reads on a thread of its own and reports back on the main one, slower on a
+        // machine doing other work, so the wait is long and ends as soon as it has given up
+        val deadline = System.nanoTime() + 20_000_000_000L
+        while (System.nanoTime() < deadline) {
             if (viewer.container.children.any { it is WebView }) {
                 assertThat(viewer.toolbar.parent).isSameInstanceAs(viewer.root)
                 assertThat(viewer.playerScreen!!.trackChrome).isNull()

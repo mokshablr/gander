@@ -1400,6 +1400,30 @@ class ViewerActivityTest {
         assertThat(viewer.rotateItem().isVisible).isTrue()
     }
 
+    /** The bar's buttons, left to right: the visible items the bar has room to show as icons. */
+    private fun ActivityController<ViewerActivity>.barButtons(): List<String> {
+        shadowOf(Looper.getMainLooper()).idle()
+        val menu = get().findViewById<MaterialToolbar>(R.id.toolbar).menu
+        return (0 until menu.size()).map { menu.getItem(it) }
+            .filter { it.isVisible && (it as androidx.appcompat.view.menu.MenuItemImpl).isActionButton }
+            .map { it.title.toString() }
+    }
+
+    /**
+     * A phone's bar has room for two buttons beside the menu. Photo viewers keep Share and Delete a
+     * tap away, so among a folder's photos Rotate goes into the menu; a photo opened alone has no
+     * Delete, and Rotate takes the second button.
+     */
+    @Test
+    @Config(qualifiers = "w384dp-h832dp")
+    fun onAPhonesBarShareAndDeleteKeepTheirButtonsAndRotateTakesWhatIsLeft() {
+        val folder = openedFrom(dcim(), "primary:DCIM/b.jpg")
+        assertThat(folder.rotateItem().isVisible).isTrue()
+        assertThat(folder.barButtons()).containsExactly("Share", "Delete").inOrder()
+
+        assertThat(open("exif-1.jpg").barButtons()).containsExactly("Share", "Rotate").inOrder()
+    }
+
     @Test
     fun aTurnedPhotoIsStillTurnedWhenTheViewerIsMadeAgain() {
         val viewer = open("exif-1.jpg")

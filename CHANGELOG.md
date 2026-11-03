@@ -25,10 +25,10 @@
 - A photo or a track has its title bar over it in the dark, as a video does, and a tap on the
   photo, or on the track's screen around its buttons, hides the title bar and the phone's bars.
   Another tap brings them back (#71, thanks @DEWE-ex).
-- A photo can be turned a quarter turn at a time with Rotate in the title bar, and stays turned
-  while the viewer is open. The file itself is left as it is. Pictures that move, such as GIFs,
-  and SVG drawings can't be turned. Among the photos of a folder added in Gander, where Delete is
-  in the title bar too, Share moves into the menu to make room (#71, thanks @DEWE-ex).
+- A photo can be turned a quarter turn at a time with Rotate, and stays turned while the viewer
+  is open. The file itself is left as it is. Rotate is in the title bar, or in its menu where
+  Share and Delete fill the bar. Pictures that move, such as GIFs, and SVG drawings can't be
+  turned (#71, thanks @DEWE-ex).
 
 ## 2.8 (2026-10-31)
 

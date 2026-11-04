@@ -37,6 +37,12 @@
   the screen's pixels and scaled down to fit, where it was drawn with about as many and came out
   soft, most of all on phones with a 720p screen (reported in a Play review). Zoomed in, the part
   on screen is drawn again at the zoom, from the same point as before.
+- A tap on the right of a book's page moves it on by a screen less a line, so the line it ended
+  on is the first you see, and a tap on the left moves it back, as in a reading app (asked for
+  in a Play review). In a book read right to left the sides swap, as Previous and Next do. At the
+  end of a chapter a tap on the right goes on to the next one, and at the start of one a tap on
+  the left goes back to the end of the chapter before. A tap on a link, or in the middle third of
+  the page, does what it did.
 
 ## 2.8 (2026-10-31)
 

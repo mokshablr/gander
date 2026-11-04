@@ -357,15 +357,17 @@ def test_script_in_a_chapter_does_not_run(viewer, page):
     open_book(viewer, page)
     turn_to(page, "The Lamp Room")
     page.click("#book #tapped")
-    page.click("#book #bad-link")
-    page.wait_for_timeout(400)
 
-    assert page.evaluate("() => window.__xss") is None
     assert page.query_selector("#book script") is None
     assert page.get_attribute("#book #tapped", "onclick") is None
     assert page.get_attribute("#book #missing", "onerror") is None
     assert page.get_attribute("#book #bad-link", "href") is None
     assert "Text after the injected markup" in page.text_content("#book .note")
+
+    # Last: the link is on the left of a chapter that fits the screen, and a tap there turns it
+    page.click("#book #bad-link")
+    page.wait_for_timeout(400)
+    assert page.evaluate("() => window.__xss") is None
 
 
 def test_nothing_outside_the_book_is_asked_for(viewer, page):
@@ -2250,3 +2252,164 @@ def test_a_search_that_turns_the_chapter_leaves_back_for_leaving(viewer, page, m
     channel.query("third")
     wait_for_heading(page, "Two")
     channel.wait_for(r"cover 0")
+
+
+# ---------------------------------------------------------------------------
+# A tap on either side of the page turns it
+# ---------------------------------------------------------------------------
+
+def screen_of(page):
+    return page.evaluate("() => ({ y: window.pageYOffset, tall: innerHeight, wide: innerWidth })")
+
+
+def tap(page, across, down=0.5):
+    """A finger's tap, [across] the width of the screen and [down] its height."""
+    s = screen_of(page)
+    page.mouse.click(s["wide"] * across, s["tall"] * down)
+
+
+def line_tall(page):
+    return page.evaluate(
+        "() => parseFloat(getComputedStyle(document.querySelector('#book').shadowRoot"
+        ".querySelector('p')).lineHeight)"
+    )
+
+
+def in_the_long_chapter(viewer, page, **params):
+    open_book(viewer, page, **params)
+    turn_to(page, "The Long")
+    page.wait_for_function("() => document.documentElement.scrollHeight > 2 * innerHeight")
+
+
+def first_cut(page, bottom):
+    """The first line of the chapter that is not wholly above [bottom]: the letter it starts
+    with, as first_line() counts them, and how far down the screen it is."""
+    return page.evaluate(
+        r"""(bottom) => {
+          const body = document.querySelector('#book').shadowRoot.querySelector('body');
+          const walk = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+          let before = 0;
+          for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+            for (let k = 0; k < n.data.length; k++) {
+              if (/\s/.test(n.data[k])) continue;
+              const range = document.createRange();
+              range.setStart(n, k);
+              range.setEnd(n, k + 1);
+              const box = range.getBoundingClientRect();
+              if (box.height > 0 && box.bottom > bottom + 0.5) {
+                return { top: box.top, words: n.data.slice(k, k + 24), letter: before + k };
+              }
+            }
+            before += n.data.length;
+          }
+          return null;
+        }""",
+        bottom,
+    )
+
+
+@pytest.mark.parametrize("bar", [0, 64], ids=["no bar", "under the title bar"])
+def test_a_tap_on_the_right_moves_a_screen_on_less_a_line(viewer, page, bar):
+    """
+    The first line the screen did not wholly show is wholly shown below the bar after the tap,
+    with no more than about a line read before above it: the screen moved on by what was seen.
+    """
+    in_the_long_chapter(viewer, page, **({"top": bar} if bar else {}))
+    edge = page.evaluate("() => vwTopPx")
+    assert (edge > 0) == (bar > 0)
+    s = screen_of(page)
+    tall = line_tall(page)
+    # Moved so the foot of the screen runs through the middle of a line's letters
+    cut = first_cut(page, s["tall"])
+    page.evaluate("(by) => window.scrollBy(0, by)", round(cut["top"] + 8 - s["tall"]))
+    page.wait_for_timeout(300)
+    s = screen_of(page)
+    cut = first_cut(page, s["tall"])
+    assert cut["top"] < s["tall"] - 4, cut
+    tap(page, 0.9)
+    page.wait_for_function(f"() => window.pageYOffset > {s['y']}")
+    now = top_of_letter(page, cut["letter"])
+    assert edge - 0.5 <= now <= edge + 2 * tall + 1, (cut, now)
+
+
+def test_a_tap_on_the_left_moves_back_as_far(viewer, page):
+    in_the_long_chapter(viewer, page)
+    page.evaluate("() => window.scrollTo(0, innerHeight / 2)")
+    page.wait_for_timeout(300)
+    y = screen_of(page)["y"]
+    tap(page, 0.9)
+    page.wait_for_function(f"() => window.pageYOffset > {y}")
+    tap(page, 0.1)
+    page.wait_for_function(f"() => Math.abs(window.pageYOffset - {y}) < 2")
+
+
+def test_a_tap_in_the_middle_leaves_the_page_where_it_is(viewer, page):
+    in_the_long_chapter(viewer, page)
+    y = screen_of(page)["y"]
+    tap(page, 0.5)
+    tap(page, 0.6)
+    page.wait_for_timeout(300)
+    assert screen_of(page)["y"] == y
+
+
+def test_past_the_foot_of_a_chapter_a_tap_goes_on_to_the_next(viewer, page):
+    in_the_long_chapter(viewer, page)
+    page.evaluate("() => window.scrollTo(0, document.documentElement.scrollHeight)")
+    page.wait_for_timeout(300)
+    tap(page, 0.9, down=0.3)
+    wait_for_heading(page, "The Tide Table")
+    assert screen_of(page)["y"] == 0
+
+
+def test_back_past_the_top_of_a_chapter_goes_to_the_foot_of_the_one_before(viewer, page):
+    open_book(viewer, page)
+    turn_to(page, "The Tide Table")
+    page.wait_for_function("() => window.pageYOffset === 0")
+    tap(page, 0.1)
+    wait_for_heading(page, "The Long")
+    page.wait_for_function(
+        "() => window.pageYOffset > 0 && "
+        "window.pageYOffset + innerHeight >= document.documentElement.scrollHeight - 2"
+    )
+
+
+def test_in_a_book_read_right_to_left_the_left_moves_on(viewer, page, made):
+    """Next is on the left in such a book, and so is the side that moves it on."""
+    words = "<p>" + "كتاب " * 80 + "</p>"
+    book = little_book(made, "rtl.epub", [("", "", "<body>" + words * 60 + "</body>")],
+                       spine='page-progression-direction="rtl"', language="ar")
+    open_book(viewer, page, fixture=book)
+    page.wait_for_function("() => document.documentElement.scrollHeight > 2 * innerHeight")
+    tap(page, 0.1)
+    page.wait_for_function("() => window.pageYOffset > 0")
+    on = screen_of(page)["y"]
+    tap(page, 0.9)
+    page.wait_for_function(f"() => window.pageYOffset < {on}")
+
+
+def test_a_tap_that_lets_go_of_a_selection_does_not_turn(viewer, page):
+    in_the_long_chapter(viewer, page)
+    page.evaluate("""() => {
+      const root = document.querySelector('#book').shadowRoot;
+      const range = document.createRange();
+      range.selectNodeContents(root.querySelector('p'));
+      const sel = root.getSelection ? root.getSelection() : document.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }""")
+    y = screen_of(page)["y"]
+    tap(page, 0.9)
+    page.wait_for_timeout(300)
+    assert screen_of(page)["y"] == y
+
+
+def test_a_click_no_finger_made_does_not_turn(viewer, page):
+    """A key or a screen reader clicks with no place on the screen, so with no side to it."""
+    in_the_long_chapter(viewer, page)
+    page.evaluate("() => window.scrollTo(0, innerHeight / 2)")
+    page.wait_for_timeout(300)
+    y = screen_of(page)["y"]
+    assert y > 0
+    page.evaluate("() => document.querySelector('#book').shadowRoot.querySelector('p').click()")
+    page.wait_for_timeout(300)
+    assert screen_of(page)["y"] == y

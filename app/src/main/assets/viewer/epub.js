@@ -1731,7 +1731,8 @@ var vwEpub = (function () {
   }
 
   /* Puts the screen at [to]: { frag } a place the book names, { past } that many letters and
-     pictures into the chapter, or anything else its top, with the strip above it in view. */
+     pictures into the chapter, { end } its foot, or anything else its top, with the strip
+     above it in view. */
   function place(to) {
     var mark = to && to.frag ? named(to.frag) : null;
     var box = !mark && to && to.past > 0 ? boxAt(to.past) : null;
@@ -1739,6 +1740,8 @@ var vwEpub = (function () {
       mark.scrollIntoView();
     } else if (box) {
       window.scrollTo(0, window.pageYOffset + box.top - topEdge());
+    } else if (to && to.end) {
+      window.scrollTo(0, document.documentElement.scrollHeight);
     } else {
       window.scrollTo(0, 0);
     }
@@ -2187,6 +2190,89 @@ var vwEpub = (function () {
   // A middle click is not a click, and would open the link in a page of its own
   shadow.addEventListener("auxclick", function (e) {
     if (linkAt(e.target)) e.preventDefault();
+  });
+
+  // ---------------------------------------------------------------------------------------
+  // A tap on either side of the book, a screen on or back
+  // ---------------------------------------------------------------------------------------
+
+  /* What keeps a tap for itself, besides the links and controls */
+  var TAPPED = /^(audio|label|summary|video)$/;
+
+  /* Whether words were selected as the finger came down: that tap is the one that lets go */
+  var selectedAtDown = false;
+  document.addEventListener("pointerdown", function () {
+    var sel = shadow.getSelection ? shadow.getSelection() : document.getSelection();
+    selectedAtDown = !!sel && !sel.isCollapsed && String(sel).length > 0;
+  }, true);
+
+  /* Whether a tap landed on the book or the paper around it, and not on anything of its own */
+  function onTheBook(e) {
+    var path = e.composedPath ? e.composedPath() : [e.target];
+    for (var i = 0; i < path.length; i++) {
+      var n = path[i];
+      if (n === host) return true;
+      if (n === bar || n === turnBar) return false;
+      if (n.nodeType === 1 && (CONTROLS.test(local(n)) || TAPPED.test(local(n)))) return false;
+    }
+    return path[0] === document.body || path[0] === document.documentElement;
+  }
+
+  /* How tall a line of the chapter's words is at the foot of the screen */
+  function lineTall() {
+    var el = shadow.elementFromPoint
+      ? shadow.elementFromPoint(window.innerWidth / 2, window.innerHeight - 2) : null;
+    if (!el || !onPage.contains(el)) el = onPage;
+    var style = getComputedStyle(el);
+    var tall = parseFloat(style.lineHeight);
+    // A line height of "normal" is the font's own, about a quarter over its size
+    if (!(tall > 0)) tall = 1.25 * parseFloat(style.fontSize);
+    return tall > 0 ? Math.min(tall, window.innerHeight / 4) : 0;
+  }
+
+  /*
+   * A screen on, or back for [side] -1, less a line, so the line the screen ended on is the one
+   * it starts with. The bar over the book stays where it is for a jump a tap makes, so the
+   * screen is what is below it. Past the foot of a chapter it goes on to the next one, as Next
+   * does, and back past the top of one to the foot of the chapter before.
+   */
+  function turnPage(side) {
+    var y = window.pageYOffset;
+    if (side > 0 && y + window.innerHeight >= document.documentElement.scrollHeight - 2) {
+      if (shown < spine.length - 1) {
+        forget();
+        go(shown + 1, null);
+      }
+      return;
+    }
+    if (side < 0 && y <= 0) {
+      if (shown > 0) {
+        forget();
+        go(shown - 1, { end: true });
+      }
+      return;
+    }
+    var step = Math.max(window.innerHeight - topEdge() - lineTall(), window.innerHeight / 2);
+    window.scrollTo(0, y + side * step);
+  }
+
+  /*
+   * A tap on the outer third of the page turns it, as in a reading app: the right a screen on and
+   * the left a screen back, or the other way round in a book read right to left, where Next is on
+   * the left. A link, a control, a selection being let go of, a page pinched larger, or anything
+   * open over the book keeps the tap, and so does a click no finger made, from a key or a screen
+   * reader, which has no side.
+   */
+  document.addEventListener("click", function (e) {
+    if (e.defaultPrevented || e.detail === 0 || selectedAtDown || shown < 0 || !onPage) return;
+    if (!panel.hidden || !linkBox.hidden) return;
+    var vv = window.visualViewport;
+    if (vv && vv.scale > 1.01) return;
+    if (!onTheBook(e)) return;
+    var third = window.innerWidth / 3;
+    var side = e.clientX < third ? -1 : e.clientX > 2 * third ? 1 : 0;
+    if (!side) return;
+    turnPage(turnBar.dir === "rtl" ? -side : side);
   });
 
   var reporting = false;

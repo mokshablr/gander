@@ -23,39 +23,44 @@ var PAGE_WIDTH = pages.clientWidth || window.innerWidth;
  * It was 2 because 2 bought pinch headroom: a page drawn at twice the layout width had
  * spare pixels for the compositor to magnify, which is what kept it sharp to about
  * 1.8x and is why one A4 page cost about 21 MB rather than 6. Tiles buy that headroom
- * now, and buy all of it rather than 1.8x of it, so this is no longer the sharpness
- * knob. It is the last-resort scale, and the ceiling nothing below is allowed to
- * exceed, so that a measurement that comes out wrong is this file's old behaviour
- * rather than a new failure.
+ * now, and buy all of it rather than 1.8x of it. It is the last-resort scale, and the
+ * ceiling nothing below is allowed to exceed, so that a measurement that comes out
+ * wrong is this file's old behaviour rather than a new failure. A page bitmap on a
+ * phone 980 px across or wider reaches it.
  */
 var DPR_FALLBACK = Math.min(window.devicePixelRatio || 1, 2);
 
-/* A tenth over the screen's own resolution for a page bitmap. .pg is fractionally
-   wide, so a bitmap at exactly 1:1 is still resampled by a fraction of a pixel; a
-   tenth costs 21% of the pixels and takes that away. Tuned by eye at fit-to-width. */
-var BASE_HEADROOM = 1.1;
+/*
+ * Twice the screen's own resolution for a page bitmap, for the compositor to scale down.
+ *
+ * .pg is fractionally wide and sits at a fraction of a pixel, so a bitmap near 1:1 is
+ * resampled by a fraction of a pixel, which is a blur on every edge. Measured on a phone
+ * at 720 and 1080 px across, a fitted page drawn a tenth over the screen came out a fifth
+ * softer than Android's own PDF engine draws it, and one drawn at twice level with it.
+ */
+var BASE_HEADROOM = 2;
 
 /*
  * The most bitmap one canvas may hold, per side and in total.
  *
  * Less a memory budget than a floor under the failure. A page bitmap is sized from its
- * width, so a page far taller than it is wide costs whatever that comes to: on the phone
- * this was measured on, where A4 comes to two megapixels, a receipt or a long ticket at
- * aspect 0.2 comes to seven. Past Blink's limit of 32767 px the canvas is simply not
- * allocated, and a canvas that failed to allocate is a blank page with nothing said
- * about it.
+ * width, so a page far taller than it is wide costs whatever that comes to: on a phone
+ * 1080 px across, where A4 comes to five and a half megapixels, a receipt or a long
+ * ticket at aspect 0.2 would come to nineteen. Past Blink's limit of 32767 px the canvas
+ * is simply not allocated, and a canvas that failed to allocate is a blank page with
+ * nothing said about it.
  *
  * 8192 is well inside that limit and inside the GPU texture limits Android devices
- * report, which are commonly between 4096 and 16384. Both caps first bite around aspect
- * 0.15, a page seven times taller than it is wide, so A4, Letter, Legal and both of the
- * maps in issue #20 are nowhere near either.
+ * report, which are commonly between 4096 and 16384. On a phone 980 px across or wider the
+ * pixel cap first bites around aspect 0.5, a page twice as tall as it is wide, so A4,
+ * Letter, Legal and both of the maps in issue #20 are clear of it.
  */
 var MAX_SIDE = 8192;
 var BASE_MAX_PIXELS = 8e6;
 
 /*
- * Canvas pixels per CSS pixel for a page bitmap: the resolution the screen has with the
- * page fitted to its width, and no more than that.
+ * Canvas pixels per CSS pixel for a page bitmap: twice the resolution the screen has with
+ * the page fitted to its width, and no more than DPR_FALLBACK.
  *
  * Deliberately not a function of the current zoom, so a page that happens to be drawn
  * while the reader is pinched in is the same size as one drawn while they are not, and
@@ -64,6 +69,17 @@ var BASE_MAX_PIXELS = 8e6;
 function baseScale() {
   var w = vwPhysicalWidth();
   return w ? Math.min((w / PAGE_WIDTH) * BASE_HEADROOM, DPR_FALLBACK) : DPR_FALLBACK;
+}
+
+/*
+ * What the tile gate is measured against: the screen's own resolution and a tenth, not
+ * the page bitmap. A tile then comes in at about 1.4 times the fitted width, short of a
+ * double tap's 2x, where a bitmap of twice the screen's pixels would be magnified with
+ * no tile over it.
+ */
+function gateScale() {
+  var w = vwPhysicalWidth();
+  return w ? Math.min((w / PAGE_WIDTH) * 1.1, DPR_FALLBACK) : DPR_FALLBACK;
 }
 
 /*
@@ -699,8 +715,8 @@ function draw(slot) {
      * Three scales now, and no two of them are the same number.
      *
      * This canvas is a bitmap and wants device pixels, so it is drawn at baseScale()
-     * times the layout width: the resolution the screen has with the page fitted to its
-     * width. The tile drawn over it later wants device pixels too, but at whatever the
+     * times the layout width: twice the resolution the screen has with the page fitted to
+     * its width. The tile drawn over it later wants device pixels too, but at whatever the
      * live pinch needs, which is larger the moment anybody zooms in. The text layer is
      * DOM and wants CSS pixels: it has to land on the box, which is PAGE_WIDTH wide
      * whatever the bitmaps behind it are. Hand the text layer a canvas viewport and
@@ -839,7 +855,8 @@ function draw(slot) {
  */
 
 /*
- * How short of pixels a page bitmap has to be before part of it is worth drawing again.
+ * How far past gateScale() the live zoom has to go before part of a page is worth
+ * drawing again.
  *
  * A quarter short is about where a shortfall starts to read as blur. Acting on any
  * shortfall at all would spend a render on a five per cent gain every time somebody
@@ -1070,7 +1087,7 @@ function refine() {
   /* Shrunk pages are drawn at the size they are shown and the WebView is at its floor, so
      there is nothing a tile could sharpen; said outright rather than left to the gate, so
      that no tile is ever drawn over a column of small pages. */
-  if (shrink < 1 || !(k > baseScale() * TILE_GATE)) {
+  if (shrink < 1 || !(k > gateScale() * TILE_GATE)) {
     /* Back at a zoom the page bitmaps cover on their own. A walk of every slot rather
        than a register of which ones are tiled: it is a property read per page, against
        the layout read per page that this function exists to avoid. */

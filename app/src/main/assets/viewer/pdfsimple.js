@@ -21,7 +21,9 @@
   /* Read once, for pdf.mjs's reason: there is no viewport meta, so this is a constant. */
   var PAGE_WIDTH = pages.clientWidth || window.innerWidth;
 
-  /* pdf.mjs's sharpness, for the same reasons: see vwPhysicalWidth() in app.js and BASE_HEADROOM there. */
+  /* See vwPhysicalWidth() in app.js and BASE_HEADROOM in pdf.mjs. A tenth over here, where
+     pdf.mjs draws at twice the screen: each picture is a PNG made in the renderer's own
+     process, on the old phones this view is for, and twice would be four times the pixels. */
   var DPR_FALLBACK = Math.min(window.devicePixelRatio || 1, 2);
   var BASE_HEADROOM = 1.1;
 

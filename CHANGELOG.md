@@ -33,6 +33,10 @@
   logo at the top of a form, now reaches its tab stop. Since 2.7 it could fall short, with the
   text after it out of line with the rows below, when the paragraph beside the picture grew by
   a line as its own tab was lined up.
+- PDF pages are sharper at the screen's width, as a PDF opens. A page is now drawn with twice
+  the screen's pixels and scaled down to fit, where it was drawn with about as many and came out
+  soft, most of all on phones with a 720p screen (reported in a Play review). Zoomed in, the part
+  on screen is drawn again at the zoom, from the same point as before.
 
 ## 2.8 (2026-10-31)
 

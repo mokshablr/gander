@@ -275,3 +275,56 @@ def test_the_text_layer_scale_is_untouched_by_the_patch(viewer, page):
     assert page.evaluate(read) == before, (
         "drawing a tile moved the text layer's scale"
     )
+
+
+# ---------------------------------------------------------------------------
+# On a phone's screen, where a CSS pixel is not a device pixel
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def phone(browser, server):
+    """
+    A phone 720 px across at 2 px to the dp, as a Lava Z3 is: the page lays out at 980 CSS
+    px and is zoomed to fit, as in the WebView. At the ratio of 1 the rest of this file runs
+    at, the cap of two device pixels to the CSS pixel and the screen are the same, so how
+    far over the screen a page bitmap is drawn cannot show.
+    """
+    context = browser.new_context(
+        viewport={"width": 360, "height": 800}, device_scale_factor=2,
+        is_mobile=True, has_touch=True,
+    )
+    page = context.new_page()
+    server.show("six-pages.pdf")
+    page.goto(server.url("pdf.html"))
+    wait_for_pdf(page)
+    yield page
+    context.close()
+
+
+def fitted(page):
+    return page.evaluate("() => visualViewport.scale")
+
+
+def test_a_fitted_page_is_drawn_at_twice_the_screens_pixels(phone):
+    """Measured on a phone, a page drawn a tenth over the screen came out a fifth softer than
+    Android's own PDF engine draws it, and one drawn at twice level with it."""
+    across = phone.evaluate("() => visualViewport.width * devicePixelRatio * visualViewport.scale")
+    assert across == pytest.approx(720, abs=1)
+    drawn = phone.evaluate("() => document.querySelector('#pages .pg canvas:not(.tile)').width")
+    assert drawn == pytest.approx(2 * 720, abs=2)
+    assert tile_count(phone) == 0
+
+
+def test_a_patch_still_comes_in_short_of_a_double_tap(phone):
+    """
+    Tiles are gated on the screen's own resolution, not on the page bitmap, so they come in
+    at about 1.4 times the fitted width as before. Gated on a bitmap of twice the screen's
+    pixels, a double tap's 2x would leave that bitmap magnified with nothing drawn over it.
+    """
+    fit = fitted(phone)
+    set_page_scale(phone, fit * 1.3)
+    phone.wait_for_timeout(600)         # longer than the 150 ms settle
+    assert tile_count(phone) == 0
+    set_page_scale(phone, fit * 1.6)
+    wait_for_tile(phone)
+    assert tile_count(phone) >= 1

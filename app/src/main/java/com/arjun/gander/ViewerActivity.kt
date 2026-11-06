@@ -19,6 +19,7 @@ import android.print.PrintManager
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.text.InputType
+import android.view.GestureDetector
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -87,6 +88,7 @@ open class ViewerActivity : AppCompatActivity() {
         private const val STATE_SIMPLE_VIEW = "simple_view"
         private const val STATE_PHOTO = "photo"
         private const val STATE_TRASHING = "trashing"
+        private const val STATE_TURNS = "turns"
 
         /**
          * Opens a PDF in the simple view whatever the WebView, so that a phone pdf.js runs on can
@@ -215,6 +217,22 @@ open class ViewerActivity : AppCompatActivity() {
      */
     private var photosListed = false
 
+    /** The title bar and the phone's bars over a picture, which a tap on it hides. See [OverChrome]. Read by tests. */
+    internal var pictureChrome: OverChrome? = null
+        private set
+
+    /** Where the page readout sits above the foot of the screen, as the layout has it. */
+    private var readoutLift = 0
+
+    /** A still photo opened alone, and the tiling view drawing it. */
+    private var lonePhoto: Pair<Uri, StillPhotoView>? = null
+
+    /** How far the reader has turned each photo, by its address, for as long as the viewer is open. Issue #71. */
+    private val turns = mutableMapOf<String, Int>()
+
+    /** Rotate, offered for a photo the tiling view draws. */
+    private var rotateItem: MenuItem? = null
+
     private val trashPrompt = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
         val photo = trashing ?: return@registerForActivityResult
         trashing = null
@@ -236,6 +254,7 @@ open class ViewerActivity : AppCompatActivity() {
         outState.putBoolean(STATE_SIMPLE_VIEW, simpleAsked)
         photoPager?.let { outState.putString(STATE_PHOTO, it.shown.toString()) }
         outState.putString(STATE_TRASHING, trashing?.toString())
+        outState.putBundle(STATE_TURNS, Bundle().apply { turns.forEach { (photo, turn) -> putInt(photo, turn) } })
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -250,6 +269,9 @@ open class ViewerActivity : AppCompatActivity() {
         copySource = savedInstanceState?.getString(STATE_COPY_SOURCE)?.let(Uri::parse)
         trashing = savedInstanceState?.getString(STATE_TRASHING)?.toUri()
         simpleAsked = savedInstanceState?.getBoolean(STATE_SIMPLE_VIEW) == true
+        savedInstanceState?.getBundle(STATE_TURNS)?.let { saved ->
+            saved.keySet().forEach { photo -> turns[photo] = saved.getInt(photo) }
+        }
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         toolbar.setNavigationOnClickListener { finish() }
@@ -299,10 +321,13 @@ open class ViewerActivity : AppCompatActivity() {
 
         fun show(kind: FileKind) {
             when (kind) {
-                FileKind.IMAGE, FileKind.IMAGE_WEB -> when {
-                    fromGander && DocumentsContract.isTreeUri(uri) -> showPhotos(container, uri, name, mime)
-                    kind == FileKind.IMAGE -> showPicture(container, uri, name, ext)
-                    else -> showWeb(container, uri, kind, name, ext)
+                FileKind.IMAGE, FileKind.IMAGE_WEB -> {
+                    floatOverPicture()
+                    when {
+                        fromGander && DocumentsContract.isTreeUri(uri) -> showPhotos(container, uri, name, mime)
+                        kind == FileKind.IMAGE -> showPicture(container, uri, name, ext)
+                        else -> showWeb(container, uri, kind, name, ext)
+                    }
                 }
                 FileKind.PLAYER -> playerScreen = PlayerScreen(
                     this, nightChrome, ::touchExplorationOn, ::applySystemBarInsets, savedInstanceState,
@@ -444,6 +469,10 @@ open class ViewerActivity : AppCompatActivity() {
         textSizeItem = toolbar.menu.findItem(R.id.action_text_size).apply {
             setOnMenuItemClickListener { askForTextSize(); true }
         }
+        rotateItem = toolbar.menu.findItem(R.id.action_rotate).apply {
+            setOnMenuItemClickListener { turnPhoto(); true }
+        }
+        updateRotate()
         setUpPrint(toolbar, kind, uri, name)
         pointActionsAt(toolbar, uri, name, ext, mime)
     }
@@ -1629,17 +1658,24 @@ open class ViewerActivity : AppCompatActivity() {
     }
 
     private fun showImage(container: FrameLayout, uri: Uri, name: String, ext: String, rotation: Int) {
-        val imageView = photoView(name, rotation) {
+        val imageView = photoView(uri, name, rotation) {
             // Some formats decode fine in the WebView even when the region decoder gives up
+            lonePhoto = null
+            updateRotate()
             container.removeAllViews()
             showWeb(container, uri, FileKind.IMAGE_WEB, name, ext)
         }
+        lonePhoto = uri to imageView
         container.addView(imageView, matchParent())
         imageView.setImage(ImageSource.uri(uri))
+        updateRotate()
     }
 
-    /** The tiling view for a still photo, turned by [rotation], which calls [failed] when it can't draw it. */
-    private fun photoView(name: String, rotation: Int, failed: () -> Unit) = SubsamplingScaleImageView(this).apply {
+    /**
+     * The tiling view for the still photo at [uri], turned by [rotation] and by however far the
+     * reader has turned it, which calls [failed] when it can't draw it.
+     */
+    private fun photoView(uri: Uri, name: String, rotation: Int, failed: () -> Unit) = StillPhotoView(this).apply {
         contentDescription = name
         setBackgroundColor(Color.BLACK)
         setMinimumScaleType(SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE)
@@ -1649,11 +1685,62 @@ open class ViewerActivity : AppCompatActivity() {
         setDoubleTapZoomDuration(DOUBLE_TAP_MS)
         addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> fitDoubleTap(this) }
         orientation = rotation
+        turnTo(turns[uri.toString()] ?: 0)
         setOnImageEventListener(object : SubsamplingScaleImageView.DefaultOnImageEventListener() {
             override fun onReady() = fitDoubleTap(this@apply)
 
             override fun onImageLoadError(e: Exception) = failed()
         })
+        // A tap hides the title bar and the phone's bars, and the next brings them back. The view
+        // takes a tap as a click only once no second tap has followed to make a double tap.
+        pictureChrome?.takeTapsOn(this)
+    }
+
+    /**
+     * The title bar and the phone's bars over a picture, as over a video, which a tap on the
+     * picture hides and the next brings back. Issue #71.
+     */
+    private fun floatOverPicture() {
+        readoutLift = (pageIndicator.layoutParams as ViewGroup.MarginLayoutParams).bottomMargin
+        pictureChrome = OverChrome(
+            this, nightChrome, ::touchExplorationOn, ::applySystemBarInsets,
+            // A folder's photo count keeps clear of the phone's bars at the bottom, which the
+            // picture now runs under
+            keepClearOf = { clear, _ -> placeReadout(readoutLift + clear.bottom) },
+        ).apply { float() }
+    }
+
+    /** The bars back above the picture, for the card that stands in for one whose page has gone. */
+    private fun landPicture() {
+        val chrome = pictureChrome ?: return
+        pictureChrome = null
+        chrome.land()
+        placeReadout(readoutLift)
+    }
+
+    private fun placeReadout(bottom: Int) {
+        val params = pageIndicator.layoutParams as ViewGroup.MarginLayoutParams
+        if (params.bottomMargin == bottom) return
+        params.bottomMargin = bottom
+        pageIndicator.layoutParams = params
+    }
+
+    /** The photo on screen and the tiling view drawing it, where one does. */
+    private fun stillOnScreen(): Pair<Uri, StillPhotoView>? {
+        val pager = photoPager ?: return lonePhoto
+        return pager.stillShown?.let { pager.shown to it }
+    }
+
+    /** Rotate goes with the tiling view: a picture that moves, or one it can't draw, is drawn by a page. */
+    private fun updateRotate() {
+        rotateItem?.isVisible = stillOnScreen() != null
+    }
+
+    /** The photo on screen a quarter turn on, clockwise, and kept that way for when it is shown again. */
+    private fun turnPhoto() {
+        val (photo, still) = stillOnScreen() ?: return
+        still.turnOn()
+        turns[photo.toString()] = still.turn
     }
 
     /**
@@ -1683,7 +1770,9 @@ open class ViewerActivity : AppCompatActivity() {
         override fun look(uri: Uri, ext: String, then: (PhotoPager.Look) -> Unit) =
             offMain(then) { app -> pictureLook(app.contentResolver, uri, ext) }
 
-        override fun still(name: String, rotation: Int, failed: () -> Unit) = photoView(name, rotation, failed)
+        override fun still(uri: Uri, name: String, rotation: Int, failed: () -> Unit) = photoView(uri, name, rotation, failed)
+
+        override fun stillChanged() = updateRotate()
 
         override fun play(frame: FrameLayout, uri: Uri, name: String, ext: String) =
             showWeb(frame, uri, FileKind.IMAGE_WEB, name, ext)
@@ -1695,6 +1784,7 @@ open class ViewerActivity : AppCompatActivity() {
             toolbar.title = photo.name
             val ext = photo.name.substringAfterLast('.', "").lowercase()
             pointActionsAt(toolbar, uri, photo.name, ext, photo.mime.ifEmpty { null })
+            updateRotate()
             pageAt = at + 1
             pageTotal = of
             setPageIndicatorText()
@@ -1886,10 +1976,23 @@ open class ViewerActivity : AppCompatActivity() {
         }
         // Only where the page turns the WebView's own double tap off, or both would zoom
         doubleTapZoom = if (kind.zoomedOnDoubleTap) DoubleTapZoom(this, web) else null
+        // A tap on a picture hides the title bar and the phone's bars, and the next brings them
+        // back, once no second tap has followed to make a double tap
+        val pictureTaps = if (kind == FileKind.IMAGE_WEB) {
+            GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+                override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                    pictureChrome?.toggle()
+                    return false
+                }
+            })
+        } else {
+            null
+        }
         // Not consumed: the document still takes every touch
         web.setOnTouchListener { _, event ->
             documentChrome?.touched(event)
             doubleTapZoom?.touched(event)
+            pictureTaps?.onTouchEvent(event)
             false
         }
 
@@ -2048,6 +2151,8 @@ open class ViewerActivity : AppCompatActivity() {
         // Back above the card, which has nothing to scroll that would bring back a bar gone out of sight
         documentChrome?.land()
         documentChrome = null
+        // And a picture's, whose dark strip would be left under the title bar in the card's colours
+        landPicture()
 
         // The card is the app's rather than the document's, so the parts around it go back to
         // the phone's colours along with the page that was dark

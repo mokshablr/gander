@@ -1317,6 +1317,128 @@ class ViewerActivityTest {
     }
 
     // ---------------------------------------------------------------
+    // Turning a photo (#71)
+    // ---------------------------------------------------------------
+
+    private fun ActivityController<ViewerActivity>.rotateItem(): android.view.MenuItem =
+        get().findViewById<MaterialToolbar>(R.id.toolbar).menu.findItem(R.id.action_rotate)
+
+    private fun ActivityController<ViewerActivity>.rotate() {
+        get().findViewById<MaterialToolbar>(R.id.toolbar).menu.performIdentifierAction(R.id.action_rotate, 0)
+        // Laid out the new way round
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100))
+    }
+
+    /** The tiling view drawing a photo opened alone. */
+    private fun ActivityController<ViewerActivity>.still(): StillPhotoView =
+        container().children().filterIsInstance<StillPhotoView>().single()
+
+    @Test
+    fun rotateTurnsAPhotoAQuarterTurnClockwiseAtATimeAndFitsItOnItsSide() {
+        val viewer = open("exif-1.jpg")
+        assertThat(viewer.rotateItem().isVisible).isTrue()
+        val space = viewer.container()
+        val photo = viewer.still()
+        assertThat(space.width).isNotEqualTo(space.height)
+
+        viewer.rotate()
+
+        assertThat(photo.turn).isEqualTo(90)
+        assertThat(photo.rotation).isEqualTo(90f)
+        // Laid out across its space, and turned about the middle of it, so it covers that space
+        assertThat(listOf(photo.width, photo.height)).isEqualTo(listOf(space.height, space.width))
+        assertThat(photo.left + photo.translationX + photo.width / 2f).isEqualTo(space.width / 2f)
+        assertThat(photo.top + photo.translationY + photo.height / 2f).isEqualTo(space.height / 2f)
+
+        repeat(3) { viewer.rotate() }
+
+        assertThat(photo.turn).isEqualTo(0)
+        assertThat(photo.rotation).isEqualTo(0f)
+        assertThat(listOf(photo.width, photo.height)).isEqualTo(listOf(space.width, space.height))
+        assertThat(listOf(photo.translationX, photo.translationY)).isEqualTo(listOf(0f, 0f))
+    }
+
+    /** A picture that moves is drawn by its page, which Rotate can't turn, and a document has nothing to turn. */
+    @Test
+    fun onlyAPhotoTheTilingViewDrawsIsOfferedRotate() {
+        assertThat(open("moving.webp").rotateItem().isVisible).isFalse()
+        assertThat(open("plain.txt").rotateItem().isVisible).isFalse()
+    }
+
+    @Test
+    fun eachOfAFoldersPhotosKeepsItsOwnTurn() {
+        val viewer = openedFrom(picsFolder(), "pics/b.jpg")
+        val pager = viewer.get().photoPager!!
+        viewer.rotate()
+        val turned = pager.stillShown!!
+        assertThat(turned.turn).isEqualTo(90)
+
+        viewer.swipeTo(0)
+        assertThat(viewer.rotateItem().isVisible).isTrue()
+        assertThat(pager.stillShown!!.turn).isEqualTo(0)
+
+        // A picture that moves has no Rotate, and this far off the turned photo's page is let go
+        viewer.swipeTo(3)
+        assertThat(viewer.rotateItem().isVisible).isFalse()
+
+        viewer.swipeTo(1)
+        assertThat(viewer.title()).isEqualTo("b.jpg")
+        assertThat(pager.stillShown).isNotSameInstanceAs(turned)
+        assertThat(pager.stillShown!!.turn).isEqualTo(90)
+        assertThat(viewer.rotateItem().isVisible).isTrue()
+    }
+
+    /** On a phone a photo is drawn after its folder is counted, so Rotate has to come with the photo. */
+    @Test
+    fun rotateComesOnceThePhotoIsDrawn() {
+        val (viewer, held) = openedHeld(picsFolder(), "pics/b.jpg")
+        assertThat(viewer.rotateItem().isVisible).isFalse()
+
+        viewer.runHeld(held)
+
+        assertThat(viewer.get().photoPager!!.stillShown).isNotNull()
+        assertThat(viewer.rotateItem().isVisible).isTrue()
+    }
+
+    /** The bar's buttons, left to right: the visible items the bar has room to show as icons. */
+    private fun ActivityController<ViewerActivity>.barButtons(): List<String> {
+        shadowOf(Looper.getMainLooper()).idle()
+        val menu = get().findViewById<MaterialToolbar>(R.id.toolbar).menu
+        return (0 until menu.size()).map { menu.getItem(it) }
+            .filter { it.isVisible && (it as androidx.appcompat.view.menu.MenuItemImpl).isActionButton }
+            .map { it.title.toString() }
+    }
+
+    /**
+     * A phone's bar has room for two buttons beside the menu. Photo viewers keep Share and Delete a
+     * tap away, so among a folder's photos Rotate goes into the menu; a photo opened alone has no
+     * Delete, and Rotate takes the second button.
+     */
+    @Test
+    @Config(qualifiers = "w384dp-h832dp")
+    fun onAPhonesBarShareAndDeleteKeepTheirButtonsAndRotateTakesWhatIsLeft() {
+        val folder = openedFrom(dcim(), "primary:DCIM/b.jpg")
+        assertThat(folder.rotateItem().isVisible).isTrue()
+        assertThat(folder.barButtons()).containsExactly("Share", "Delete").inOrder()
+
+        assertThat(open("exif-1.jpg").barButtons()).containsExactly("Share", "Rotate").inOrder()
+    }
+
+    @Test
+    fun aTurnedPhotoIsStillTurnedWhenTheViewerIsMadeAgain() {
+        val viewer = open("exif-1.jpg")
+        viewer.rotate()
+        val saved = Bundle().also { viewer.saveInstanceState(it) }
+
+        val again = Robolectric.buildActivity(ViewerActivity::class.java, viewer.intent)
+        again.get().documentLoader = Executor { it.run() }
+        again.setup(saved)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertThat(again.still().turn).isEqualTo(90)
+    }
+
+    // ---------------------------------------------------------------
     // Deleting a photo in a folder's photos (#75)
     // ---------------------------------------------------------------
 

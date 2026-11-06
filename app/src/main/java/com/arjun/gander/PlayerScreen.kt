@@ -71,6 +71,10 @@ internal class PlayerScreen(
     internal var videoChrome: VideoChrome? = null
         private set
 
+    /** The title bar and the phone's bars over a track's screen, which a tap hides. See [OverChrome]. */
+    internal var trackChrome: OverChrome? = null
+        private set
+
     /** Where a video or a track picks up when the viewer is rebuilt around it, as a change of theme does. */
     private val startAt = state?.getLong(STATE_POSITION) ?: 0L
 
@@ -143,6 +147,22 @@ internal class PlayerScreen(
             ).apply {
                 float()
                 heldBefore?.let { hold(it) }
+            }
+        } else {
+            // Over a track's screen as over a video, on its own dark. A tap around the controls
+            // hides the title bar and the phone's bars, and the next brings them back; the
+            // controls stay, since nothing else is on the screen. Issue #71.
+            val controls = playerView.findViewById<View>(androidx.media3.ui.R.id.exo_controller)
+            trackChrome = OverChrome(
+                activity, nightChrome, touchExplorationOn, applySystemBarInsets,
+                ground = ContextCompat.getColor(activity, R.color.audio_backdrop),
+                // Clear of what takes a tap, as a video's controls are
+                keepClearOf = { _, tappable ->
+                    controls?.setPadding(tappable.left, tappable.top, tappable.right, tappable.bottom)
+                },
+            ).apply {
+                float()
+                takeTapsOn(playerView)
             }
         }
 
@@ -222,6 +242,8 @@ internal class PlayerScreen(
                 player = null
                 videoChrome?.land()
                 videoChrome = null
+                trackChrome?.land()
+                trackChrome = null
                 container.removeAllViews()
                 failed()
             }

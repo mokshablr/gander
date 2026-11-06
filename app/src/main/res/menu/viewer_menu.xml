@@ -51,6 +51,16 @@
         android:visible="false"
         app:iconTint="?attr/colorOnSurface"
         app:showAsAction="ifRoom" />
+    <!-- A photo the tiling view draws, turned a quarter turn clockwise for each tap, to look at.
+         Issue #71. After Share and Delete, which photo viewers keep a tap away, so on a phone's
+         bar, with room for two buttons beside the menu, it goes into the menu among a folder's
+         photos, where Delete is there too. -->
+    <item
+        android:id="@+id/action_rotate"
+        android:icon="@drawable/ic_rotate"
+        android:title="@string/rotate_photo"
+        android:visible="false"
+        app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_save_copy"
         android:title="@string/save_copy"

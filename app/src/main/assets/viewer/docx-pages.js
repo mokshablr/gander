@@ -295,7 +295,15 @@ function vwSplitAsWordDid(renderer) {
  * 25 s. This is the same pass (vwTabPlan) with the reads for one tab of every paragraph made
  * before any of them moves, so the page is laid out once for each tab a paragraph holds. A tab
  * is placed from its own paragraph's left edge and moves only the text after it in that
- * paragraph, so the tabs of one paragraph do not move another's.
+ * paragraph, so the tabs of one paragraph move another's only beside a float: a line beside an
+ * anchored picture, a drop cap or a floating table starts after it, and a paragraph that grows
+ * or shrinks as its tabs are set can move the paragraphs below it from beside the float to
+ * below it, or back. So where the page holds a float, each tab is read with where the floats
+ * beside its paragraph sit (vwTabKey), the page is read once more after the rounds, and a
+ * paragraph with a tab that no longer has the same floats beside it is put back as drawn and
+ * lined up on its own, a tab at a time, as upstream's pass reads it. A document without floats
+ * is lined up in the rounds alone. A table laid out to its content moves its cells' edges as
+ * their tabs are set too, in either order, and is left to the rounds.
  */
 function vwLineUpTabs() {
   var held = vwPages.tabs;
@@ -315,15 +323,106 @@ function vwLineUpTabs() {
       }
       group.tabs.push(tab);
     });
-    var ratio = vwPointsPerPixel();
-    for (var k = 0; paras.length; k++) {
-      var plans = paras.map(function (group) { return vwTabPlan(group.tabs[k], group.p, held.size, ratio); });
-      plans.forEach(function (plan, i) { if (plan) vwSetTab(paras[i].tabs[k].span, plan); });
-      paras = paras.filter(function (group) { return group.tabs.length > k + 1; });
+    var pass = { size: held.size, ratio: vwPointsPerPixel(), floats: vwFloats() };
+    vwLineUpInRounds(paras, pass);
+    for (var n = 0; pass.floats.length && n < VW_TAB_PASSES; n++) {
+      var moved = vwTabsMoved(paras, pass);
+      if (!moved.length) break;
+      moved.forEach(function (group) {
+        group.tabs.forEach(vwUnsetTab);
+        vwLineUpInRounds([group], pass);
+      });
     }
   } catch (e) {
     /* The tabs not yet lined up stay as drawn, as when docx-preview's own pass threw */
   }
+}
+
+/* How often the page is read again after the rounds: a paragraph lined up again can move the
+   paragraphs below it past a float's edge in turn, so a pass can leave the next one more to do */
+var VW_TAB_PASSES = 4;
+
+/* The rounds: the tab at [k] of every paragraph in [paras] read, then every one of them set */
+function vwLineUpInRounds(paras, pass) {
+  for (var k = 0; paras.length; k++) {
+    var floats = pass.floats.length ? vwFloatBoxes(pass.floats) : null;
+    var plans = paras.map(function (group) {
+      var tab = group.tabs[k], para = group.p.getBoundingClientRect();
+      if (floats) {
+        tab.vwKey = vwTabKey(group.p, para, floats, null);
+        if (!tab.vwDrawn) tab.vwDrawn = { text: tab.span.textContent, style: tab.span.getAttribute("style") };
+      }
+      return vwTabPlan(tab, group.p, pass.size, pass.ratio, para);
+    });
+    plans.forEach(function (plan, i) { if (plan) vwSetTab(paras[i].tabs[k].span, plan); });
+    paras = paras.filter(function (group) { return group.tabs.length > k + 1; });
+  }
+}
+
+/* The paragraphs with a tab that no longer has beside it the floats it was read beside */
+function vwTabsMoved(paras, pass) {
+  var floats = vwFloatBoxes(pass.floats);
+  return paras.filter(function (group) {
+    var para = group.p.getBoundingClientRect();
+    return group.tabs.some(function (tab) {
+      return tab.vwKey && !vwSameKey(tab.vwKey.edges, vwTabKey(group.p, para, floats, tab.vwKey.height).edges);
+    });
+  });
+}
+
+/* A tab as docx-preview drew it, for a paragraph to be lined up again from the start */
+function vwUnsetTab(tab) {
+  if (!tab.vwDrawn) return;
+  tab.span.textContent = tab.vwDrawn.text;
+  if (tab.vwDrawn.style === null) tab.span.removeAttribute("style");
+  else tab.span.setAttribute("style", tab.vwDrawn.style);
+}
+
+/*
+ * Where each float beside paragraph [p], whose box is [para], sits against it. A float is
+ * beside it where its margin box reaches into the paragraph's, read [height] tall or as it is,
+ * so that the paragraph's own growth as its tabs are set pulls no float below it in. A float
+ * drawn after the paragraph sits below its lines, and one anchored inside it or one that holds
+ * it moves with it, so none of them counts.
+ */
+function vwTabKey(p, para, floats, height) {
+  var edges = [];
+  var bottom = para.top + (height === null ? para.height : height);
+  floats.forEach(function (f) {
+    // The overlap test goes first: it rules out nearly every float, and the tree walks cost seconds on long files
+    if (f.bottom <= para.top || f.top >= bottom) return;
+    if (f.el.contains(p) || (p.compareDocumentPosition(f.el) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+    edges.push(f.left - para.left, f.right - para.left, f.top - para.top, f.bottom - para.top);
+  });
+  return { edges: edges, height: para.height };
+}
+
+function vwSameKey(a, b) {
+  if (a.length !== b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (Math.abs(a[i] - b[i]) > VW_SLACK) return false;
+  }
+  return true;
+}
+
+/* What docx-preview floats, which it does by inline style: anchored drawings, drop caps and floating tables, with the margins a line keeps clear of too */
+function vwFloats() {
+  var floats = [], styled = document.querySelectorAll('.docx-wrapper [style*="float"]');
+  for (var i = 0; i < styled.length; i++) {
+    var style = getComputedStyle(styled[i]);
+    if (style.cssFloat === "none") continue;
+    floats.push({ el: styled[i], margins: [style.marginTop, style.marginRight, style.marginBottom, style.marginLeft].map(function (m) {
+      return parseFloat(m) || 0;
+    }) });
+  }
+  return floats;
+}
+
+function vwFloatBoxes(floats) {
+  return floats.map(function (f) {
+    var box = f.el.getBoundingClientRect(), m = f.margins;
+    return { el: f.el, top: box.top - m[0], right: box.right + m[1], bottom: box.bottom + m[2], left: box.left - m[3] };
+  });
 }
 
 /* Points to a pixel, as docx-preview reads it: 100pt over the whole pixels a div that wide takes */
@@ -341,11 +440,13 @@ var VW_TAB_LEFT = { pos: 0, leader: "none", style: "left" };
 /*
  * docx-preview's updateTabStop up to where it writes: the stop a tab reaches and the width that
  * takes it there, with the paragraph's own stops, then default stops to its width, at most 50.
- * Null for a tab past the last stop, which stays as drawn. Reads only. It differs from upstream's
- * only for a right or centred tab with nothing drawn after it.
+ * Null for a tab past the last stop, which stays as drawn. Reads only, and takes the paragraph's
+ * box as [para] where the caller has read it. It differs from upstream's only for a right or
+ * centred tab with nothing drawn after it.
  */
-function vwTabPlan(tab, p, size, ratio) {
-  var span = tab.span, box = span.getBoundingClientRect(), para = p.getBoundingClientRect();
+function vwTabPlan(tab, p, size, ratio, para) {
+  var span = tab.span, box = span.getBoundingClientRect();
+  para = para || p.getBoundingClientRect();
   var margin = parseFloat(getComputedStyle(p).marginLeft);
   var stops = tab.stops && tab.stops.length > 0 ? tab.stops.map(function (s) {
     return { pos: parseFloat(s.position), leader: s.leader, style: s.style };

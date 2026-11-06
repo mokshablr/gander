@@ -1161,6 +1161,60 @@ def word_measured_tables() -> None:
     written(target)
 
 
+def word_tabs_beside_float() -> None:
+    """
+    Tabs beside a floating picture, every line exactly 20pt. A paragraph holds only a plain
+    grey picture 1.5in wide and 1in high, anchored to the column's left with square wrap, so
+    the lines after it start beside it. Then a paragraph opens on a tab to a left stop at 5in
+    and goes on with "gauge reading" ten times, so it wraps beside the picture and grows by a
+    line once its tab is lined up. Then eight paragraphs "Label N", a tab, "Value N", each with
+    a left stop at 3in: the first of them is read beside the picture and ends up below it, and
+    its tab, lined up in a round with the paragraph above it, fell short of its stop.
+    test_docx_pages.py also remakes the file with the second paragraph at other lengths.
+    """
+    from docx.shared import Inches
+    from PIL import Image
+
+    doc = measured_base(20)
+    grey = io.BytesIO()
+    Image.new("RGB", (144, 96), (160, 160, 160)).save(grey, format="PNG")
+    grey.seek(0)
+    doc.add_picture(grey, width=Inches(1.5), height=Inches(1))
+    beside = doc.add_paragraph("\t" + " ".join(["gauge reading"] * 10))
+    beside.paragraph_format.tab_stops.add_tab_stop(Inches(5))
+    for n in range(1, 9):
+        doc.add_paragraph(f"Label {n}\tValue {n}").paragraph_format.tab_stops.add_tab_stop(Inches(3))
+    fix_core_properties(doc)
+    target = OUT / "word-tabs-beside-float.docx"
+    doc.save(str(target))
+
+    def anchor(m):
+        """The inline's namespaces, then the anchor's own placement, then the inline's picture."""
+        names = " ".join(re.findall(r'xmlns:\w+="[^"]*"', m.group(1)))
+        inside = re.sub(r"<wp:(extent|effectExtent)[^>]*/>", "", m.group(3))
+        return (
+            f'<wp:anchor {names} distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1"'
+            ' behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/>'
+            "<wp:positionH relativeFrom=\"column\"><wp:align>left</wp:align></wp:positionH>"
+            "<wp:positionV relativeFrom=\"paragraph\"><wp:posOffset>0</wp:posOffset></wp:positionV>"
+            + m.group(2) + '<wp:wrapSquare wrapText="bothSides"/>' + inside + "</wp:anchor>"
+        )
+
+    def edit(name, xml):
+        if name != "word/document.xml":
+            return xml
+        return re.sub(r"<wp:inline([^>]*)>(?:(?!</wp:inline>).)*?(<wp:extent[^>]*/>)(.*?)</wp:inline>",
+                      anchor, xml, count=1, flags=re.S)
+
+    rewrite_parts(target, edit)
+    with zipfile.ZipFile(target) as z:
+        body = z.read("word/document.xml").decode()
+    assert "<wp:inline" not in body and body.count("<wp:anchor") == 1 and "wrapSquare" in body
+    assert body.count("<w:tab/>") == 9 and "lastRenderedPageBreak" not in body
+    normalize_zip(target)
+    written(target)
+
+
 def word_colours() -> None:
     """
     Issue #47's night mode for Word: ink, a coloured heading, a colour given only by
@@ -4489,7 +4543,7 @@ def main() -> int:
     print(f"Writing fixtures into {OUT}")
     for step in (pdfs, wasm_decoded_images, docx, raised_runs, word_pages, word_columns, word_unrecorded, word_measured,
                  word_odd_even, word_measured_fit, word_measured_notes, word_measured_sections, word_measured_tails,
-                 word_measured_tables, word_colours, word_lines,
+                 word_measured_tables, word_tabs_beside_float, word_colours, word_lines,
                  cell_directions, xlsx, sheet_colours, sheet_layout, pptx,
                  without_app_properties, freeforms, straight_lines, wrapping, weights, inherited_bold, line_breaks, unwrapped,
                  symbol_bullets, placed_by_design, unsized, unreadable, charted, undrawn, grounds, relatives, texts, images, audio,

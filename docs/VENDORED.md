@@ -119,7 +119,8 @@ twice, docxjs#233, and the page-number fields), `splitBySection`, `groupByPageBr
 `createPageElement`, `renderHeaderFooter`, `renderParagraph` and `renderTableRow` (Word's own
 pages, issue #47), `renderText` and `createSectionContent` (measured pages, issue #55),
 `refreshTabStops` (tabs lined up when Gander says, not on docx-preview's timer, with the page
-laid out once for each tab a paragraph holds rather than once a tab), `renderFootnoteReference`
+laid out once for each tab a paragraph holds rather than once a tab, and again, a tab at a
+time, for the paragraphs a float moved), `renderFootnoteReference`
 and `renderNotes` (footnotes numbered through the document, each listed once), `styleToString`
 (lines as Word sets them), and `renderTableCell` (a cell whose text direction is `lrTb`, Word's
 plain left-to-right text, drawn on its side). They call two more as they are: `findStyle`, for
@@ -140,10 +141,15 @@ The tab pass is upstream's, copied. `vwTabPlan` and `vwSetTab` in `docx-pages.js
 how a tab is lined up has to be copied by hand. The copy makes one change: a right or centred
 tab with nothing drawn after it, as at the end of a contents line, is placed from its own end
 and never narrower than nothing, where upstream read the empty range after it as a box at the
-page's left edge and drew the tab past its line. The replacement reads the renderer's `currentTabs`, each with its `span` and its
-paragraph's `stops`, each stop's `position`, `leader` and `style`, and `defaultTabSize`.
-`test_docx_pages.py` fails if the copy and upstream's pass line up a file's other tabs
-differently.
+page's left edge and drew the tab past its line. The copy also reads in a different order:
+upstream reads each tab after every tab before it is set, where `vwLineUpTabs` reads one tab
+of every paragraph before any moves, so where the page holds a float, beside which a paragraph's
+growth moves the lines below it, it reads the page once more after its rounds and lines up the
+paragraphs the float moved one at a time, as upstream reads them. The replacement reads the renderer's `currentTabs`,
+each with its `span` and its paragraph's `stops`, each stop's `position`, `leader` and `style`,
+and `defaultTabSize`, and finds what upstream floats by the inline `float` it sets on an
+anchored drawing, a drop cap and a floating table. `test_docx_pages.py` fails if the copy and
+upstream's pass line up a file's other tabs differently, beside a float too.
 
 Two of them lean on how upstream's work inside. `renderNotes(ids, map)` lists the notes of
 `ids` that `map` holds, in that order, returns the list for its caller to add, and is told

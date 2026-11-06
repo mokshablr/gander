@@ -382,15 +382,16 @@ function vwUnsetTab(tab) {
  * Where each float beside paragraph [p], whose box is [para], sits against it. A float is
  * beside it where its margin box reaches into the paragraph's, read [height] tall or as it is,
  * so that the paragraph's own growth as its tabs are set pulls no float below it in. A float
- * drawn after the paragraph never sits beside its lines, and one that holds it moves with it,
- * so neither counts.
+ * drawn after the paragraph sits below its lines, and one anchored inside it or one that holds
+ * it moves with it, so none of them counts.
  */
 function vwTabKey(p, para, floats, height) {
   var edges = [];
   var bottom = para.top + (height === null ? para.height : height);
   floats.forEach(function (f) {
-    if (f.el.contains(p) || (p.compareDocumentPosition(f.el) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+    // The overlap test goes first: it rules out nearly every float, and the tree walks cost seconds on long files
     if (f.bottom <= para.top || f.top >= bottom) return;
+    if (f.el.contains(p) || (p.compareDocumentPosition(f.el) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
     edges.push(f.left - para.left, f.right - para.left, f.top - para.top, f.bottom - para.top);
   });
   return { edges: edges, height: para.height };

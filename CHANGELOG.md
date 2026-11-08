@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.9 (2026-11-08)
 
 - A photo opened from a folder you added in Gander swipes to the folder's other photos, in the
   order you sorted the folder in Gander, by name, date or size, and a readout says which photo of

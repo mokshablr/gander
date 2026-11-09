@@ -32,12 +32,48 @@ internal sealed interface Row {
          */
         val onRemove: ((kept: () -> Unit) -> Unit)? = null,
         val thumbUri: Uri? = null,
-        val thumbExt: String = ""
+        val thumbExt: String = "",
+        /**
+         * What the row goes by while rows are picked to delete together, issue #75: a photo's
+         * address. Null for a row that can't be picked.
+         */
+        val pickKey: String? = null
     ) : Row
 }
 
 internal class RowAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     private val rows = mutableListOf<Row>()
+
+    /**
+     * The rows picked, by [Row.Item.pickKey], while rows are being picked to delete together,
+     * and null while a tap on a row opens it. Issue #75.
+     */
+    private var picked: Set<String>? = null
+
+    /**
+     * A row that can be picked was tapped while rows are being picked, or [held] down, which is
+     * how picking starts, and picks or lets go like a tap once it has.
+     */
+    var onPick: (key: String, held: Boolean) -> Unit = { _, _ -> }
+
+    /** Draws the rows for [now] being picked, or for none being, touching only the rows it changes. */
+    fun pick(now: Set<String>?) {
+        val before = picked
+        picked = now?.toSet()
+        if ((before == null) != (now == null)) {
+            // Every row changes: the ones that can be picked gain or lose their mark, the rest dim or clear
+            notifyItemRangeChanged(0, rows.size, PICK)
+            return
+        }
+        if (before == null || now == null) return
+        rows.forEachIndexed { at, row ->
+            val key = (row as? Row.Item)?.pickKey ?: return@forEachIndexed
+            if ((key in before) != (key in now)) notifyItemChanged(at, PICK)
+        }
+    }
+
+    /** What can be picked among the rows on screen. */
+    val pickable: Set<String> get() = rows.mapNotNullTo(LinkedHashSet()) { (it as? Row.Item)?.pickKey }
 
     fun submit(newRows: List<Row>) {
         rows.clear()
@@ -83,6 +119,49 @@ internal class RowAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     override fun getItemCount(): Int = rows.size
 
+    /** A change to what is picked redraws a row's mark and leaves its thumbnail alone. */
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int, payloads: MutableList<Any>) {
+        val row = rows[position]
+        if (payloads.isNotEmpty() && row is Row.Item) bindPick(holder.itemView, row) else onBindViewHolder(holder, position)
+    }
+
+    /**
+     * How a row looks and answers a tap for what is being picked. While rows are picked, a tap
+     * on one that can be picks it or lets it go, and the rest stand back, dimmed, and open
+     * nothing. Otherwise a tap opens the row. Holding one that can be picked starts picking, and
+     * does what a tap does once picking has started.
+     */
+    private fun bindPick(view: View, row: Row.Item) {
+        val picking = picked
+        val key = row.pickKey
+        val mark = view.findViewById<ImageView>(R.id.pick)
+        mark.visibility = if (picking != null && key != null) View.VISIBLE else View.GONE
+        if (picking != null && key != null) {
+            mark.setImageResource(if (key in picking) R.drawable.ic_pick_on else R.drawable.ic_pick_off)
+        }
+        view.alpha = if (picking != null && key == null) DIMMED else 1f
+        ViewCompat.setStateDescription(
+            view,
+            if (picking == null || key == null) null
+            else view.context.getString(if (key in picking) R.string.selected else R.string.not_selected)
+        )
+        view.setOnClickListener {
+            when {
+                picked == null -> row.onClick()
+                key != null -> onPick(key, false)
+            }
+        }
+        if (key == null) {
+            view.setOnLongClickListener(null)
+            view.isLongClickable = false
+        } else {
+            view.setOnLongClickListener {
+                onPick(key, true)
+                true
+            }
+        }
+    }
+
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         when (val row = rows[position]) {
             is Row.Header ->
@@ -112,7 +191,7 @@ internal class RowAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 // is hidden once a thumbnail loads, and the file type would go with it
                 holder.itemView.contentDescription =
                     listOfNotNull(row.title, row.badge, row.subtitle).joinToString(", ")
-                holder.itemView.setOnClickListener { row.onClick() }
+                bindPick(holder.itemView, row)
                 // A swipe is how a row is removed, and nothing on screen says so, nor can a
                 // screen reader make one. So TalkBack is offered Remove among the row's
                 // actions, as dismiss, the action a view that can be swiped away has, and
@@ -125,5 +204,13 @@ internal class RowAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 )
             }
         }
+    }
+
+    private companion object {
+        /** Tells a row only what is picked has changed. */
+        val PICK = Any()
+
+        /** A row that can't be picked while others are, as Material dims what can't be used. */
+        const val DIMMED = 0.38f
     }
 }

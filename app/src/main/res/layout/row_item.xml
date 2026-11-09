@@ -64,4 +64,14 @@
             android:textAppearance="?attr/textAppearanceBodySmall"
             android:textColor="?attr/colorOnSurfaceVariant" />
     </LinearLayout>
+
+    <!-- Shown while a folder's photos are being picked, on the rows that can be: ticked or
+         empty. The row says which to a screen reader, so this is for the eye. -->
+    <ImageView
+        android:id="@+id/pick"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginStart="12dp"
+        android:importantForAccessibility="no"
+        android:visibility="gone" />
 </LinearLayout>

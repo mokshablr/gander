@@ -185,6 +185,29 @@
     <string name="delete_photo">Delete</string>
     <string name="photo_trashed">Moved to the bin</string>
     <string name="photo_not_trashed">The photo could not be moved to the bin</string>
+    <!-- Picking several of a folder's photos to delete together, in the viewer or the folder's
+         list, since Android's one prompt then covers them all. Asked for on issue #75, where
+         its prompt for every photo was hundreds of extra taps. -->
+    <string name="select_photos">Select photos</string>
+    <plurals name="photos_selected">
+        <item quantity="one">%d selected</item>
+        <item quantity="other">%d selected</item>
+    </plurals>
+    <string name="select_photo">Select this photo</string>
+    <string name="unselect_photo">Unselect this photo</string>
+    <string name="stop_selecting">Stop selecting</string>
+    <string name="selected">Selected</string>
+    <string name="not_selected">Not selected</string>
+    <plurals name="photos_trashed">
+        <item quantity="one">%d photo moved to the bin</item>
+        <item quantity="other">%d photos moved to the bin</item>
+    </plurals>
+    <plurals name="photos_not_trashed">
+        <item quantity="one">%d photo could not be moved to the bin</item>
+        <item quantity="other">%d photos could not be moved to the bin</item>
+    </plurals>
+    <!-- Some went and some stayed: the two sentences above, one after the other. -->
+    <string name="photos_trashed_some">%1$s. %2$s</string>
     <!-- Turns the photo on screen a quarter turn clockwise, to look at. The file stays as it is. -->
     <string name="rotate_photo">Rotate</string>
     <string name="print">Print</string>

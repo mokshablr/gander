@@ -102,24 +102,30 @@ internal class PhotoPager(
     }
 
     /**
-     * Takes [photo] out once Android has moved it to its trash, and shows the photo after it, or
-     * the one before where it was the last. False where it was the only photo, or isn't here,
-     * which leaves nothing to show.
+     * Takes [gone] out once Android has moved them to its trash. The photo on screen stays if it
+     * wasn't one of them, and otherwise the photo after it shows, or the one before where it was
+     * the last. False where that would leave no photo to show, and then nothing is taken out.
      */
-    fun drop(photo: Uri): Boolean {
-        val docId = DocumentsContract.getDocumentId(photo)
-        val at = photos.indexOfFirst { it.docId == docId }
-        if (at < 0 || photos.size < 2) return false
-        photos = photos.filterIndexed { i, _ -> i != at }
-        pages.notifyItemRemoved(at)
-        // The photo after it takes its number, so no page change comes to name it, or to play
-        // it if it moves
+    fun drop(gone: Collection<Uri>): Boolean {
+        val docIds = gone.mapTo(HashSet(), DocumentsContract::getDocumentId)
+        if (photos.all { it.docId in docIds }) return false
+        // From the end, so the numbers of the ones still to go hold
+        for (at in photos.indices.reversed()) {
+            if (photos[at].docId !in docIds) continue
+            photos = photos.filterIndexed { i, _ -> i != at }
+            pages.notifyItemRemoved(at)
+        }
+        // A photo that takes the place of one that went takes its number too, so no page change
+        // comes to name it, or to play it if it moves
         view.post {
             announce(view.currentItem)
             settle()
         }
         return true
     }
+
+    /** Says again which photo is on screen, for a title bar that was showing something else. */
+    fun announce() = announce(view.currentItem)
 
     private fun uriOf(photo: ChildDoc): Uri = DocumentsContract.buildDocumentUriUsingTree(opened, photo.docId)
 
@@ -248,10 +254,13 @@ internal fun photosAround(
 
 /** The pictures in a folder's listing, in the order the home screen shows them. */
 internal fun photosIn(children: List<ChildDoc>, sortOrder: Settings.SortOrder): List<ChildDoc> =
-    orderChildren(children, sortOrder).second.filter {
-        val kind = FileKind.detect(it.name.substringAfterLast('.', "").lowercase(), it.mime.ifEmpty { null })
-        kind == FileKind.IMAGE || kind == FileKind.IMAGE_WEB
-    }
+    orderChildren(children, sortOrder).second.filter { it.isPhoto() }
+
+/** Whether a folder's entry is a picture: one the viewer swipes to, and the home screen's list lets be picked. */
+internal fun ChildDoc.isPhoto(): Boolean {
+    val kind = FileKind.detect(name.substringAfterLast('.', "").lowercase(), mime.ifEmpty { null })
+    return kind == FileKind.IMAGE || kind == FileKind.IMAGE_WEB
+}
 
 /**
  * Whether the picture at [uri] moves, which of the formats the tiling view draws only a WebP or a

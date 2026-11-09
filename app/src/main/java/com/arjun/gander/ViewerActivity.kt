@@ -1,7 +1,6 @@
 package com.arjun.gander
 
 import android.annotation.SuppressLint
-import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -45,8 +44,6 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.result.IntentSenderRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AlertDialog
@@ -56,6 +53,8 @@ import androidx.core.content.IntentCompat
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.children
+import androidx.core.view.forEach
 import androidx.lifecycle.Lifecycle
 import androidx.webkit.WebMessageCompat
 import androidx.webkit.WebMessagePortCompat
@@ -67,6 +66,7 @@ import com.arjun.gander.FileKind.Companion.detect
 import com.davemorrissey.labs.subscaleview.ImageSource
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.progressindicator.LinearProgressIndicator
 import java.io.File
 import java.io.InputStream
 import java.util.concurrent.Executors
@@ -87,7 +87,10 @@ open class ViewerActivity : AppCompatActivity() {
         private const val STATE_ARCHIVE_CODE_PAGE = "archive_code_page"
         private const val STATE_SIMPLE_VIEW = "simple_view"
         private const val STATE_PHOTO = "photo"
-        private const val STATE_TRASHING = "trashing"
+        private const val STATE_PICKED = "picked"
+
+        /** A button that can't be pressed, as Material dims one: 38 parts in a hundred. */
+        private const val DISABLED_ALPHA = 97
         private const val STATE_TURNS = "turns"
 
         /**
@@ -202,14 +205,23 @@ open class ViewerActivity : AppCompatActivity() {
         if (dest != null && src != null) copier.copy(src, dest)
     }
 
-    /**
-     * The photo Android's prompt was opened for, kept across the viewer being made again while the
-     * prompt is up, since the answer comes back without it.
-     */
-    private var trashing: Uri? = null
+    /** Android's prompt to move photos to its trash. See PhotoTrash.kt. */
+    private val bin = TrashPrompt(this, object : TrashPrompt.Worker {
+        override fun <T> offMain(then: (T) -> Unit, ask: (Context) -> T) = this@ViewerActivity.offMain(then, ask)
+    }, ::trashed, ::binBusy)
 
-    /** While the prompt is being got ready, when a second tap on Delete does nothing. */
-    private var askingToTrash = false
+    /**
+     * The photos picked to delete together, by address, while the title bar is given over to
+     * picking them, and null while it isn't. Android's one prompt then covers them all, where
+     * Delete alone brings it up for each photo. Issue #75.
+     */
+    private var picked: MutableSet<String>? = null
+
+    /** The photos picked before the viewer was made again, taken up once the folder is read. */
+    private var pickedBefore: List<String>? = null
+
+    /** What the title bar's menu showed before it was given over to picking, to put back. */
+    private var shownBeforePicking = emptyList<Int>()
 
     /**
      * Whether the folder around a photo has been read. Delete waits for it, since a photo deleted
@@ -233,13 +245,6 @@ open class ViewerActivity : AppCompatActivity() {
     /** Rotate, offered for a photo the tiling view draws. */
     private var rotateItem: MenuItem? = null
 
-    private val trashPrompt = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
-        val photo = trashing ?: return@registerForActivityResult
-        trashing = null
-        // A no moves nothing and needs no word
-        if (it.resultCode == RESULT_OK) afterTrashPrompt(photo)
-    }
-
     /**
      * The picker outlives the activity if Android reclaims the process while it is
      * open, and the callback is handed the destination but never the source, so
@@ -253,7 +258,8 @@ open class ViewerActivity : AppCompatActivity() {
         playerScreen?.save(outState)
         outState.putBoolean(STATE_SIMPLE_VIEW, simpleAsked)
         photoPager?.let { outState.putString(STATE_PHOTO, it.shown.toString()) }
-        outState.putString(STATE_TRASHING, trashing?.toString())
+        bin.save(outState)
+        picked?.let { outState.putStringArrayList(STATE_PICKED, ArrayList(it)) }
         outState.putBundle(STATE_TURNS, Bundle().apply { turns.forEach { (photo, turn) -> putInt(photo, turn) } })
     }
 
@@ -264,17 +270,20 @@ open class ViewerActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, searchBackCallback)
         // After the search bar's, so it is asked first: what it closes is over the whole page
         onBackPressedDispatcher.addCallback(this, coverBackCallback)
+        onBackPressedDispatcher.addCallback(this, pickBackCallback)
         pageIndicator.setOnClickListener { askForPage() }
 
         copySource = savedInstanceState?.getString(STATE_COPY_SOURCE)?.let(Uri::parse)
-        trashing = savedInstanceState?.getString(STATE_TRASHING)?.toUri()
+        bin.restore(savedInstanceState)
+        pickedBefore = savedInstanceState?.getStringArrayList(STATE_PICKED)
         simpleAsked = savedInstanceState?.getBoolean(STATE_SIMPLE_VIEW) == true
         savedInstanceState?.getBundle(STATE_TURNS)?.let { saved ->
             saved.keySet().forEach { photo -> turns[photo] = saved.getInt(photo) }
         }
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
-        toolbar.setNavigationOnClickListener { finish() }
+        // The cross it shows while photos are picked ends the picking, and the arrow leaves
+        toolbar.setNavigationOnClickListener { if (picked != null) stopPicking() else finish() }
         val container = findViewById<FrameLayout>(R.id.container)
 
         // Files arrive via VIEW (data), the share sheet (EXTRA_STREAM), a plain path extra
@@ -516,53 +525,138 @@ open class ViewerActivity : AppCompatActivity() {
 
         // Only among a folder's photos, where photos are gone through one after another to keep
         // or delete. A photo from Recents would leave its entry behind.
+        val deletable = photoPager != null && photosListed && mayTrash(uri)
         toolbar.menu.findItem(R.id.action_delete).apply {
-            isVisible = photoPager != null && photosListed && mayTrash(uri)
+            isVisible = deletable
             setOnMenuItemClickListener {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) askToTrash(uri)
                 true
             }
         }
+        // And picking several to delete together, where there is more than one
+        toolbar.menu.findItem(R.id.action_select).apply {
+            isVisible = deletable && (photoPager?.count ?: 0) > 1
+            setOnMenuItemClickListener {
+                pickPhotos(emptyList())
+                true
+            }
+        }
+        toolbar.menu.findItem(R.id.action_pick).setOnMenuItemClickListener {
+            pickOrLetGo(uri)
+            true
+        }
     }
 
     /**
-     * Asks Android to move [photo] to its trash, which it does once the person says yes in its own
-     * prompt. See PhotoTrash.kt.
+     * Asks Android to move the photo on screen to its trash, or the photos picked while photos
+     * are being picked, which it does once the person says yes in its own prompt. See
+     * PhotoTrash.kt.
      */
     @RequiresApi(Build.VERSION_CODES.R)
     private fun askToTrash(photo: Uri) {
-        if (askingToTrash || trashing != null) return
-        askingToTrash = true
-        offMain({ request: PendingIntent? ->
-            askingToTrash = false
+        val picking = picked?.toList()
+        if (picking == null) {
             // Swiped on or left while the prompt was got ready, it would ask about a photo off screen
-            if (!showing(photo)) return@offMain
-            if (request == null) return@offMain cantTrash()
-            trashing = photo
-            runCatching { trashPrompt.launch(IntentSenderRequest.Builder(request).build()) }.onFailure {
-                trashing = null
-                cantTrash()
-            }
-        }) { app -> trashRequest(app, photo) }
+            bin.ask(listOf(photo)) { showing(photo) }
+        } else {
+            // Or about photos picked or let go since
+            bin.ask(picking.map { it.toUri() }) { inFront() && picked?.toList() == picking }
+        }
     }
 
     /**
-     * After a yes in Android's prompt, the photo leaves the viewer once it has left its folder.
+     * After a yes in Android's prompt, the photos that have left their folder leave the viewer.
      * The viewer closes where nothing is left to show: after the only photo, or when it was made
-     * again while the prompt was up, around the photo that has now gone.
+     * again while the prompt was up, around a photo that has now gone.
      */
-    private fun afterTrashPrompt(photo: Uri) = offMain({ there: Boolean ->
-        if (there) return@offMain cantTrash()
-        Toast.makeText(this, R.string.photo_trashed, Toast.LENGTH_SHORT).show()
-        if (photoPager?.drop(photo) != true) finish()
-    }) { app -> stillThere(app.contentResolver, photo) }
+    private fun trashed(gone: List<Uri>, stayed: List<Uri>) {
+        Toast.makeText(this, trashWord(this, gone.size, stayed.size), Toast.LENGTH_SHORT).show()
+        if (gone.isEmpty()) return
+        // What was picked has been dealt with, as far as it could be
+        pickedBefore = null
+        if (picked != null) stopPicking()
+        if (photoPager?.drop(gone) != true) finish()
+    }
 
-    private fun cantTrash() = Toast.makeText(this, R.string.photo_not_trashed, Toast.LENGTH_SHORT).show()
+    /**
+     * The bar under the title bar runs while Android's prompt is got ready or its answer looked
+     * into. Left alone while a copy is being saved, whose bar it is first.
+     */
+    private fun binBusy(busy: Boolean) {
+        if (copier.saving) return
+        findViewById<LinearProgressIndicator>(R.id.saveProgress).apply {
+            // Set while out of sight, the only time the bar lets its kind be changed
+            if (busy) isIndeterminate = true
+            visibility = if (busy) View.VISIBLE else View.GONE
+        }
+    }
+
+    private fun inFront() = !isFinishing && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
 
     /** Whether [photo] is the one on screen, with the viewer in front. */
     private fun showing(photo: Uri): Boolean =
-        !isFinishing && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) &&
-            photoPager?.shown?.let(DocumentsContract::getDocumentId) == DocumentsContract.getDocumentId(photo)
+        inFront() && photoPager?.shown?.let(DocumentsContract::getDocumentId) == DocumentsContract.getDocumentId(photo)
+
+    /**
+     * Gives the title bar over to picking photos to delete together, starting with [photos]: it
+     * says how many are picked, and holds a button that picks the photo on screen or lets it go,
+     * and Delete, which then asks about all of them. Swiping goes on as before. Back, or the
+     * bar's cross, ends it.
+     */
+    private fun pickPhotos(photos: List<String>) {
+        val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
+        if (picked == null) shownBeforePicking = toolbar.menu.children.filter { it.isVisible }.map { it.itemId }.toList()
+        picked = LinkedHashSet(photos)
+        pickBackCallback.isEnabled = true
+        // Up, if a tap had put the bars away, since what picks a photo is in one of them
+        pictureChrome?.show(true)
+        drawPicking()
+    }
+
+    private fun pickOrLetGo(photo: Uri) {
+        val picking = picked ?: return
+        val key = photo.toString()
+        if (!picking.remove(key)) picking += key
+        drawPicking()
+    }
+
+    /** The title bar back to the photo on screen, with nothing picked any more. */
+    private fun stopPicking() {
+        picked = null
+        pickBackCallback.isEnabled = false
+        val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
+        toolbar.setNavigationIcon(R.drawable.ic_back)
+        toolbar.setNavigationContentDescription(R.string.back)
+        toolbar.menu.forEach { it.isVisible = it.itemId in shownBeforePicking }
+        toolbar.menu.findItem(R.id.action_delete).apply {
+            isEnabled = true
+            icon?.alpha = 255
+        }
+        // The name of the photo on screen now, and its own Delete, Rotate and the rest
+        photoPager?.announce()
+    }
+
+    /** The title bar while photos are picked, drawn again as one is picked, let go or swiped to. */
+    private fun drawPicking() {
+        val picking = picked ?: return
+        val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
+        toolbar.title =
+            if (picking.isEmpty()) getString(R.string.select_photos)
+            else resources.getQuantityString(R.plurals.photos_selected, picking.size, picking.size)
+        toolbar.setNavigationIcon(R.drawable.ic_close)
+        toolbar.setNavigationContentDescription(R.string.stop_selecting)
+        toolbar.menu.forEach { it.isVisible = it.itemId == R.id.action_pick || it.itemId == R.id.action_delete }
+        val on = photoPager?.shown?.toString() in picking
+        toolbar.menu.findItem(R.id.action_pick).apply {
+            setIcon(if (on) R.drawable.ic_pick_on else R.drawable.ic_pick_off)
+            setTitle(if (on) R.string.unselect_photo else R.string.select_photo)
+        }
+        // Delete has nothing to ask about until a photo is picked
+        toolbar.menu.findItem(R.id.action_delete).apply {
+            isEnabled = picking.isNotEmpty()
+            icon?.alpha = if (picking.isEmpty()) DISABLED_ALPHA else 255
+        }
+    }
 
     /**
      * Turning a document's pages over for reading in the dark: a PDF's since issue #19,
@@ -739,6 +833,11 @@ open class ViewerActivity : AppCompatActivity() {
      */
     private val searchBackCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() = closeSearchBar()
+    }
+
+    /** Back while photos are being picked ends the picking, and the viewer stays. */
+    private val pickBackCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() = stopPicking()
     }
 
     /**
@@ -1738,7 +1837,8 @@ open class ViewerActivity : AppCompatActivity() {
 
     /** Rotate goes with the tiling view: a picture that moves, or one it can't draw, is drawn by a page. */
     private fun updateRotate() {
-        rotateItem?.isVisible = stillOnScreen() != null
+        // Not while photos are picked, when the title bar holds only what picks and deletes them
+        rotateItem?.isVisible = picked == null && stillOnScreen() != null
     }
 
     /** The photo on screen a quarter turn on, clockwise, and kept that way for when it is shown again. */
@@ -1767,7 +1867,10 @@ open class ViewerActivity : AppCompatActivity() {
             // the page has gone, taking the folder's photos with it.
             if (pager.view.parent != null) {
                 findViewById<MaterialToolbar>(R.id.toolbar).menu.findItem(R.id.action_delete).isVisible = mayTrash(pager.shown)
+                // And the photos that were being picked when the viewer was made again
+                pickedBefore?.let(::pickPhotos)
             }
+            pickedBefore = null
         }) { app -> photosAround(app.contentResolver, uri, Settings.sortOrder(app)) }
     }
 
@@ -1796,6 +1899,8 @@ open class ViewerActivity : AppCompatActivity() {
             showPageIndicator()
             // One photo left after a delete, which has no count to show
             if (of < 2) pageFader.hideNow()
+            // The bar stays given over to picking, and its button says whether this photo is picked
+            drawPicking()
         }
     }
 
@@ -2144,8 +2249,12 @@ open class ViewerActivity : AppCompatActivity() {
         goneMenu.findItem(R.id.action_night_mode)?.isVisible = false
         // And Print, which has no document to print until Reload brings it back
         goneMenu.findItem(R.id.action_print)?.isVisible = false
-        // And Delete, whose photos were in the page that has gone, which a moving one plays in
+        // And Delete, whose photos were in the page that has gone, which a moving one plays in,
+        // with the picking of several of them
+        if (picked != null) stopPicking()
+        pickedBefore = null
         goneMenu.findItem(R.id.action_delete)?.isVisible = false
+        goneMenu.findItem(R.id.action_select)?.isVisible = false
         // A book's two speak to the page that has gone as well: Contents would do nothing,
         // and Text size would change the stored size with nothing on screen to show for it.
         // Its page can no longer answer Back either.

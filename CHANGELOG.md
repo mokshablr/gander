@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Several photos in a folder you added in Gander can be deleted together, with one prompt from
+  Android for all of them, where each photo brought the prompt up again (#75, thanks @0xlne).
+  In the folder's list, hold a photo down to start selecting, or use Select photos in the menu,
+  then tap the photos to delete and the bin in the title bar. In the viewer, Select photos in the
+  menu turns the title bar into a count with a button that selects the photo on screen, so you
+  can swipe through a folder selecting as you go, and the bin then deletes them all. Back ends
+  selecting. As before it works from Android 11, for photos on the phone's own storage, and
+  Android keeps them in its bin for 30 days.
 - A text file saved in an older encoding, as Windows saved Chinese, Japanese, Korean, Russian
   and Western European text before UTF-8, opens in that encoding, where it came out as garbled
   characters and a large one took twice as long to show. Greek, Turkish and Central European

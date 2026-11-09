@@ -30,7 +30,7 @@ class PhotoTrashTest {
     fun thePromptIsAskedForThePhotosEntryAmongThePictures() {
         val media = FakeMediaStore.install().entry(photo, 42)
 
-        assertThat(trashRequest(context, photo)).isNotNull()
+        assertThat(trashRequest(context, listOf(photo))).isNotNull()
 
         val (asked, values) = media.trashRequests.single()
         assertThat(asked).containsExactly(MediaStore.Images.Media.getContentUri(FakeMediaStore.VOLUME, 42))
@@ -45,11 +45,38 @@ class PhotoTrashTest {
     fun aFileTheStoreDoesNotCountAsAPictureIsTurnedAwayWhereGanderCanTell() {
         val media = FakeMediaStore.install().entry(photo, 42, MediaStore.Files.FileColumns.MEDIA_TYPE_NONE)
 
-        assertThat(trashRequest(context, photo, sdk = 31)).isNull()
+        assertThat(trashRequest(context, listOf(photo), sdk = 31)).isNull()
         assertThat(media.trashRequests).isEmpty()
-        assertThat(trashRequest(context, photo, sdk = 30)).isNotNull()
+        assertThat(trashRequest(context, listOf(photo), sdk = 30)).isNotNull()
         // Nor is one the store doesn't list at all
-        assertThat(trashRequest(context, DocumentsContract.buildDocumentUriUsingTree(tree, "primary:DCIM/new.jpg")))
+        assertThat(trashRequest(context, listOf(DocumentsContract.buildDocumentUriUsingTree(tree, "primary:DCIM/new.jpg"))))
             .isNull()
+    }
+
+    /** One prompt covers every photo asked about, which is what picking many of them is for. */
+    @Test
+    fun onePromptIsAskedForEveryPhotoAndWhatIsNotAPictureIsLeftOutOfIt() {
+        val b = DocumentsContract.buildDocumentUriUsingTree(tree, "primary:DCIM/b.jpg")
+        val hidden = DocumentsContract.buildDocumentUriUsingTree(tree, "primary:DCIM/hidden.jpg")
+        val unlisted = DocumentsContract.buildDocumentUriUsingTree(tree, "primary:DCIM/new.jpg")
+        val media = FakeMediaStore.install().entry(photo, 42).entry(b, 43)
+            .entry(hidden, 44, MediaStore.Files.FileColumns.MEDIA_TYPE_NONE)
+
+        assertThat(trashRequest(context, listOf(photo, hidden, b, unlisted))).isNotNull()
+
+        assertThat(media.trashRequests.single().first).containsExactly(
+            MediaStore.Images.Media.getContentUri(FakeMediaStore.VOLUME, 42),
+            MediaStore.Images.Media.getContentUri(FakeMediaStore.VOLUME, 43),
+        ).inOrder()
+    }
+
+    /** One photo keeps the words it had, and several are counted: those that went, and those that stayed. */
+    @Test
+    fun whatIsSaidAfterwardsCountsThePhotosThatWentAndThoseThatStayed() {
+        assertThat(trashWord(context, gone = 1, stayed = 0)).isEqualTo(context.getString(R.string.photo_trashed))
+        assertThat(trashWord(context, gone = 0, stayed = 1)).isEqualTo(context.getString(R.string.photo_not_trashed))
+        assertThat(trashWord(context, gone = 3, stayed = 0)).isEqualTo("3 photos moved to the bin")
+        assertThat(trashWord(context, gone = 0, stayed = 2)).isEqualTo("2 photos could not be moved to the bin")
+        assertThat(trashWord(context, gone = 2, stayed = 1)).isEqualTo("2 photos moved to the bin. 1 photo could not be moved to the bin")
     }
 }

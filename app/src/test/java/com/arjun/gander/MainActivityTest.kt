@@ -1,11 +1,15 @@
 package com.arjun.gander
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
+import android.provider.DocumentsContract
+import android.provider.MediaStore
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -13,10 +17,12 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.google.android.material.appbar.MaterialToolbar
 import com.google.common.truth.Truth.assertThat
 import java.io.File
 import java.time.Duration
@@ -32,7 +38,9 @@ import org.junit.runner.RunWith
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowActivity
 import org.robolectric.shadows.ShadowDialog
+import org.robolectric.shadows.ShadowToast
 
 /**
  * The home screen: recents, granted folders, and the first-run explainer.
@@ -947,4 +955,311 @@ class MainActivityTest {
         assertThat(second.rowTitles()).doesNotContain("notes.txt")
         assertThat(second.rowTitles()).doesNotContain("sheet.xlsx")
     }
+
+    // ---------------------------------------------------------------
+    // Picking several of a folder's photos to delete together (#75)
+    // ---------------------------------------------------------------
+
+    private lateinit var docs: FakeDocumentsProvider
+    private lateinit var media: FakeMediaStore
+
+    private fun photoUri(tree: Uri, name: String): Uri =
+        DocumentsContract.buildDocumentUriUsingTree(tree, "primary:DCIM/$name")
+
+    /**
+     * Grants a folder on the phone's own storage, which Android's trash reaches: a folder, a PDF
+     * and three photos its media store lists as 11, 12 and 13.
+     */
+    private fun grantedPhotos(): Uri {
+        docs = FakeDocumentsProvider.install(EXTERNAL_STORAGE_AUTHORITY)
+            .folder(
+                "primary:DCIM", "DCIM",
+                ChildDoc("primary:DCIM/Trip", "Trip", MIME_DIR, 0, 0),
+                ChildDoc("primary:DCIM/a.jpg", "a.jpg", "image/jpeg", 10, 1_000),
+                ChildDoc("primary:DCIM/b.jpg", "b.jpg", "image/jpeg", 20, 2_000),
+                ChildDoc("primary:DCIM/c.png", "c.png", "image/png", 30, 3_000),
+                ChildDoc("primary:DCIM/notes.pdf", "notes.pdf", "application/pdf", 40, 4_000),
+            )
+        val tree = FakeDocumentsProvider.treeUri("primary:DCIM", EXTERNAL_STORAGE_AUTHORITY)
+        context.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        media = FakeMediaStore.install()
+        listOf("a.jpg", "b.jpg", "c.png").forEachIndexed { i, name -> media.entry(photoUri(tree, name), 11L + i) }
+        return tree
+    }
+
+    private fun ActivityController<MainActivity>.bar(): MaterialToolbar = get().findViewById(R.id.toolbar)
+
+    private fun ActivityController<MainActivity>.barTitle(): String = bar().title.toString()
+
+    /** The row titled [title], bound as the list would draw it now. */
+    private fun ActivityController<MainActivity>.boundRow(title: String): View {
+        val rv = list()
+        val adapter = rv.adapter!!
+        return (0 until adapter.itemCount).firstNotNullOf { position ->
+            val holder = adapter.createViewHolder(rv, adapter.getItemViewType(position))
+            adapter.bindViewHolder(holder, position)
+            holder.itemView.takeIf { it.findViewById<TextView>(R.id.title)?.text?.toString() == title }
+        }
+    }
+
+    /**
+     * Holds the row titled [title] down, and answers whether the row took it. A row that takes
+     * no hold isn't asked: unattached as it is here, it would look for a parent to offer a menu.
+     */
+    private fun ActivityController<MainActivity>.holdRow(title: String): Boolean {
+        val row = boundRow(title)
+        return (row.isLongClickable && row.performLongClick()).also { shadowOf(context.mainLooper).idle() }
+    }
+
+    /** What a screen reader is told of the row titled [title] while photos are picked, or null. */
+    private fun ActivityController<MainActivity>.said(title: String): String? =
+        ViewCompat.getStateDescription(boundRow(title))?.toString()
+
+    private fun ActivityController<MainActivity>.tapBin(): ShadowActivity.IntentSenderRequest? {
+        bar().menu.performIdentifierAction(R.id.action_delete, 0)
+        shadowOf(context.mainLooper).idle()
+        return shadowOf(get()).lastIntentSenderRequest
+    }
+
+    private fun ActivityController<MainActivity>.answer(prompt: ShadowActivity.IntentSenderRequest, result: Int) {
+        assertThat(get().activityResultRegistry.dispatchResult(prompt.requestCode, result, null)).isTrue()
+        shadowOf(context.mainLooper).idle()
+    }
+
+    private fun picture(id: Long): Uri = MediaStore.Images.Media.getContentUri(FakeMediaStore.VOLUME, id)
+
+    private val selected get() = context.getString(R.string.selected)
+    private val notSelected get() = context.getString(R.string.not_selected)
+
+    @Test
+    fun holdingAPhotoStartsPickingAndTapsPickMoreOrLetGo() {
+        grantedPhotos()
+        val controller = home()
+        controller.clickRow("DCIM")
+        assertThat(controller.said("a.jpg")).isNull()
+        assertThat(controller.boundRow("a.jpg").findViewById<View>(R.id.pick).visibility).isEqualTo(View.GONE)
+
+        assertThat(controller.holdRow("a.jpg")).isTrue()
+
+        assertThat(controller.barTitle()).isEqualTo("1 selected")
+        assertThat(controller.said("a.jpg")).isEqualTo(selected)
+        assertThat(controller.said("b.jpg")).isEqualTo(notSelected)
+        assertThat(controller.boundRow("b.jpg").findViewById<View>(R.id.pick).visibility).isEqualTo(View.VISIBLE)
+        assertThat(controller.bar().navigationContentDescription).isEqualTo(context.getString(R.string.stop_selecting))
+        assertThat(controller.bar().menu.findItem(R.id.action_delete).isVisible).isTrue()
+        assertThat(controller.bar().menu.findItem(R.id.action_sort).isVisible).isFalse()
+        assertThat(controller.bar().menu.findItem(R.id.action_filter).isVisible).isFalse()
+        assertThat(controller.bar().menu.findItem(R.id.action_select).isVisible).isFalse()
+        // Open a file would leave the photos picked behind
+        assertThat(controller.get().findViewById<View>(R.id.openFab).visibility).isNotEqualTo(View.VISIBLE)
+
+        controller.clickRow("c.png")
+        assertThat(controller.barTitle()).isEqualTo("2 selected")
+        assertThat(controller.said("c.png")).isEqualTo(selected)
+        controller.clickRow("a.jpg")
+        assertThat(controller.barTitle()).isEqualTo("1 selected")
+        assertThat(controller.said("a.jpg")).isEqualTo(notSelected)
+        // Held down once picking has started, a photo is picked or let go as by a tap
+        assertThat(controller.holdRow("b.jpg")).isTrue()
+        assertThat(controller.barTitle()).isEqualTo("2 selected")
+        assertThat(controller.said("b.jpg")).isEqualTo(selected)
+        controller.holdRow("b.jpg")
+        assertThat(controller.barTitle()).isEqualTo("1 selected")
+        // And no viewer opened for any of the taps
+        assertThat(shadowOf(controller.get()).nextStartedActivity).isNull()
+    }
+
+    /** What can't be picked stands back while photos are: it shows no mark, and a tap on it goes nowhere. */
+    @Test
+    fun whatIsNotAPhotoStandsBackWhilePhotosArePicked() {
+        grantedPhotos()
+        val controller = home()
+        controller.clickRow("DCIM")
+        // Holding one down starts nothing
+        assertThat(controller.holdRow("notes.pdf")).isFalse()
+        assertThat(controller.holdRow("Trip")).isFalse()
+        assertThat(controller.barTitle()).isEqualTo("DCIM")
+        assertThat(controller.boundRow("notes.pdf").alpha).isEqualTo(1f)
+        controller.holdRow("b.jpg")
+
+        for (row in listOf("notes.pdf", "Trip")) {
+            assertThat(controller.boundRow(row).alpha).isLessThan(0.5f)
+            assertThat(controller.boundRow(row).findViewById<View>(R.id.pick).visibility).isEqualTo(View.GONE)
+            assertThat(controller.said(row)).isNull()
+            controller.clickRow(row)
+        }
+        assertThat(controller.boundRow("a.jpg").alpha).isEqualTo(1f)
+
+        assertThat(shadowOf(controller.get()).nextStartedActivity).isNull()
+        assertThat(controller.barTitle()).isEqualTo("1 selected")
+        assertThat(controller.rowTitles()).contains("notes.pdf")
+    }
+
+    @Test
+    fun thePhotosPickedGoToTheBinWithOnePromptAndLeaveTheList() {
+        val tree = grantedPhotos()
+        // Their small pictures, as the list keeps them, and one of a photo that stays
+        val thumbs = checkNotNull(Thumbs.folderDir(context, tree)).apply { mkdirs() }
+        fun thumb(name: String) = File(thumbs, md5(photoUri(tree, name).toString()) + ".png")
+        listOf("a.jpg", "b.jpg", "c.png").forEach { thumb(it).writeBytes(Fixtures.bytes("tiny.png")) }
+        val controller = home()
+        controller.clickRow("DCIM")
+        controller.holdRow("a.jpg")
+        controller.clickRow("c.png")
+
+        val prompt = controller.tapBin()!!
+        docs.remove("primary:DCIM/a.jpg")
+        docs.remove("primary:DCIM/c.png")
+        controller.answer(prompt, Activity.RESULT_OK)
+
+        assertThat(media.trashRequests.single().first).containsExactly(picture(11), picture(13)).inOrder()
+        assertThat(ShadowToast.getTextOfLatestToast()).isEqualTo("2 photos moved to the bin")
+        assertThat(controller.rowTitles()).containsExactly("Trip", "b.jpg", "notes.pdf").inOrder()
+        // The picking is over, and the bar is the folder's again
+        assertThat(controller.barTitle()).isEqualTo("DCIM")
+        assertThat(controller.said("b.jpg")).isNull()
+        assertThat(controller.bar().menu.findItem(R.id.action_delete).isVisible).isFalse()
+        assertThat(controller.bar().menu.findItem(R.id.action_sort).isVisible).isTrue()
+        // A photo that has gone leaves no small copy of itself behind
+        assertThat(thumb("a.jpg").exists()).isFalse()
+        assertThat(thumb("c.png").exists()).isFalse()
+        assertThat(thumb("b.jpg").exists()).isTrue()
+    }
+
+    /** A no in the prompt moves nothing, and a yes that moved nothing says so. Either way the photos stay picked. */
+    @Test
+    fun photosThatStayAreStillPicked() {
+        grantedPhotos()
+        val controller = home()
+        controller.clickRow("DCIM")
+        controller.holdRow("a.jpg")
+        controller.clickRow("b.jpg")
+
+        controller.answer(controller.tapBin()!!, Activity.RESULT_CANCELED)
+        assertThat(ShadowToast.shownToastCount()).isEqualTo(0)
+        assertThat(controller.barTitle()).isEqualTo("2 selected")
+
+        controller.answer(controller.tapBin()!!, Activity.RESULT_OK)
+        assertThat(ShadowToast.getTextOfLatestToast()).isEqualTo("2 photos could not be moved to the bin")
+        assertThat(controller.barTitle()).isEqualTo("2 selected")
+        assertThat(controller.rowTitles()).containsAtLeast("a.jpg", "b.jpg")
+    }
+
+    @Test
+    fun backEndsThePickingAndStaysInTheFolder() {
+        grantedPhotos()
+        val controller = home()
+        controller.clickRow("DCIM")
+        controller.holdRow("a.jpg")
+
+        controller.get().onBackPressedDispatcher.onBackPressed()
+        shadowOf(context.mainLooper).idle()
+
+        assertThat(controller.barTitle()).isEqualTo("DCIM")
+        assertThat(controller.said("a.jpg")).isNull()
+        assertThat(controller.bar().navigationContentDescription).isEqualTo(context.getString(R.string.back))
+        assertThat(controller.get().findViewById<View>(R.id.openFab).visibility).isEqualTo(View.VISIBLE)
+        // A tap opens a photo again
+        controller.clickRow("a.jpg")
+        assertThat(shadowOf(controller.get()).nextStartedActivity).isNotNull()
+
+        controller.get().onBackPressedDispatcher.onBackPressed()
+        shadowOf(context.mainLooper).idle()
+        assertThat(controller.rowTitles()).contains(context.getString(R.string.folders))
+    }
+
+    /** From the menu too, for whoever doesn't hold rows down: with nothing picked yet, and a bin that asks nothing. */
+    @Test
+    fun selectPhotosInTheMenuStartsPickingWithNothingPicked() {
+        grantedPhotos()
+        val controller = home()
+        assertThat(controller.bar().menu.findItem(R.id.action_select).isVisible).isFalse()
+        controller.clickRow("DCIM")
+        assertThat(controller.bar().menu.findItem(R.id.action_select).isVisible).isTrue()
+
+        controller.bar().menu.performIdentifierAction(R.id.action_select, 0)
+        shadowOf(context.mainLooper).idle()
+
+        assertThat(controller.barTitle()).isEqualTo(context.getString(R.string.select_photos))
+        assertThat(controller.said("a.jpg")).isEqualTo(notSelected)
+        assertThat(controller.bar().menu.findItem(R.id.action_delete).isEnabled).isFalse()
+        assertThat(controller.tapBin()).isNull()
+        assertThat(media.trashRequests).isEmpty()
+        controller.clickRow("b.jpg")
+        assertThat(controller.barTitle()).isEqualTo("1 selected")
+        assertThat(controller.bar().menu.findItem(R.id.action_delete).isEnabled).isTrue()
+    }
+
+    /** Only where there are photos, and Android's trash reaches them. */
+    @Test
+    fun photosCanBePickedOnlyWhereAndroidCanMoveThemToItsBin() {
+        // No photos in it
+        grantedFolder()
+        val documents = home()
+        documents.clickRow("Documents")
+        assertThat(documents.bar().menu.findItem(R.id.action_select).isVisible).isFalse()
+        assertThat(documents.holdRow("alpha.pdf")).isFalse()
+
+        // Photos, in a folder that isn't on the phone's own storage
+        FakeDocumentsProvider.install().folder("root", "Cloud", ChildDoc("p1", "a.jpg", "image/jpeg", 1, 1))
+        val cloud = home()
+        cloud.clickRow("Cloud")
+        assertThat(cloud.rowTitles()).contains("a.jpg")
+        assertThat(cloud.bar().menu.findItem(R.id.action_select).isVisible).isFalse()
+        assertThat(cloud.holdRow("a.jpg")).isFalse()
+        assertThat(cloud.barTitle()).isEqualTo("Cloud")
+    }
+
+    /** Android's trash came with Android 11, and before it there is nothing to pick photos for. */
+    @Test
+    @Config(sdk = [29])
+    fun beforeAndroid11NoPhotoCanBePicked() {
+        grantedPhotos()
+        val controller = home()
+        controller.clickRow("DCIM")
+
+        assertThat(controller.bar().menu.findItem(R.id.action_select).isVisible).isFalse()
+        assertThat(controller.holdRow("a.jpg")).isFalse()
+        assertThat(controller.barTitle()).isEqualTo("DCIM")
+    }
+
+    @Test
+    fun whatIsPickedSurvivesARotation() {
+        grantedPhotos()
+        val first = home()
+        first.clickRow("DCIM")
+        first.holdRow("a.jpg")
+        first.clickRow("c.png")
+        val state = Bundle().also { first.saveInstanceState(it) }
+
+        val second = home(state)
+
+        assertThat(second.barTitle()).isEqualTo("2 selected")
+        assertThat(second.said("a.jpg")).isEqualTo(selected)
+        assertThat(second.said("b.jpg")).isEqualTo(notSelected)
+        assertThat(second.said("c.png")).isEqualTo(selected)
+        assertThat(second.get().findViewById<View>(R.id.openFab).visibility).isNotEqualTo(View.VISIBLE)
+    }
+
+    /** A photo deleted from somewhere else while picked is picked no longer once the folder is read again. */
+    @Test
+    fun aPickedPhotoThatHasGoneFromTheFolderIsPickedNoLonger() {
+        grantedPhotos()
+        val controller = home()
+        controller.clickRow("DCIM")
+        controller.holdRow("a.jpg")
+        controller.clickRow("b.jpg")
+
+        docs.remove("primary:DCIM/a.jpg")
+        controller.pause().resume()
+        shadowOf(context.mainLooper).idle()
+
+        assertThat(controller.barTitle()).isEqualTo("1 selected")
+        val prompt = controller.tapBin()!!
+        assertThat(media.trashRequests.single().first).containsExactly(picture(12))
+        controller.answer(prompt, Activity.RESULT_CANCELED)
+    }
+
+    private fun md5(text: String): String =
+        java.security.MessageDigest.getInstance("MD5").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
 }

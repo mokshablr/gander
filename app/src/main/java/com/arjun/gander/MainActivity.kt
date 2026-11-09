@@ -25,6 +25,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
@@ -48,7 +49,10 @@ class MainActivity : AppCompatActivity() {
      * and "nothing has ever been opened" both produce no rows and only the second one
      * replaces the screen.
      */
-    private data class Screen(val rows: List<Row>, val welcome: Boolean = false)
+    private data class Screen(val rows: List<Row>, val welcome: Boolean = false) {
+        /** Whether any row is a photo that can be picked to delete. */
+        val canPick get() = rows.any { it is Row.Item && it.pickKey != null }
+    }
 
     private data class Crumb(val treeUri: Uri, val docId: String, val label: String)
 
@@ -76,6 +80,28 @@ class MainActivity : AppCompatActivity() {
 
     /** The row's URI, which is what hides it, and what removing it does. */
     private class Pending(val uri: String, val commit: () -> Unit)
+
+    /**
+     * The photos picked to delete together in the folder on screen, by address, and null while a
+     * tap on a row opens it. Picking starts by holding a photo's row, or from Select photos in
+     * the menu, and then a tap picks a photo or lets it go. Android's one prompt covers them
+     * all, where deleting in the viewer brings it up for each photo. Issue #75.
+     */
+    private var picked: MutableSet<String>? = null
+
+    /** The folder whose rows were last found to hold photos that can be picked, which is where Select photos is offered. */
+    private var pickableIn: Crumb? = null
+
+    /** Android's prompt to move photos to its trash. See PhotoTrash.kt. */
+    private val bin = TrashPrompt(this, object : TrashPrompt.Worker {
+        override fun <T> offMain(then: (T) -> Unit, ask: (Context) -> T) {
+            val app = applicationContext
+            loader.execute {
+                val answer = ask(app)
+                main.post { if (!isDestroyed) then(answer) }
+            }
+        }
+    }, ::trashed) { busy -> progress.visibility = if (busy) View.VISIBLE else View.GONE }
 
     /**
      * Where the rows are built.
@@ -112,6 +138,8 @@ class MainActivity : AppCompatActivity() {
 
     private val backCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
+            // Out of picking photos first, which leaves the reader in the folder
+            if (picked != null) return stopPicking()
             stack.removeLast()
             if (stack.isEmpty()) {
                 activeFilters.clear()
@@ -164,6 +192,8 @@ class MainActivity : AppCompatActivity() {
             when (item.itemId) {
                 R.id.action_sort -> { showSortDialog(); true }
                 R.id.action_filter -> { showFilterDialog(); true }
+                R.id.action_select -> { pick(emptySet()); true }
+                R.id.action_delete -> { askToTrash(); true }
                 R.id.action_play -> { openPlayListing(); true }
                 R.id.action_share_app -> { shareGander(); true }
                 R.id.action_about -> { showAbout(); true }
@@ -191,6 +221,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
         list.adapter = adapter
+        adapter.onPick = { key, held ->
+            val picking = picked
+            if (picking == null) {
+                if (held) pick(setOf(key))
+            } else {
+                if (!picking.remove(key)) picking += key
+                adapter.pick(picking)
+                drawBar()
+            }
+        }
         ItemTouchHelper(SwipeToRemove(this, adapter)).attachToRecyclerView(list)
 
         // Built once here rather than on every render: the nine kinds Gander opens do not
@@ -209,6 +249,9 @@ class MainActivity : AppCompatActivity() {
 
         restoreStack(savedInstanceState)
         restoreFilters(savedInstanceState)
+        picked = savedInstanceState?.getStringArrayList(STATE_PICKED)?.let(::LinkedHashSet)
+        adapter.pick(picked)
+        bin.restore(savedInstanceState)
         onBackPressedDispatcher.addCallback(this, backCallback)
     }
 
@@ -235,6 +278,8 @@ class MainActivity : AppCompatActivity() {
         outState.putStringArrayList(STATE_DOC_IDS, ArrayList(stack.map { it.docId }))
         outState.putStringArrayList(STATE_LABELS, ArrayList(stack.map { it.label }))
         outState.putStringArrayList(STATE_ACTIVE_FILTERS, ArrayList(activeFilters))
+        picked?.let { outState.putStringArrayList(STATE_PICKED, ArrayList(it)) }
+        bin.save(outState)
     }
 
     private fun restoreFilters(state: Bundle?) {
@@ -458,33 +503,7 @@ class MainActivity : AppCompatActivity() {
     private fun render() {
         val here = stack.lastOrNull()
         backCallback.isEnabled = here != null
-        // At the root the wordmark is the title, centred; inside a folder the title is the
-        // folder's name, where Android puts it, beside the back arrow. A mark is an identity
-        // and a folder name is a location, so these are two kinds of content sharing a slot
-        // rather than one element that moves.
-        toolbar.title = here?.label.orEmpty()
-        lockup.visibility = if (here == null) View.VISIBLE else View.GONE
-        toolbar.navigationIcon =
-            if (here == null) null
-            else androidx.appcompat.content.res.AppCompatResources.getDrawable(this, R.drawable.ic_back)
-        toolbar.navigationContentDescription = getString(R.string.back)
-
-        val inFolder = here != null
-        toolbar.menu.findItem(R.id.action_sort)?.isVisible = inFolder
-        toolbar.menu.findItem(R.id.action_filter)?.isVisible = inFolder
-        toolbar.menu.findItem(R.id.action_play)?.isVisible = !inFolder
-        toolbar.menu.findItem(R.id.action_share_app)?.isVisible = !inFolder
-        toolbar.menu.findItem(R.id.action_about)?.isVisible = !inFolder
-
-        val filterSummary = if (inFolder && activeFilters.isNotEmpty()) {
-            SUPPORTED_FILTER_TYPES
-                .map { it.badge }
-                .filter { it in activeFilters }
-                .joinToString(", ")
-        } else {
-            null
-        }
-        toolbar.subtitle = if (filterSummary != null) getString(R.string.filter_subtitle, filterSummary) else null
+        drawBar()
 
         val token = ++renderToken
         // Delayed rather than shown at once. Most folders come back in a few
@@ -513,10 +532,103 @@ class MainActivity : AppCompatActivity() {
                 // moved on cannot put the welcome block back over a folder they are in.
                 welcome.visibility = if (screen.welcome) View.VISIBLE else View.GONE
                 list.visibility = if (screen.welcome) View.GONE else View.VISIBLE
-                if (screen.welcome) fab.hide() else fab.show()
                 adapter.submit(screen.rows)
+                pickableIn = here.takeIf { screen.canPick }
+                // A photo picked and since gone from the folder is picked no longer, and with
+                // no photo left to pick there is nothing to go on picking
+                picked?.retainAll(adapter.pickable)
+                if (pickableIn == null) picked = null
+                adapter.pick(picked)
+                // Open a file stands down while photos are picked, when a tap on it would leave them
+                if (screen.welcome || picked != null) fab.hide() else fab.show()
+                drawBar()
             }
         }
+    }
+
+    /**
+     * The title bar for where the reader is: the wordmark at home, a folder's name inside one,
+     * and while photos are picked, how many, with a cross that ends the picking and the bin
+     * that deletes them.
+     */
+    private fun drawBar() {
+        val here = stack.lastOrNull()
+        val picking = picked
+        // At the root the wordmark is the title, centred; inside a folder the title is the
+        // folder's name, where Android puts it, beside the back arrow. A mark is an identity
+        // and a folder name is a location, so these are two kinds of content sharing a slot
+        // rather than one element that moves.
+        toolbar.title = when {
+            picking == null -> here?.label.orEmpty()
+            picking.isEmpty() -> getString(R.string.select_photos)
+            else -> resources.getQuantityString(R.plurals.photos_selected, picking.size, picking.size)
+        }
+        lockup.visibility = if (here == null) View.VISIBLE else View.GONE
+        toolbar.navigationIcon =
+            if (here == null) null
+            else androidx.appcompat.content.res.AppCompatResources.getDrawable(
+                this, if (picking != null) R.drawable.ic_close else R.drawable.ic_back
+            )
+        toolbar.navigationContentDescription =
+            getString(if (picking != null) R.string.stop_selecting else R.string.back)
+
+        val inFolder = here != null
+        toolbar.menu.findItem(R.id.action_sort)?.isVisible = inFolder && picking == null
+        toolbar.menu.findItem(R.id.action_filter)?.isVisible = inFolder && picking == null
+        toolbar.menu.findItem(R.id.action_select)?.isVisible = inFolder && picking == null && pickableIn == here
+        toolbar.menu.findItem(R.id.action_delete)?.apply {
+            isVisible = picking != null
+            // It has nothing to ask about until a photo is picked
+            isEnabled = !picking.isNullOrEmpty()
+            icon?.alpha = if (picking.isNullOrEmpty()) DISABLED_ALPHA else 255
+        }
+        toolbar.menu.findItem(R.id.action_play)?.isVisible = !inFolder
+        toolbar.menu.findItem(R.id.action_share_app)?.isVisible = !inFolder
+        toolbar.menu.findItem(R.id.action_about)?.isVisible = !inFolder
+
+        val filterSummary = if (inFolder && activeFilters.isNotEmpty()) {
+            SUPPORTED_FILTER_TYPES
+                .map { it.badge }
+                .filter { it in activeFilters }
+                .joinToString(", ")
+        } else {
+            null
+        }
+        toolbar.subtitle = if (filterSummary != null) getString(R.string.filter_subtitle, filterSummary) else null
+    }
+
+    /** Starts picking photos to delete together, with [start] picked. */
+    private fun pick(start: Set<String>) {
+        picked = LinkedHashSet(start)
+        adapter.pick(picked)
+        fab.hide()
+        drawBar()
+    }
+
+    private fun stopPicking() {
+        picked = null
+        adapter.pick(null)
+        fab.show()
+        drawBar()
+    }
+
+    /** Asks Android to move the photos picked to its trash, which it does after a yes in its own prompt. */
+    private fun askToTrash() {
+        val photos = picked?.toList().orEmpty()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        bin.ask(photos.map { it.toUri() }) {
+            // Left, or with other photos picked, while the prompt was got ready
+            !isFinishing && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && picked?.toList() == photos
+        }
+    }
+
+    /** After a yes in Android's prompt, the photos that left the folder leave the list, and the picking is over. */
+    private fun trashed(gone: List<Uri>, stayed: List<Uri>) {
+        Toast.makeText(this, trashWord(this, gone.size, stayed.size), Toast.LENGTH_SHORT).show()
+        if (gone.isEmpty()) return
+        picked = null
+        adapter.pick(null)
+        render()
     }
 
     /**
@@ -726,7 +838,9 @@ class MainActivity : AppCompatActivity() {
                 thumbUri = fileUri.takeIf {
                     Thumbs.supported(FileKind.detect(ext, f.mime), ext)
                 },
-                thumbExt = ext
+                thumbExt = ext,
+                // A photo Android can move to its bin, which is what picking is for
+                pickKey = fileUri.toString().takeIf { f.isPhoto() && mayTrash(fileUri) }
             )
         }
         if (rows.isEmpty()) {
@@ -868,5 +982,9 @@ class MainActivity : AppCompatActivity() {
         const val STATE_DOC_IDS = "stack.docIds"
         const val STATE_LABELS = "stack.labels"
         const val STATE_ACTIVE_FILTERS = "active_filters"
+        const val STATE_PICKED = "picked"
+
+        /** A button that can't be pressed, as Material dims one: 38 parts in a hundred. */
+        const val DISABLED_ALPHA = 97
     }
 }

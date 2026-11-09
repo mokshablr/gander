@@ -22,6 +22,7 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.core.content.FileProvider
 import androidx.core.content.IntentCompat
+import androidx.core.view.children
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -1773,6 +1774,276 @@ class ViewerActivityTest {
 
         assertThat(viewer.title()).isEqualTo("m.webp")
         assertThat(shadowOf(viewer.webViews().single()).lastLoadedUrl).contains("viewer/imgweb.html?name=m.webp")
+    }
+
+    // ---------------------------------------------------------------
+    // Picking several of a folder's photos to delete together (#75)
+    // ---------------------------------------------------------------
+
+    private fun ActivityController<ViewerActivity>.bar(): MaterialToolbar = get().findViewById(R.id.toolbar)
+
+    private fun ActivityController<ViewerActivity>.tap(item: Int) {
+        bar().menu.performIdentifierAction(item, 0)
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    /** What the title bar's menu offers, by id. */
+    private fun ActivityController<ViewerActivity>.offered(): List<Int> =
+        bar().menu.children.filter { it.isVisible }.map { it.itemId }.toList()
+
+    /** The arrow or the cross at the start of the title bar. */
+    private fun ActivityController<ViewerActivity>.tapStartOfBar() {
+        bar().children.filterIsInstance<android.widget.ImageButton>()
+            .single { it.contentDescription == bar().navigationContentDescription }.performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    private fun picture(id: Long): Uri = MediaStore.Images.Media.getContentUri(FakeMediaStore.VOLUME, id)
+
+    @Test
+    fun selectPhotosGivesTheTitleBarOverToPickingAndBackGivesItBack() {
+        val viewer = openedFrom(dcim(), "primary:DCIM/b.jpg")
+        val before = viewer.offered()
+        assertThat(before).containsAtLeast(R.id.action_share, R.id.action_delete, R.id.action_select)
+        assertThat(before).doesNotContain(R.id.action_pick)
+
+        viewer.tap(R.id.action_select)
+
+        assertThat(viewer.title()).isEqualTo(context.getString(R.string.select_photos))
+        assertThat(viewer.offered()).containsExactly(R.id.action_pick, R.id.action_delete)
+        assertThat(viewer.bar().navigationContentDescription).isEqualTo(context.getString(R.string.stop_selecting))
+        // Delete has nothing to ask about yet, and asks nothing
+        assertThat(viewer.deleteItem().isEnabled).isFalse()
+        assertThat(viewer.tapDelete()).isNull()
+        assertThat(media.trashRequests).isEmpty()
+
+        viewer.get().onBackPressedDispatcher.onBackPressed()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertThat(viewer.get().isFinishing).isFalse()
+        assertThat(viewer.title()).isEqualTo("b.jpg")
+        assertThat(viewer.offered()).isEqualTo(before)
+        assertThat(viewer.deleteItem().isEnabled).isTrue()
+        assertThat(viewer.bar().navigationContentDescription).isEqualTo(context.getString(R.string.back))
+    }
+
+    /** The whole point: any number of photos picked while swiping, and one prompt for them all. */
+    @Test
+    fun photosPickedWhileSwipingGoToTheBinWithOnePrompt() {
+        val viewer = openedFrom(dcim(), "primary:DCIM/a.jpg")
+        viewer.tap(R.id.action_select)
+
+        viewer.tap(R.id.action_pick)
+        assertThat(viewer.title()).isEqualTo("1 selected")
+        assertThat(viewer.bar().menu.findItem(R.id.action_pick).title).isEqualTo(context.getString(R.string.unselect_photo))
+        viewer.swipeTo(2)
+        // The bar stays given over to picking, and its button is for the photo on screen now
+        assertThat(viewer.title()).isEqualTo("1 selected")
+        assertThat(viewer.offered()).containsExactly(R.id.action_pick, R.id.action_delete)
+        assertThat(viewer.bar().menu.findItem(R.id.action_pick).title).isEqualTo(context.getString(R.string.select_photo))
+        viewer.tap(R.id.action_pick)
+        assertThat(viewer.title()).isEqualTo("2 selected")
+
+        val prompt = viewer.tapDelete()!!
+        docs.remove("primary:DCIM/a.jpg")
+        docs.remove("primary:DCIM/c.png")
+        viewer.answer(prompt, Activity.RESULT_OK)
+
+        assertThat(media.trashRequests.single().first).containsExactly(picture(11), picture(13)).inOrder()
+        assertThat(viewer.get().photoPager!!.names).containsExactly("b.jpg")
+        assertThat(viewer.title()).isEqualTo("b.jpg")
+        assertThat(ShadowToast.getTextOfLatestToast()).isEqualTo("2 photos moved to the bin")
+        // And the picking is over
+        assertThat(viewer.offered()).contains(R.id.action_share)
+        assertThat(viewer.offered()).doesNotContain(R.id.action_pick)
+        assertThat(viewer.get().isFinishing).isFalse()
+    }
+
+    @Test
+    fun aPhotoPickedTwiceIsLetGo() {
+        val viewer = openedFrom(dcim(), "primary:DCIM/b.jpg")
+        viewer.tap(R.id.action_select)
+        viewer.tap(R.id.action_pick)
+        viewer.swipeTo(0)
+        viewer.tap(R.id.action_pick)
+        assertThat(viewer.title()).isEqualTo("2 selected")
+
+        viewer.tap(R.id.action_pick)
+        assertThat(viewer.title()).isEqualTo("1 selected")
+
+        val prompt = viewer.tapDelete()!!
+        docs.remove("primary:DCIM/b.jpg")
+        viewer.answer(prompt, Activity.RESULT_OK)
+        assertThat(media.trashRequests.single().first).containsExactly(picture(12))
+        // The photo on screen wasn't among them, and stays
+        assertThat(viewer.title()).isEqualTo("a.jpg")
+        assertThat(viewer.get().photoPager!!.names).containsExactly("a.jpg", "c.png").inOrder()
+    }
+
+    /** A no in the prompt moves nothing, and what was picked is still picked to ask about again. */
+    @Test
+    fun aNoKeepsWhatWasPicked() {
+        val viewer = openedFrom(dcim(), "primary:DCIM/a.jpg")
+        viewer.tap(R.id.action_select)
+        viewer.tap(R.id.action_pick)
+
+        viewer.answer(viewer.tapDelete()!!, Activity.RESULT_CANCELED)
+
+        assertThat(viewer.title()).isEqualTo("1 selected")
+        assertThat(ShadowToast.shownToastCount()).isEqualTo(0)
+        assertThat(viewer.get().photoPager!!.names).hasSize(3)
+    }
+
+    /** A photo Android can't move is left out of the prompt, and counted apart from those that went. */
+    @Test
+    fun aPickedPhotoThatStaysIsCountedApartFromThoseThatWent() {
+        val tree = dcim()
+        media.entry(
+            DocumentsContract.buildDocumentUriUsingTree(tree, "primary:DCIM/b.jpg"), 12,
+            MediaStore.Files.FileColumns.MEDIA_TYPE_NONE
+        )
+        val viewer = openedFrom(tree, "primary:DCIM/a.jpg")
+        viewer.tap(R.id.action_select)
+        viewer.tap(R.id.action_pick)
+        viewer.swipeTo(1)
+        viewer.tap(R.id.action_pick)
+
+        val prompt = viewer.tapDelete()!!
+        docs.remove("primary:DCIM/a.jpg")
+        viewer.answer(prompt, Activity.RESULT_OK)
+
+        assertThat(media.trashRequests.single().first).containsExactly(picture(11))
+        assertThat(ShadowToast.getTextOfLatestToast()).isEqualTo("1 photo moved to the bin. 1 photo could not be moved to the bin")
+        assertThat(viewer.get().photoPager!!.names).containsExactly("b.jpg", "c.png").inOrder()
+        assertThat(viewer.title()).isEqualTo("b.jpg")
+    }
+
+    @Test
+    fun deletingEveryPhotoPickedWhenTheyAreAllThereIsClosesTheViewer() {
+        val viewer = openedFrom(dcim(), "primary:DCIM/a.jpg")
+        viewer.tap(R.id.action_select)
+        for (photo in 0..2) {
+            viewer.swipeTo(photo)
+            viewer.tap(R.id.action_pick)
+        }
+        assertThat(viewer.title()).isEqualTo("3 selected")
+
+        val prompt = viewer.tapDelete()!!
+        listOf("a.jpg", "b.jpg", "c.png").forEach { docs.remove("primary:DCIM/$it") }
+        viewer.answer(prompt, Activity.RESULT_OK)
+
+        assertThat(ShadowToast.getTextOfLatestToast()).isEqualTo("3 photos moved to the bin")
+        assertThat(viewer.get().isFinishing).isTrue()
+    }
+
+    /** A turn of the phone makes the viewer again, and it comes back still picking, with the same photos. */
+    @Test
+    fun whatIsPickedSurvivesTheViewerBeingMadeAgain() {
+        val viewer = openedFrom(dcim(), "primary:DCIM/a.jpg")
+        viewer.tap(R.id.action_select)
+        viewer.tap(R.id.action_pick)
+        viewer.swipeTo(2)
+        viewer.tap(R.id.action_pick)
+        val saved = Bundle().also { viewer.saveInstanceState(it) }
+
+        val again = closing.build(ViewerActivity::class.java, viewer.intent)
+        again.get().documentLoader = Executor { it.run() }
+        again.setup(saved)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertThat(again.title()).isEqualTo("2 selected")
+        assertThat(again.offered()).containsExactly(R.id.action_pick, R.id.action_delete)
+        // On the photo it was showing, which is picked
+        assertThat(again.bar().menu.findItem(R.id.action_pick).title).isEqualTo(context.getString(R.string.unselect_photo))
+        val prompt = again.tapDelete()!!
+        docs.remove("primary:DCIM/a.jpg")
+        docs.remove("primary:DCIM/c.png")
+        again.answer(prompt, Activity.RESULT_OK)
+        assertThat(media.trashRequests.single().first).containsExactly(picture(11), picture(13)).inOrder()
+        assertThat(again.title()).isEqualTo("b.jpg")
+    }
+
+    /**
+     * Android is asked about every photo to get its prompt ready, which hundreds of them take
+     * seconds over on a phone, so the bar under the title runs meanwhile. Not for the moment one
+     * photo takes.
+     */
+    @Test
+    fun theBarUnderTheTitleRunsWhileThePromptIsGotReady() {
+        val viewer = openedFrom(dcim(), "primary:DCIM/b.jpg")
+        val busy = viewer.get().findViewById<LinearProgressIndicator>(R.id.saveProgress)
+        val held = mutableListOf<Runnable>()
+        viewer.get().documentLoader = Executor { held += it }
+
+        assertThat(viewer.tapDelete()).isNull()
+        assertThat(busy.visibility).isEqualTo(android.view.View.GONE)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(200))
+        assertThat(busy.visibility).isEqualTo(android.view.View.VISIBLE)
+        assertThat(busy.isIndeterminate).isTrue()
+
+        viewer.runHeld(held)
+        assertThat(shadowOf(viewer.get()).lastIntentSenderRequest).isNotNull()
+        assertThat(busy.visibility).isEqualTo(android.view.View.GONE)
+        // Nor does it come up later, for work that was over in time
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500))
+        assertThat(busy.visibility).isEqualTo(android.view.View.GONE)
+    }
+
+    /** The cross the bar shows while photos are picked ends the picking, where the arrow leaves the viewer. */
+    @Test
+    fun theCrossEndsThePickingAndTheArrowLeaves() {
+        val viewer = openedFrom(dcim(), "primary:DCIM/b.jpg")
+        viewer.tap(R.id.action_select)
+        viewer.tap(R.id.action_pick)
+
+        viewer.tapStartOfBar()
+        assertThat(viewer.get().isFinishing).isFalse()
+        assertThat(viewer.title()).isEqualTo("b.jpg")
+        // Nothing is picked any more, so Delete is for the photo on screen alone
+        viewer.delete("primary:DCIM/b.jpg")
+        assertThat(media.trashRequests.single().first).containsExactly(picture(12))
+
+        viewer.tapStartOfBar()
+        assertThat(viewer.get().isFinishing).isTrue()
+    }
+
+    /** Rotate is for one photo, and stays out of a bar given over to picking several. */
+    @Test
+    fun rotateStaysOutOfTheBarWhilePhotosArePicked() {
+        val viewer = openedFrom(dcim(), "primary:DCIM/a.jpg")
+        assertThat(viewer.rotateItem().isVisible).isTrue()
+
+        viewer.tap(R.id.action_select)
+        viewer.swipeTo(1)
+        assertThat(viewer.rotateItem().isVisible).isFalse()
+
+        viewer.get().onBackPressedDispatcher.onBackPressed()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertThat(viewer.rotateItem().isVisible).isTrue()
+    }
+
+    /** Where there is one photo, or none Android can move, there is nothing to pick. */
+    @Test
+    fun selectPhotosIsOfferedOnlyWhereThereAreSeveralPhotosToDelete() {
+        docs = FakeDocumentsProvider.install(EXTERNAL_STORAGE_AUTHORITY)
+            .folder("primary:One", "One", ChildDoc("primary:One/x.jpg", "x.jpg", "image/jpeg", 1, 1))
+            .contents("primary:One/x.jpg", Fixtures.bytes("exif-1.jpg"))
+        val alone = openedFrom(FakeDocumentsProvider.treeUri("primary:One", EXTERNAL_STORAGE_AUTHORITY), "primary:One/x.jpg")
+        assertThat(alone.deleteItem().isVisible).isTrue()
+        assertThat(alone.offered()).doesNotContain(R.id.action_select)
+
+        // A folder Android's trash doesn't reach
+        FakeDocumentsProvider.install()
+            .folder(
+                "cloud", "cloud",
+                ChildDoc("cloud/a.jpg", "a.jpg", "image/jpeg", 1, 1),
+                ChildDoc("cloud/b.jpg", "b.jpg", "image/jpeg", 1, 1),
+            )
+            .contents("cloud/a.jpg", Fixtures.bytes("exif-1.jpg"))
+            .contents("cloud/b.jpg", Fixtures.bytes("exif-1.jpg"))
+        val cloud = openedFrom(FakeDocumentsProvider.treeUri("cloud"), "cloud/a.jpg")
+        assertThat(cloud.get().photoPager!!.count).isEqualTo(2)
+        assertThat(cloud.offered()).doesNotContain(R.id.action_select)
     }
 
     // ---------------------------------------------------------------

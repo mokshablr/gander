@@ -41,6 +41,14 @@
         android:icon="@drawable/ic_share"
         android:title="@string/share_file"
         app:showAsAction="ifRoom" />
+    <!-- While photos are being picked to delete together, the one on screen is picked or let go
+         here, and Delete after it then asks about all of them. Issue #75. -->
+    <item
+        android:id="@+id/action_pick"
+        android:icon="@drawable/ic_pick_off"
+        android:title="@string/select_photo"
+        android:visible="false"
+        app:showAsAction="ifRoom" />
     <!-- A photo in a folder added in Gander, from Android 11, where Android moves it to its trash
          after its own prompt. The bin is the one the home screen's swipe uncovers, tinted here as
          the share icon is. Issue #75. -->
@@ -61,6 +69,13 @@
         android:title="@string/rotate_photo"
         android:visible="false"
         app:showAsAction="ifRoom" />
+    <!-- Among a folder's photos that can be deleted, where there is more than one: turns the
+         title bar over to picking them. -->
+    <item
+        android:id="@+id/action_select"
+        android:title="@string/select_photos"
+        android:visible="false"
+        app:showAsAction="never" />
     <item
         android:id="@+id/action_save_copy"
         android:title="@string/save_copy"

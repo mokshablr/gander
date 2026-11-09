@@ -12,6 +12,20 @@
         android:title="@string/filter"
         android:visible="false"
         app:showAsAction="never" />
+    <!-- A folder's photos picked to delete together, issue #75: Select photos where the folder
+         has photos Android can move to its bin, and the bin while some are being picked. -->
+    <item
+        android:id="@+id/action_select"
+        android:title="@string/select_photos"
+        android:visible="false"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_delete"
+        android:icon="@drawable/ic_delete"
+        android:title="@string/delete_photo"
+        android:visible="false"
+        app:iconTint="?attr/colorOnSurface"
+        app:showAsAction="ifRoom" />
 
     <!-- Rate on a copy Google Play installed, the only install a rating can come from.
          Any other copy gets Switch to Google Play here instead: a copy from GitHub is

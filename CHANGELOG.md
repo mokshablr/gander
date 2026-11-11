@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- A long file name in a folder's list takes up to two lines, and one longer than that loses its
+  middle, so a folder of books named by author still shows each title and its year, where a name
+  had one line and kept little more than the author (#77, thanks @XZY123lol for passing it on
+  from 4PDA).
+
 ## 2.9 (2026-11-08)
 
 - A photo opened from a folder you added in Gander swipes to the folder's other photos, in the

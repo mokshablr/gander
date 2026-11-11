@@ -47,12 +47,12 @@
         android:importantForAccessibility="no"
         android:orientation="vertical">
 
-        <TextView
+        <com.arjun.gander.TwoLineName
             android:id="@+id/title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:singleLine="true"
-            android:ellipsize="middle"
+            android:maxLines="2"
+            android:ellipsize="end"
             android:textAppearance="?attr/textAppearanceBodyLarge" />
 
         <TextView

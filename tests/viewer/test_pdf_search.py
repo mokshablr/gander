@@ -72,6 +72,72 @@ def test_clearing_the_search_puts_the_count_back_to_nothing(viewer, page, port):
 
 
 # ---------------------------------------------------------------------------
+# Text that takes care to read: search-runs.pdf, one line for each test here
+# ---------------------------------------------------------------------------
+
+def highlighted(page):
+    """The words under the current hit's highlight, as the text layer holds them."""
+    return page.evaluate(
+        "() => { const h = CSS.highlights.get('vw-find-active');"
+        " return h ? [...h].map(r => r.toString()).join('|') : null; }"
+    )
+
+
+def found_once(viewer, page, port, query):
+    p = open_and_attach(viewer, page, port, "search-runs.pdf")
+    p.query(query)
+    assert p.wait_for_count(1, 1, done=True)
+    return highlighted(page)
+
+
+def test_a_word_in_two_runs_is_found(viewer, page, port):
+    """
+    "landlord" changes font after "land", so pdf.js hands it over as two runs. The gap
+    between two runs of a line is nothing: a space there made the word unfindable.
+    """
+    assert found_once(viewer, page, port, "landlord") == "landlord"
+
+
+def test_words_either_side_of_a_line_end_are_found(viewer, page, port):
+    """A line end is a space to a search, as it is to a reader: "last" ends one line."""
+    assert found_once(viewer, page, port, "last day") == "lastday"
+
+
+def test_two_runs_of_a_line_are_not_joined_by_a_space(viewer, page, port):
+    """The other half of the above: "land lord" is not what the page says."""
+    p = open_and_attach(viewer, page, port, "search-runs.pdf")
+    p.query("land lord")
+    assert p.wait_for_count(0, 0, done=True)
+
+
+def test_a_highlight_keeps_its_place_after_a_letter_lower_case_lengthens(viewer, page, port):
+    """
+    Four Turkish capital dotted I come before "depozito", and lower case writes each as
+    two characters. The highlight was that many characters to the right of the word.
+    """
+    assert found_once(viewer, page, port, "depozito") == "depozito"
+
+
+def test_an_accent_written_as_a_mark_matches_the_typed_letter(viewer, page, port):
+    """The file says "citta" and a combining grave; a keyboard types the one letter."""
+    assert found_once(viewer, page, port, "citt\u00e0") == "citta\u0300"
+
+
+def test_a_typed_letter_and_mark_match_too(viewer, page, port):
+    assert found_once(viewer, page, port, "citta\u0300") == "citta\u0300"
+
+
+def test_a_radical_standing_for_its_character_is_found(viewer, page, port):
+    """The file gives U+2F08, a radical, where the word has U+4EBA, which looks the same."""
+    assert found_once(viewer, page, port, "\u627f\u79df\u4eba") == "\u627f\u79df\u2f08"
+
+
+def test_a_final_sigma_matches_the_capital(viewer, page, port):
+    """The capitals' last letter is typed in lower case as the final sigma."""
+    assert found_once(viewer, page, port, "\u03bf\u03b4\u03bf\u03c2") == "\u039f\u0394\u039f\u03a3"
+
+
+# ---------------------------------------------------------------------------
 # Stepping
 # ---------------------------------------------------------------------------
 

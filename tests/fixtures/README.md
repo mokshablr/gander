@@ -33,6 +33,7 @@ should stay obviously so.
 | File | Exists to test |
 |---|---|
 | `six-pages.pdf` | Base rendering, six pages, base-14 fonts. Contains "tenancy" exactly three times in three cases, which is what the search tests count. |
+| `search-runs.pdf` | Find in a PDF, in text that takes care to read. Hand-built, base-14 fonts with a ToUnicode map, one line each: a word in two runs, two words across a line end, capital dotted I before a match, an accent as a combining mark, a Kangxi radical for its character, a Greek word in capitals. The glyphs drawn for the non-Latin lines are stand-ins. |
 | `forty-pages.pdf` | Page virtualisation and go-to-page: long enough that only a band is ever drawn. |
 | `embedded-font.pdf` | `embedFonts` in `pdf.mjs`. Carries its own Vera face, so the text layer must name that face and not a generic. |
 | `cjk.pdf` | Issue #21. Names a CID font without embedding it, so it renders only if `lib/cmaps/` ships and `vwWithAssets` is applied. Fails silently when it is not. |

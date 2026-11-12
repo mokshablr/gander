@@ -182,7 +182,7 @@ var tileQueue = [];
 /*
  * Everything the search knows.
  *
- * "pages" is the text of the whole document, one normalised string per page, built
+ * "pages" is the text of the whole document, one string per page as fold() gives it, built
  * once on the first search and kept. It is the only part of a page that outlives
  * being released, and it is why a match on page 300 can be found while pages 1 to 11
  * are the only ones drawn. Text is small: the 41 MB, 357-page document this file was
@@ -1554,11 +1554,14 @@ function textLayerFor(slot, page, viewport) {
    */
   slot.text.style.setProperty(
     "--total-scale-factor", String(viewport.scale * (viewport.userUnit || 1)));
+  var eols = [];
   var layer = new pdfjsLib.TextLayer({
-    textContentSource: embedFonts(page.streamTextContent()),
+    textContentSource: embedFonts(page.streamTextContent(), eols),
     container: slot.text,
     viewport: viewport
   });
+  /* Which runs end a line, for flatten(): the layer keeps each run's text and not this */
+  layer.vwEols = eols;
   slot.layer = layer;
   return layer.render().then(function () {
     padRows(slot.text, layer.textDivs);
@@ -1824,7 +1827,7 @@ document.addEventListener("selectionchange", selectionEdgeScroll);
  * at a time. A run with no embedded face, as in a scan, a Type3 font or a substituted Helvetica,
  * keeps pdf.js's default.
  */
-function embedFonts(stream) {
+function embedFonts(stream, eols) {
   /* Degrading is structural rather than argued: with no TransformStream nothing is
      rewritten and every page keeps the font it has today. Chromium has had it since
      67 and pdf.js already requires 125, so this will not fire. */
@@ -1838,6 +1841,11 @@ function embedFonts(stream) {
 
   return stream.pipeThrough(new TransformStream({
     transform: function (chunk, controller) {
+      /* A run for each item with text, empty or not, as the layer itself counts them */
+      var items = (chunk && chunk.items) || [];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].str !== undefined) eols.push(!!items[i].hasEOL);
+      }
       var styles = chunk && chunk.styles;
       for (var key in styles) {
         var style = styles[key];
@@ -1909,23 +1917,76 @@ function loadedFamilies() {
  * between two runs may be a space, a newline or nothing at all. Searching the raw
  * concatenation therefore misses anything that straddles a run.
  *
- * So the runs are joined with a single space between them and every stretch of
- * whitespace inside them is collapsed to one, which is what makes "Baker Street"
- * findable whichever way the typesetter broke it. "map" records, for each run, where
- * it landed in the joined string, which is what turns a match back into a Range.
+ * So the runs of a line are joined with nothing between them, since pdf.js gives the
+ * space between two words as a run of its own, and a word it hands over in two runs,
+ * as it does where the font changes or a ligature sits, has none inside it. A run that
+ * ends a line, which "eols" says, gets a space after it, and every stretch of
+ * whitespace is collapsed to one, which is what makes "Baker Street" findable
+ * whichever way the typesetter broke it. Without "eols" every run ends with a space.
+ * "map" records, for each run, where it landed in the joined string and how many
+ * characters of its start were left out, which is what turns a match back into a Range.
  */
-function flatten(runs) {
+function flatten(runs, eols) {
   var text = "";
   var map = [];
   for (var i = 0; i < runs.length; i++) {
     var run = String(runs[i] == null ? "" : runs[i]);
-    if (!run) { map.push(null); continue; }
-    if (text) text += " ";
     var cleaned = run.replace(/\s+/g, " ");
-    map.push({ at: text.length, len: cleaned.length, run: i });
-    text += cleaned;
+    var spaced = !text || text.charAt(text.length - 1) === " ";
+    var lead = spaced && cleaned.charAt(0) === " " ? 1 : 0;
+    if (lead) cleaned = cleaned.slice(1);
+    if (cleaned) {
+      map.push({ at: text.length, len: cleaned.length, run: i, lead: lead });
+      text += cleaned;
+    } else {
+      map.push(null);
+    }
+    if ((!eols || eols[i]) && text && text.charAt(text.length - 1) !== " ") text += " ";
   }
   return { text: text, map: map };
+}
+
+/*
+ * [s] as a search compares it, and where each character of that came from in [s].
+ *
+ * Lower case, and one spelling for what Unicode counts as the same text: an accent
+ * written as a mark after its letter becomes the one accented letter a keyboard types,
+ * and a look-alike such as the radical some fonts give for a Chinese character becomes
+ * the character. Both change how long the text is, as lower case does for the Turkish
+ * capital dotted I, so "from" says for each character of the result where in [s] the
+ * letter and its marks it came from begin, with the length of [s] after the last. It
+ * is null where the two line up one for one, as they do in most text.
+ */
+var FOLD_PLAIN = /^[\x00-\x7f]*$/;
+var FOLD_CLUSTER = /\P{M}\p{M}*|\p{M}+/gu;
+
+function fold(s) {
+  if (FOLD_PLAIN.test(s)) return { text: s.toLowerCase(), from: null };
+  var text = "";
+  var from = null;
+  var m, k;
+  FOLD_CLUSTER.lastIndex = 0;
+  while ((m = FOLD_CLUSTER.exec(s))) {
+    /* The final sigma is the same letter as the other, and lower case gives either */
+    var piece = m[0].toLowerCase().normalize("NFKC").replace(/\u03c2/g, "\u03c3");
+    if (!from && piece.length !== m[0].length) {
+      from = [];
+      for (k = 0; k < text.length; k++) from.push(k);
+    }
+    if (from) for (k = 0; k < piece.length; k++) from.push(m.index);
+    text += piece;
+  }
+  if (from) from.push(s.length);
+  return { text: text, from: from };
+}
+
+/* The stretch of the text fold() was given that [len] characters of its result at [at] came from */
+function unfolded(folded, at, len) {
+  if (!folded.from) return { at: at, len: len };
+  var from = folded.from;
+  var end = at + len;
+  while (end < from.length - 1 && from[end] === from[end - 1]) end++;
+  return { at: from[at], len: from[end] - from[at] };
 }
 
 /*
@@ -1967,7 +2028,8 @@ function buildIndex() {
         var runs = content.items.map(function (it) {
           return typeof it.str === "string" ? it.str : "";
         });
-        finding.pages[n - 1] = flatten(runs).text;
+        var eols = content.items.map(function (it) { return !!it.hasEOL; });
+        finding.pages[n - 1] = fold(flatten(runs, eols).text).text;
         if (slots[n - 1].state === "blank") page.cleanup();
       });
     }).catch(function () {
@@ -1996,19 +2058,16 @@ function buildIndex() {
   step();
 }
 
-/* Case-insensitive, like the native find the other viewers get. Chromium's find does
-   its own Unicode folding beyond this, so counts on the same query can differ a
-   little between a PDF and a DOCX. That is worth knowing and not worth matching. */
-function foldCase(s) { return s.toLowerCase(); }
+/* The query as the pages are kept: folded, and with one space where it has several */
+function foldedQuery() { return fold(finding.query.replace(/\s+/g, " ")).text; }
 
 /* Every occurrence of the query on one page, appended. Pages are indexed in order,
    so appending keeps finding.matches in document order without a sort. */
 function scanPage(n) {
-  var text = finding.pages[n - 1];
-  if (!text) return 0;
-  var q = foldCase(finding.query);
+  var hay = finding.pages[n - 1];
+  if (!hay) return 0;
+  var q = foldedQuery();
   if (!q) return 0;
-  var hay = foldCase(text);
   var found = 0;
   var at = hay.indexOf(q);
   while (at !== -1) {
@@ -2090,16 +2149,20 @@ function markSlot(slot) {
   var strs = slot.layer.textContentItemsStr;
   if (!divs || !strs || !divs.length) return;
 
-  var flat = flatten(strs);
-  var hay = foldCase(flat.text);
-  var q = foldCase(finding.query);
+  /* The line ends the layer's runs came with, unless they are not one for one with them */
+  var eols = slot.layer.vwEols;
+  var flat = flatten(strs, eols && eols.length === strs.length ? eols : null);
+  var folded = fold(flat.text);
+  var hay = folded.text;
+  var q = foldedQuery();
   if (!q) return;
 
   var activeMatch = finding.matches[finding.active];
   var nth = 0;
   var at = hay.indexOf(q);
   while (at !== -1) {
-    var r = rangeFor(divs, flat.map, at, q.length);
+    var found = unfolded(folded, at, q.length);
+    var r = rangeFor(divs, flat.map, found.at, found.len);
     if (r) {
       /* The active one is identified by its position among this page's hits, which
          is the same order rerun() pushed them in. */
@@ -2145,10 +2208,10 @@ function rangeFor(divs, map, at, len) {
        a disagreement to a highlight of the wrong width rather than a thrown error. */
     var max = node.length;
     if (!started) {
-      range.setStart(node, Math.min(Math.max(at - piece.at, 0), max));
+      range.setStart(node, Math.min(Math.max(at - piece.at, 0) + piece.lead, max));
       started = true;
     }
-    range.setEnd(node, Math.min(Math.max(end - piece.at, 0), max));
+    range.setEnd(node, Math.min(Math.max(end - piece.at, 0) + piece.lead, max));
   }
   return started ? range : null;
 }

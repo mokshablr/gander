@@ -6,6 +6,12 @@
   and Western European text before UTF-8, opens in that encoding, where it came out as garbled
   characters and a large one took twice as long to show. Greek, Turkish and Central European
   files are read so on a phone set to that language (#78, thanks @Allureglorious).
+- Search in a PDF finds a word the file keeps in two pieces, as some do where a ligature such as
+  "fi" sits or the font changes inside the word, where it found nothing. It also finds a word
+  whose accents the file keeps apart from their letters, and a Chinese word the file spells with
+  a look-alike character.
+- A search highlight in a PDF sits on the word it found in Turkish text, where every capital
+  dotted İ before the word moved it one letter to the right.
 - A long file name in a folder's list takes up to two lines, and one longer than that loses its
   middle, so a folder of books named by author still shows each title and its year, where a name
   had one line and kept little more than the author (#77, thanks @XZY123lol for passing it on

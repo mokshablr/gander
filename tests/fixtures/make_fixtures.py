@@ -2583,6 +2583,90 @@ def _group4(im) -> bytes:
                     zip(tiff.tag_v2[273], tiff.tag_v2[279]))
 
 
+def searched_text() -> None:
+    """
+    search-runs.pdf: text a search has to read with care, written out by hand because no font
+    the generator can count on holds these characters, and a search only reads what the
+    file says each code stands for (its ToUnicode map), never the glyphs.
+
+    One line each: "landlord" with the font changing inside the word, so it comes as two
+    runs, and "last day" across a line end; four Turkish capital dotted I ahead of
+    "depozito", each of which lower case makes two characters; "citta" with its grave
+    accent as a mark of its own; a Chinese word whose last character the file gives as the
+    radical that looks like it (U+2F08 for U+4EBA), as some fonts' maps do; and a Greek
+    word in capitals, whose last letter lower case writes as a final sigma.
+    """
+    special = {
+        "İ": (128, "Idotaccent"), "Ş": (129, "Scedilla"), "̀": (130, "grave"),
+        "承": (131, "bullet"), "租": (132, "bullet"), "⼈": (133, "bullet"),
+        "Ο": (134, "O"), "Δ": (135, "bullet"), "Σ": (136, "bullet"),
+        "Ü": (0xDC, None), "ç": (0xE7, None),
+    }
+    used = {}
+
+    def show(text: str) -> bytes:
+        codes = []
+        for ch in text:
+            code = special[ch][0] if ch in special else ord(ch)
+            assert code < 256 and (ch in special or code < 127), ch
+            used[code] = ch
+            codes.append(code)
+        return b"<" + bytes(codes).hex().encode() + b"> Tj"
+
+    lines = [
+        b"BT /F2 18 Tf 72 760 Td " + show("Alder Court, search") + b" ET",
+        b"BT /F1 11 Tf 72 720 Td " + show("The keys go back to the land")
+        + b" /F2 11 Tf " + show("lord on the last") + b" ET",
+        b"BT /F1 11 Tf 72 702 Td " + show("day of June.") + b" ET",
+        b"BT /F1 11 Tf 72 672 Td "
+        + show("İLK İKİ İŞ GÜNÜ içinde depozito geri verilir.") + b" ET",
+        b"BT /F1 11 Tf 72 654 Td " + show("La città vecchia è vicina.") + b" ET",
+        b"BT /F1 11 Tf 72 636 Td " + show("承租⼈ is the one who rents.") + b" ET",
+        b"BT /F1 11 Tf 72 618 Td " + show("ΟΔΟΣ is the road.") + b" ET",
+    ]
+    content = b"\n".join(lines)
+    differences = " ".join(f"{code} /{glyph}" for code, glyph in sorted(special.values()) if glyph)
+    encoding = f"<< /Type /Encoding /BaseEncoding /WinAnsiEncoding /Differences [{differences}] >>".encode()
+    chars = "\n".join(f"<{code:02X}> <{ord(ch):04X}>" for code, ch in sorted(used.items()))
+    cmap = (
+        "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n"
+        "/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n"
+        "/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n"
+        "1 begincodespacerange\n<00> <FF>\nendcodespacerange\n"
+        f"{len(used)} beginbfchar\n{chars}\nendbfchar\n"
+        "endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend"
+    ).encode()
+
+    def font(base: bytes) -> bytes:
+        return (b"<< /Type /Font /Subtype /Type1 /BaseFont /" + base
+                + b" /Encoding 7 0 R /ToUnicode 8 0 R >>")
+
+    objs = {
+        1: b"<< /Type /Catalog /Pages 2 0 R >>",
+        2: b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        3: (b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+            b"/Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 4 0 R >>"),
+        4: b"<< /Length %d >>\nstream\n" % len(content) + content + b"\nendstream",
+        5: font(b"Helvetica"),
+        6: font(b"Helvetica-Bold"),
+        7: encoding,
+        8: b"<< /Length %d >>\nstream\n" % len(cmap) + cmap + b"\nendstream",
+    }
+    out = bytearray(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n")
+    offsets = {}
+    for n in sorted(objs):
+        offsets[n] = len(out)
+        out += b"%d 0 obj\n" % n + objs[n] + b"\nendobj\n"
+    start = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1)
+    for n in sorted(objs):
+        out += b"%010d 00000 n \n" % offsets[n]
+    out += (b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n"
+            % (len(objs) + 1, start))
+    (OUT / "search-runs.pdf").write_bytes(bytes(out))
+    written(OUT / "search-runs.pdf")
+
+
 def wasm_decoded_images() -> None:
     from PIL import Image, ImageDraw
 
@@ -4610,7 +4694,7 @@ def epubs() -> None:
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     print(f"Writing fixtures into {OUT}")
-    for step in (pdfs, wasm_decoded_images, docx, raised_runs, word_pages, word_columns, word_unrecorded, word_measured,
+    for step in (pdfs, searched_text, wasm_decoded_images, docx, raised_runs, word_pages, word_columns, word_unrecorded, word_measured,
                  word_odd_even, word_measured_fit, word_measured_notes, word_measured_sections, word_measured_tails,
                  word_measured_tables, word_tabs_beside_float, word_colours, word_lines,
                  cell_directions, xlsx, sheet_colours, sheet_layout, pptx,

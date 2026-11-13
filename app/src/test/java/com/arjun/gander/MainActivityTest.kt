@@ -26,9 +26,9 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
@@ -43,6 +43,8 @@ import org.robolectric.shadows.ShadowDialog
  */
 @RunWith(AndroidJUnit4::class)
 class MainActivityTest {
+
+    @get:Rule val closing = ClosesActivities()
 
     private lateinit var context: Context
 
@@ -103,7 +105,7 @@ class MainActivityTest {
     }
 
     private fun home(state: Bundle? = null): ActivityController<MainActivity> {
-        val controller = Robolectric.buildActivity(MainActivity::class.java)
+        val controller = closing.build(MainActivity::class.java)
         controller.get().loader = directExecutor()
         return controller.create(state).start().resume().visible().also {
             shadowOf(context.mainLooper).idle()

@@ -34,9 +34,9 @@ import com.google.common.truth.Truth.assertThat
 import java.time.Duration
 import java.util.concurrent.Executor
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 
@@ -46,6 +46,8 @@ import org.robolectric.android.controller.ActivityController
  */
 @RunWith(AndroidJUnit4::class)
 class OverChromeTest {
+
+    @get:Rule val closing = ClosesActivities()
 
     private lateinit var context: Context
 
@@ -58,7 +60,7 @@ class OverChromeTest {
 
     /** The viewer for [intent], with what it reads off the main thread read inline, so the picture is up. */
     private fun start(intent: Intent): ActivityController<ViewerActivity> {
-        val controller = Robolectric.buildActivity(ViewerActivity::class.java, intent)
+        val controller = closing.build(ViewerActivity::class.java, intent)
         controller.get().documentLoader = Executor { it.run() }
         return controller.setup().also { shadowOf(Looper.getMainLooper()).idle() }
     }
@@ -317,6 +319,16 @@ class OverChromeTest {
             Thread.sleep(50)
             shadowOf(Looper.getMainLooper()).idle()
         }
-        error("the player never gave up on broken.mp3")
+        // It has failed now and then this way, on CI and once on a Mac, waiting the whole time
+        // where it passes in a tenth of a second, so the cause is unknown: say what the player
+        // was doing
+        val player = viewer.container.children.filterIsInstance<PlayerView>().singleOrNull()?.player
+        val threads = Thread.getAllStackTraces().entries
+            .filter { it.key.name.startsWith("ExoPlayer") }
+            .joinToString("") { (t, at) -> "\n${t.name} ${t.state}" + at.take(8).joinToString("") { "\n    at $it" } }
+        error(
+            "the player never gave up on broken.mp3: state ${player?.playbackState}, " +
+                "error ${player?.playerError}, loading ${player?.isLoading}$threads"
+        )
     }
 }

@@ -18,9 +18,9 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.common.truth.Truth.assertThat
 import java.time.Duration
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 
@@ -39,6 +39,8 @@ import org.robolectric.android.controller.ActivityController
 @RunWith(AndroidJUnit4::class)
 class PlayerErrorTest {
 
+    @get:Rule val closing = ClosesActivities()
+
     private lateinit var context: Context
 
     @Before
@@ -51,7 +53,7 @@ class PlayerErrorTest {
         val intent = Intent(context, ViewerActivity::class.java)
             .setAction(Intent.ACTION_VIEW)
             .setDataAndType(FixtureProvider.uriFor("tone.wav"), "audio/x-wav")
-        return Robolectric.buildActivity(ViewerActivity::class.java, intent).setup()
+        return closing.build(ViewerActivity::class.java, intent).setup()
     }
 
     private val ActivityController<ViewerActivity>.shown: List<View>

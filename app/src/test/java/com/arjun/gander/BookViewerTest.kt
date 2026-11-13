@@ -18,9 +18,9 @@ import java.io.File
 import java.time.Duration
 import java.util.concurrent.Executor
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.shadows.ShadowDialog
@@ -35,6 +35,8 @@ import org.robolectric.shadows.ShadowDialog
  */
 @RunWith(AndroidJUnit4::class)
 class BookViewerTest {
+
+    @get:Rule val closing = ClosesActivities()
 
     private lateinit var context: Context
 
@@ -53,7 +55,7 @@ class BookViewerTest {
         val intent = Intent(context, ViewerActivity::class.java)
             .setAction(Intent.ACTION_VIEW)
             .setDataAndType(uri, context.contentResolver.getType(uri))
-        val controller = Robolectric.buildActivity(ViewerActivity::class.java, intent)
+        val controller = closing.build(ViewerActivity::class.java, intent)
         controller.get().documentLoader = Executor { it.run() }
         controller.setup()
         settle()

@@ -27,9 +27,9 @@ import com.google.common.truth.Truth.assertThat
 import kotlin.math.pow
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowDialog
@@ -43,6 +43,8 @@ import org.robolectric.shadows.ShadowDialog
  */
 @RunWith(AndroidJUnit4::class)
 class NightChromeTest {
+
+    @get:Rule val closing = ClosesActivities()
 
     private lateinit var context: Context
 
@@ -64,7 +66,7 @@ class NightChromeTest {
         val intent = Intent(context, ViewerActivity::class.java)
             .setAction(Intent.ACTION_VIEW)
             .setDataAndType(uri, context.contentResolver.getType(uri))
-        return Robolectric.buildActivity(ViewerActivity::class.java, intent).setup().get()
+        return closing.build(ViewerActivity::class.java, intent).setup().get()
     }
 
     /** The app's colours as a phone set to dark has them. */

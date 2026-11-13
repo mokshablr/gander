@@ -42,6 +42,7 @@ import java.util.concurrent.atomic.AtomicReference
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -65,6 +66,8 @@ import org.robolectric.shadows.ShadowWebView
  */
 @RunWith(AndroidJUnit4::class)
 class ViewerActivityTest {
+
+    @get:Rule val closing = ClosesActivities()
 
     private lateinit var context: Context
 
@@ -97,7 +100,7 @@ class ViewerActivityTest {
      * inline, so the page has loaded by the time this returns.
      */
     private fun start(intent: Intent): ActivityController<ViewerActivity> {
-        val controller = Robolectric.buildActivity(ViewerActivity::class.java, intent)
+        val controller = closing.build(ViewerActivity::class.java, intent)
         controller.get().documentLoader = Executor { it.run() }
         return controller.setup().also { shadowOf(Looper.getMainLooper()).idle() }
     }
@@ -111,7 +114,7 @@ class ViewerActivityTest {
             .setClassName(context, ViewerActivity.INTERNAL_VIEWER)
             .setAction(Intent.ACTION_VIEW)
             .setDataAndType(uri, type ?: context.contentResolver.getType(uri))
-        return Robolectric.buildActivity(ViewerActivity::class.java, intent).setup()
+        return closing.build(ViewerActivity::class.java, intent).setup()
     }
 
     private fun ActivityController<ViewerActivity>.container(): FrameLayout =
@@ -1333,7 +1336,7 @@ class ViewerActivityTest {
         viewer.swipeTo(2)
         val saved = Bundle().also { viewer.saveInstanceState(it) }
 
-        val again = Robolectric.buildActivity(ViewerActivity::class.java, viewer.intent)
+        val again = closing.build(ViewerActivity::class.java, viewer.intent)
         again.get().documentLoader = Executor { it.run() }
         again.setup(saved)
         shadowOf(Looper.getMainLooper()).idle()
@@ -1484,7 +1487,7 @@ class ViewerActivityTest {
         viewer.rotate()
         val saved = Bundle().also { viewer.saveInstanceState(it) }
 
-        val again = Robolectric.buildActivity(ViewerActivity::class.java, viewer.intent)
+        val again = closing.build(ViewerActivity::class.java, viewer.intent)
         again.get().documentLoader = Executor { it.run() }
         again.setup(saved)
         shadowOf(Looper.getMainLooper()).idle()
@@ -1655,7 +1658,7 @@ class ViewerActivityTest {
         val saved = Bundle().also { viewer.saveInstanceState(it) }
         docs.remove("primary:DCIM/b.jpg")
 
-        val again = Robolectric.buildActivity(ViewerActivity::class.java, viewer.intent)
+        val again = closing.build(ViewerActivity::class.java, viewer.intent)
         again.get().documentLoader = Executor { it.run() }
         again.setup(saved)
         shadowOf(Looper.getMainLooper()).idle()
@@ -1672,7 +1675,7 @@ class ViewerActivityTest {
      */
     private fun openedHeld(tree: Uri, docId: String): Pair<ActivityController<ViewerActivity>, MutableList<Runnable>> {
         val held = mutableListOf<Runnable>()
-        val viewer = Robolectric.buildActivity(
+        val viewer = closing.build(
             ViewerActivity::class.java,
             Intent()
                 .setComponent(ComponentName(context, ViewerActivity.INTERNAL_VIEWER))
@@ -1987,7 +1990,7 @@ class ViewerActivityTest {
                 .setType("text/plain")
                 .putExtra(Intent.EXTRA_STREAM, Uri.parse("file:///dev/zero")),
         ).forEach { intent ->
-            val activity = Robolectric.buildActivity(ViewerActivity::class.java, intent).setup().get()
+            val activity = closing.build(ViewerActivity::class.java, intent).setup().get()
             assertWithMessage(intent.toUri(0)).that(activity.isFinishing).isTrue()
         }
     }
@@ -2107,7 +2110,7 @@ class ViewerActivityTest {
         val intent = Intent(context, ViewerActivity::class.java)
             .setAction(Intent.ACTION_VIEW)
             .setDataAndType(uri, "application/zip")
-        val controller = Robolectric.buildActivity(ViewerActivity::class.java, intent)
+        val controller = closing.build(ViewerActivity::class.java, intent)
         controller.get().archiveLoader = loader
         // setup(null) restores from a null bundle and throws; the no-argument form is the one
         // that means a fresh start
@@ -2755,7 +2758,7 @@ class ViewerActivityTest {
                 .setAction(Intent.ACTION_VIEW)
                 .setDataAndType(uri, "application/pdf")
             val started = System.nanoTime()
-            val controller = Robolectric.buildActivity(ViewerActivity::class.java, intent).setup()
+            val controller = closing.build(ViewerActivity::class.java, intent).setup()
             val tookMs = (System.nanoTime() - started) / 1_000_000
             assertWithMessage("the viewer waited for the provider on the main thread")
                 .that(tookMs).isLessThan(10_000L)
@@ -2786,7 +2789,7 @@ class ViewerActivityTest {
                 .setAction(Intent.ACTION_VIEW)
                 .setDataAndType(FixtureProvider.uriFor(FixtureProvider.SLOW_PHOTO), "image/jpeg")
             val started = System.nanoTime()
-            val controller = Robolectric.buildActivity(ViewerActivity::class.java, intent).setup()
+            val controller = closing.build(ViewerActivity::class.java, intent).setup()
             val tookMs = (System.nanoTime() - started) / 1_000_000
             assertWithMessage("the viewer waited for the provider on the main thread")
                 .that(tookMs).isLessThan(10_000L)

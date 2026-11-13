@@ -30,9 +30,9 @@ import com.google.android.material.shape.MaterialShapeDrawable
 import com.google.common.truth.Truth.assertThat
 import java.time.Duration
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
@@ -45,6 +45,8 @@ import org.robolectric.annotation.Config
  */
 @RunWith(AndroidJUnit4::class)
 class VideoChromeTest {
+
+    @get:Rule val closing = ClosesActivities()
 
     private lateinit var context: Context
 
@@ -59,7 +61,7 @@ class VideoChromeTest {
         val intent = Intent(context, ViewerActivity::class.java)
             .setAction(Intent.ACTION_VIEW)
             .setDataAndType(uri, context.contentResolver.getType(uri))
-        return Robolectric.buildActivity(ViewerActivity::class.java, intent).setup()
+        return closing.build(ViewerActivity::class.java, intent).setup()
     }
 
     private fun video(): ActivityController<ViewerActivity> =

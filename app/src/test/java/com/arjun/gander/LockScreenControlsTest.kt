@@ -15,9 +15,9 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 
@@ -31,6 +31,8 @@ import org.robolectric.android.controller.ActivityController
  */
 @RunWith(AndroidJUnit4::class)
 class LockScreenControlsTest {
+
+    @get:Rule val closing = ClosesActivities()
 
     private lateinit var context: Context
 
@@ -49,7 +51,7 @@ class LockScreenControlsTest {
         val intent = Intent(context, ViewerActivity::class.java)
             .setAction(Intent.ACTION_VIEW)
             .setDataAndType(uri, "audio/x-wav")
-        return Robolectric.buildActivity(ViewerActivity::class.java, intent).setup()
+        return closing.build(ViewerActivity::class.java, intent).setup()
             .also { idle() }
     }
 

@@ -262,6 +262,123 @@ internal object ZipNames {
         return best.charset!!
     }
 
+    /** A code page a text file may be in, under the name a browser's TextDecoder knows it by. */
+    private class Readable(val candidate: Candidate, val label: String)
+
+    // Windows' own code page for each language, since that is what Notepad saved its text in
+    // before UTF-8. GB18030 reads every GBK file and the four-byte characters GBK lacks. The
+    // double-byte ones are the same Windows supersets as for names, which are what the WHATWG
+    // decoders implement under these labels. DOS code pages 437 and 850 are left out: a
+    // browser has no decoder for them.
+    private val TEXT_GB = Readable(Candidate(Script.GB, "GB18030"), "gb18030")
+    private val TEXT_BIG5 = Readable(BIG5, "big5")
+    private val TEXT_SJIS = Readable(SJIS, "shift_jis")
+    private val TEXT_KOREAN = Readable(UHC, "euc-kr")
+    private val TEXT_WIN_CYRILLIC = Readable(WIN_CYRILLIC, "windows-1251")
+    private val TEXT_DOS_CYRILLIC = Readable(DOS_CYRILLIC, "ibm866")
+    private val TEXT_WESTERN = Readable(Candidate(Script.LATIN, "windows-1252"), "windows-1252")
+    private val TEXT_CENTRAL = Readable(Candidate(Script.LATIN, "windows-1250"), "windows-1250")
+    private val TEXT_GREEK = Readable(Candidate(Script.GREEK, "windows-1253"), "windows-1253")
+    private val TEXT_TURKISH = Readable(Candidate(Script.LATIN, "windows-1254"), "windows-1254")
+
+    /**
+     * Every text file is tried in these, in this order when nothing else decides; see
+     * [EVERYWHERE]. Western comes before both Cyrillic code pages, unlike for names: a short
+     * Western text whose only accented letter stands alone, "à" between spaces, reads under
+     * either as "а", which is a Russian word, and the three tie. Russian does not tie the other
+     * way, see [proseScore].
+     */
+    private val TEXT_EVERYWHERE = listOf(
+        TEXT_GB, TEXT_SJIS, TEXT_BIG5, TEXT_KOREAN, TEXT_WESTERN, TEXT_WIN_CYRILLIC, TEXT_DOS_CYRILLIC
+    )
+
+    /**
+     * How many characters in a thousand a text file's guess may have to replace. A long text
+     * read in the wrong code page breaks it at nearly every turn, while a file in the right one
+     * can still hold a stray byte or two, cut short or pasted in from elsewhere, which turned
+     * every candidate down when one bad byte was enough.
+     */
+    private const val TEXT_REPLACED_PER_MILLE = 5
+
+    /**
+     * How many characters outside ASCII a file read as UTF-8 needs to have read for each it
+     * could not; see [textCodePage]. Text in a code page reads as UTF-8 only by accident: over
+     * 889 samples in 14 languages and their Windows code pages, none read more than 0.41 for
+     * each fault, Japanese and Chinese the most.
+     */
+    private const val UTF8_READ_PER_FAULT = 2
+
+    /**
+     * The code page a text file was most likely written in, from its first [bytes], as the
+     * label a browser's TextDecoder takes, or null for UTF-8 or when none reads it. Scored the
+     * way names are, over code pages a browser can decode. Issue #78.
+     *
+     * UTF-8 is tried first, and nothing is scored against it: GB18030 reads nearly any run of
+     * UTF-8's high bytes without a fault, so a UTF-8 file with one bad byte in it would
+     * otherwise come out as a page of wrong hanzi. Its allowance for stray bytes is
+     * [UTF8_READ_PER_FAULT] characters read for each one, which holds for a short file too,
+     * where one in a thousand is less than one.
+     */
+    fun textCodePage(bytes: ByteArray, locale: Locale = Locale.getDefault()): String? {
+        val utf8 = lenient(Charsets.UTF_8, bytes)
+        val faults = utf8.count { it == '\uFFFD' }
+        val read = utf8.count { it.code >= 0x80 } - faults
+        if (read >= faults * UTF8_READ_PER_FAULT) return null
+        return textScoresFor(bytes, locale)
+            .fold(null as Pair<String, Double>?) { best, s -> if (best == null || s.second > best.second) s else best }
+            ?.first
+    }
+
+    /** Whether [text], as some code page read it, had to replace little enough; see [TEXT_REPLACED_PER_MILLE]. */
+    private fun replacesLittle(text: String): Boolean {
+        val outside = text.count { it.code >= 0x80 }
+        val replaced = text.count { it == '\uFFFD' }
+        return replaced * 1000 <= outside * TEXT_REPLACED_PER_MILLE
+    }
+
+    /** The phone's language first, then everything else, as [ordered] does for names. */
+    private fun textOrdered(locale: Locale): List<Readable> {
+        val first = when (locale.language) {
+            "zh" ->
+                if (locale.script == "Hant" || locale.country in setOf("TW", "HK", "MO")) {
+                    listOf(TEXT_BIG5, TEXT_GB)
+                } else {
+                    listOf(TEXT_GB, TEXT_BIG5)
+                }
+            "ja" -> listOf(TEXT_SJIS)
+            "ko" -> listOf(TEXT_KOREAN)
+            "ru", "uk", "be", "bg", "kk", "ky", "tg", "mn", "mk" -> listOf(TEXT_WIN_CYRILLIC)
+            "el" -> listOf(TEXT_GREEK)
+            "tr", "az" -> listOf(TEXT_TURKISH)
+            "pl", "cs", "sk", "hu", "hr", "sl", "ro", "bs", "sq" -> listOf(TEXT_CENTRAL)
+            else -> emptyList()
+        }
+        return (first + TEXT_EVERYWHERE).distinct()
+    }
+
+    /**
+     * Each of [candidates] that reads [bytes] without replacing too much, by label, with its
+     * score, in the order given.
+     */
+    private fun textScores(bytes: ByteArray, candidates: List<Readable>): List<Pair<String, Double>> =
+        candidates.mapNotNull { r ->
+            val charset = r.candidate.charset ?: return@mapNotNull null
+            val text = lenient(charset, bytes)
+            if (replacesLittle(text)) r.label to score(r.candidate, charset, text, prose = true) else null
+        }
+
+    /** For a test to see why: every candidate's score on [bytes], for a phone set to [locale]. */
+    internal fun textScoresFor(bytes: ByteArray, locale: Locale): List<Pair<String, Double>> =
+        textScores(bytes, textOrdered(locale))
+
+    /** [bytes] as [charset] says, with a replacement character for anything not valid in it. */
+    private fun lenient(charset: Charset, bytes: ByteArray): String =
+        charset.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPLACE)
+            .onUnmappableCharacter(CodingErrorAction.REPLACE)
+            .decode(ByteBuffer.wrap(bytes))
+            .toString()
+
     /**
      * How much of what [c] makes of [bytes] is ordinary text in its language, from 0 to 1, or
      * -1 if the bytes are not valid in it at all. Only characters outside ASCII count, since
@@ -270,6 +387,14 @@ internal object ZipNames {
     private fun score(c: Candidate, bytes: ByteArray): Double {
         val charset = c.charset ?: return -1.0
         val text = strict(charset, bytes) ?: return -1.0
+        return score(c, charset, text)
+    }
+
+    /**
+     * [score] for what [charset], [c]'s, already made of the bytes. A replacement character
+     * counts 0. [prose] is a text file's body rather than names, see [proseScore].
+     */
+    private fun score(c: Candidate, charset: Charset, text: String, prose: Boolean = false): Double {
         val encoder = charset.newEncoder()
         var counted = 0
         var sum = 0.0
@@ -280,7 +405,9 @@ internal object ZipNames {
             if (cp >= 0x80) {
                 counted++
                 val own = if (c.script.doubleByte) encode(encoder, text, i, width) else null
+                val proseOnly = if (prose) proseScore(c, cp, text, i) else null
                 sum += when {
+                    proseOnly != null -> proseOnly
                     own != null && westernLetterPairedUp(text, i, width, own) -> 0.0
                     else -> when (c.script) {
                         Script.GB -> gb(cp, own)
@@ -296,6 +423,37 @@ internal object ZipNames {
             i += width
         }
         return if (counted == 0) 0.0 else sum / counted
+    }
+
+    /**
+     * The punctuation a text in a European language is set with, which no name needs: the
+     * no-break space French puts before a colon, curly quotes and apostrophes, guillemets,
+     * dashes, the ellipsis, and the bullet, degree, copyright, registered and euro signs.
+     */
+    private const val PROSE_PUNCTUATION = "\u00A0«»…‘’“”–—•°©®€"
+
+    /**
+     * What a character of a text file scores where that differs from a name's, or null.
+     *
+     * Its punctuation is as much the language as its letters. Scored 0 as in a name, a French
+     * text full of no-break spaces lost to IBM866, which reads that byte as "а", a letter on
+     * its own, which Russian has. No word in Cyrillic or Greek turns a capital straight after a
+     * small letter, which is how Korean reads under Windows Cyrillic, every byte a letter of
+     * either case. And no Western word runs three accented letters together, which is how
+     * Russian reads under windows-1252.
+     */
+    private fun proseScore(c: Candidate, cp: Int, text: String, at: Int): Double? {
+        if (c.script.doubleByte) return null
+        if (cp <= 0xFFFF && cp.toChar() in PROSE_PUNCTUATION) return 1.0
+        if (c.script == Script.CYRILLIC || c.script == Script.GREEK) {
+            val before = text.getOrNull(at - 1)
+            if (before != null && before.isLetter() && before.isLowerCase() && Character.isUpperCase(cp)) return 0.0
+        }
+        if (c.script == Script.LATIN && Character.isLetter(cp)) {
+            val accented = { ch: Char? -> ch != null && ch.code >= 0x80 && ch.isLetter() }
+            if (accented(text.getOrNull(at - 1)) && accented(text.getOrNull(at + 1))) return 0.0
+        }
+        return null
     }
 
     /** IBM850 and IBM437, the code pages a Western name from Windows is in; see [westernLetterPairedUp]. */

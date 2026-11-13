@@ -8,9 +8,16 @@ import android.webkit.WebResourceResponse
 import androidx.webkit.WebViewAssetLoader
 import java.io.ByteArrayInputStream
 import java.io.InputStream
+import java.io.SequenceInputStream
 
 /** The host the viewer pages and the open document are served from, by Gander itself. */
 internal const val ASSET_HOST = "appassets.androidplatform.net"
+
+/** The query the text page asks for the document with, `?encoding=guess`: see [TextEncoding]. */
+internal const val ENCODING_QUERY = "encoding"
+
+/** The response header the guessed code page comes back under; app.js reads it by this name. */
+internal const val ENCODING_HEADER = "X-Gander-Encoding"
 
 /**
  * Answers every request a viewer page makes for the document [uri], a [kind] of [mime]: the
@@ -45,7 +52,10 @@ internal class DocumentServer(
             url.scheme == "https" && url.host == ASSET_HOST &&
             url.path?.startsWith("/doc/") == true
         ) {
-            return docResponse(request.requestHeaders["Range"], total)
+            return docResponse(
+                request.requestHeaders["Range"], total,
+                guessEncoding = url.getQueryParameter(ENCODING_QUERY) == "guess",
+            )
         }
         // The simple view's pages, drawn by its isolated renderer. See SimplePdf.
         if (kind == FileKind.PDF_SIMPLE &&
@@ -83,8 +93,11 @@ internal class DocumentServer(
      * whole document in memory for as long as it was on screen.
      *
      * A fresh stream per request: the page asks for many, and out of order.
+     *
+     * Asked with [guessEncoding], by the text page, a whole file comes with the code page
+     * [TextEncoding] finds it in, under [ENCODING_HEADER], when it is not UTF-8.
      */
-    private fun docResponse(range: String?, total: Long): WebResourceResponse {
+    private fun docResponse(range: String?, total: Long, guessEncoding: Boolean = false): WebResourceResponse {
         return try {
             // Ranges are only offered for documents big enough to be worth the extra
             // round trips. Measured on a Nothing Phone 2: a 53 MB scan opened 177 ms
@@ -101,10 +114,16 @@ internal class DocumentServer(
                 val headers = mutableMapOf(nosniff)
                 if (rangeable) headers["Accept-Ranges"] = "bytes"
                 if (total >= 0) headers["Content-Length"] = total.toString()
-                WebResourceResponse(
-                    mime, null, 200, "OK", headers,
-                    resolver.openInputStream(uri)
-                )
+                var body = resolver.openInputStream(uri)
+                if (guessEncoding && body != null) {
+                    // The head is read once and handed back in front of the rest. A guess that
+                    // fails leaves the page reading UTF-8, as it did before there was one.
+                    val head = TextEncoding.readHead(body)
+                    runCatching { TextEncoding.guess(head) }.getOrNull()
+                        ?.let { headers[ENCODING_HEADER] = it }
+                    body = SequenceInputStream(ByteArrayInputStream(head), body)
+                }
+                WebResourceResponse(mime, null, 200, "OK", headers, body)
             } else {
                 val (start, end) = span
                 WebResourceResponse(

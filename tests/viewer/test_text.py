@@ -247,6 +247,53 @@ def test_a_character_split_across_the_boundary_still_decodes(viewer, page, made)
 
 
 # ---------------------------------------------------------------------------
+# A file in a Windows code page, which Gander guesses (TextEncoding.kt, #78)
+# ---------------------------------------------------------------------------
+
+CHINESE = "这是一个用记事本保存的文本文件。我们在会议上讨论了下一季度的计划。\r\n"
+
+
+def test_a_file_is_read_in_the_code_page_gander_guessed(viewer, page, made, server):
+    gbk = made("notes.txt", CHINESE.encode("gbk"))
+    viewer("text.html", gbk, ext="txt", encoding="gb18030")
+    wait_for_text(page)
+    assert content(page) == CHINESE
+    asked = [r for r in server.state.requests if r["path"].startswith("/doc/")]
+    assert [r["query"] for r in asked] == [{"encoding": "guess"}]
+
+
+def test_a_character_in_a_code_page_split_across_the_boundary_still_decodes(viewer, page, made):
+    # 你 is c4 e3 in GBK: its two bytes fall either side of the 5 MiB mark
+    head = b"a" * (VW_TEXT_PAGE - 1)
+    big = made("split-gbk.txt", head + "你好".encode("gbk") + b"b" * 100)
+    viewer("text.html", big, ext="txt", encoding="gb18030")
+    wait_for_text(page)
+    page.click("#moreBtn")
+    page.wait_for_function(
+        "() => document.querySelector('#content').textContent.indexOf('b') >= 0",
+        timeout=20000,
+    )
+    text = content(page)
+    assert "你好" in text
+    assert "\ufffd" not in text
+
+
+def test_a_byte_order_mark_beats_the_guess(viewer, page, made):
+    marked = made("marked.txt", "\ufeffHello, world".encode("utf-16-le"))
+    viewer("text.html", marked, ext="txt", encoding="gb18030")
+    wait_for_text(page)
+    assert content(page) == "Hello, world"
+
+
+def test_a_code_page_the_engine_does_not_know_falls_back_to_utf8(viewer, page, made):
+    """Any label Gander sends is one TextDecoder takes, but an old engine may not."""
+    plain = made("plain-u8.txt", "café crème")
+    viewer("text.html", plain, ext="txt", encoding="x-no-such-code-page")
+    wait_for_text(page)
+    assert content(page) == "café crème"
+
+
+# ---------------------------------------------------------------------------
 # JSON, which is very often written with no spacing at all
 # ---------------------------------------------------------------------------
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A text file saved in an older encoding, as Windows saved Chinese, Japanese, Korean, Russian
+  and Western European text before UTF-8, opens in that encoding, where it came out as garbled
+  characters and a large one took many seconds to show. Greek, Turkish and Central European
+  files are read so on a phone set to that language (#78, thanks @Allureglorious).
 - A long file name in a folder's list takes up to two lines, and one longer than that loses its
   middle, so a folder of books named by author still shows each title and its year, where a name
   had one line and kept little more than the author (#77, thanks @XZY123lol for passing it on

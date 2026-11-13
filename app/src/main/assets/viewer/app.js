@@ -327,12 +327,22 @@ function vwFetchDoc(kind) {
    rather than committing the whole file to the DOM up front. */
 var VW_TEXT_PAGE = 5 * 1024 * 1024;
 
-/* Encoding of a file from its byte order mark, if it has one. The decoder
-   strips the mark itself. */
-function vwEncodingOf(bytes) {
+/* Encoding of a file from its byte order mark, if it has one, else the code page
+   Gander guessed it is in (TextEncoding.kt, issue #78, which never guesses for a
+   file with a mark), else UTF-8. The decoder strips the mark itself. */
+function vwEncodingOf(bytes, guessed) {
   if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) return "utf-16le";
   if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) return "utf-16be";
-  return "utf-8";
+  return guessed || "utf-8";
+}
+
+/* A decoder for [label], or for UTF-8 should this engine not know it. */
+function vwDecoder(label) {
+  try {
+    return new TextDecoder(label);
+  } catch (e) {
+    return new TextDecoder("utf-8");
+  }
 }
 
 /*
@@ -351,15 +361,16 @@ function vwOpenText() {
 }
 
 function vwOpenTextPages() {
-  return fetch(vwDocUrl()).then(function (r) {
+  return fetch(vwDocUrl() + "?encoding=guess").then(function (r) {
     if (!r.ok) throw new Error("Could not read the file (HTTP " + r.status + ")");
+    var guessed = r.headers.get("X-Gander-Encoding");
 
     // One streaming decoder across every page, so a multi-byte character split
     // by a page boundary still comes out whole. Decoding stays lenient, so an
     // unfamiliar encoding degrades to replacement characters rather than an error
     var decoder = null;
     function decode(bytes, last) {
-      if (!decoder) decoder = new TextDecoder(vwEncodingOf(bytes));
+      if (!decoder) decoder = vwDecoder(vwEncodingOf(bytes, guessed));
       return { text: decoder.decode(bytes, { stream: !last }), bytes: bytes.length, done: last };
     }
 

@@ -81,9 +81,9 @@ def viewer(page, server):
 
         viewer("pdf.html", "six-pages.pdf")
     """
-    def open_page(html, fixture=None, ranged=False, status=0, wait=True, **params):
+    def open_page(html, fixture=None, ranged=False, status=0, wait=True, encoding=None, **params):
         if fixture is not None:
-            server.show(fixture, ranged=ranged, status=status)
+            server.show(fixture, ranged=ranged, status=status, encoding=encoding)
         page.goto(server.url(html, **params))
         if wait:
             page.wait_for_load_state("domcontentloaded")

@@ -113,6 +113,8 @@ class Served:
     path: Path = None
     ranged: bool = False
     status_override: int = 0
+    # The code page DocumentServer would guess the document is in, see TextEncoding.kt
+    encoding: str = None
     requests: list = field(default_factory=list)
     simple: Simple = None
 
@@ -266,6 +268,8 @@ class ViewerServer:
                     headers = {"Content-Type": ctype}
                     if state.ranged:
                         headers["Accept-Ranges"] = "bytes"
+                    if state.encoding and self.record["query"].get("encoding") == "guess":
+                        headers["X-Gander-Encoding"] = state.encoding
                     return self._send(200, data, headers)
 
                 start, end = span
@@ -284,11 +288,15 @@ class ViewerServer:
     def origin(self):
         return f"http://127.0.0.1:{self.port}"
 
-    def show(self, fixture, ranged=False, status=0):
-        """Points /doc at a fixture, and says whether ranges are on offer."""
+    def show(self, fixture, ranged=False, status=0, encoding=None):
+        """
+        Points /doc at a fixture, says whether ranges are on offer, and what code page Gander
+        would guess it is in when the page asks.
+        """
         self.state.path = fixture if isinstance(fixture, Path) else FIXTURES / fixture
         self.state.ranged = ranged
         self.state.status_override = status
+        self.state.encoding = encoding
         self.state.simple = None
         self.state.requests.clear()
 

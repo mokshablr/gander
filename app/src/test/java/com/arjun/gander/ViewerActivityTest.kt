@@ -1062,6 +1062,36 @@ class ViewerActivityTest {
         assertThat(response.responseHeaders["Accept-Ranges"]).isEqualTo("bytes")
     }
 
+    /**
+     * Issue #78: asked by the text page, a file in a Windows code page comes with the one it is
+     * in, and whole, though its head was read off the stream for the guess. Longer than the
+     * head, so the two halves are joined back up.
+     */
+    @Test
+    fun aTextFileInAWindowsCodePageIsServedWholeWithItsCodePage() {
+        val text = "这是一个用记事本保存的文本文件。我们在会议上讨论了下一季度的计划。\r\n"
+        val bytes = text.repeat(TextEncoding.HEAD_BYTES / 40).toByteArray(charset("GBK"))
+        assertThat(bytes.size).isGreaterThan(TextEncoding.HEAD_BYTES)
+        val file = File.createTempFile("gbk", ".txt").apply { writeBytes(bytes); deleteOnExit() }
+        val controller = view(FixtureProvider.install().add("gbk.txt", file), "text/plain")
+
+        val guessed = controller.serve("/doc/file.txt?encoding=guess")!!
+        assertThat(guessed.responseHeaders[ENCODING_HEADER]).isEqualTo("gb18030")
+        assertThat(guessed.data.readBytes()).isEqualTo(bytes)
+
+        // Only the text page asks, and every other page is served the file as it was
+        val plain = controller.serve("/doc/file.txt")!!
+        assertThat(plain.responseHeaders).doesNotContainKey(ENCODING_HEADER)
+        assertThat(plain.data.readBytes()).isEqualTo(bytes)
+    }
+
+    @Test
+    fun aUtf8TextFileComesWithNoCodePage() {
+        val response = open("plain.txt").serve("/doc/file.txt?encoding=guess")!!
+        assertThat(response.responseHeaders).doesNotContainKey(ENCODING_HEADER)
+        assertThat(response.data.readBytes()).isEqualTo(Fixtures.bytes("plain.txt"))
+    }
+
     @Test
     fun anUnsatisfiableRangeFallsBackToTheWholeDocument() {
         val big = Fixtures.sized("ranged3.pdf", (RANGE_THRESHOLD_BYTES + 1).toInt())

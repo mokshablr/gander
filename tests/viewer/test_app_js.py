@@ -44,13 +44,21 @@ def test_ten_megabytes_and_over_are_whole_numbers(loaded):
 
 
 # ---------------------------------------------------------------------------
-# vwEncodingOf: the only byte sniffing anywhere in the project
+# vwEncodingOf: a byte order mark, else the code page Gander guessed, else UTF-8
 # ---------------------------------------------------------------------------
 
-def encoding_of(page, *byte_values):
+def encoding_of(page, *byte_values, guessed=None):
     return page.evaluate(
-        "(b) => vwEncodingOf(new Uint8Array(b))", list(byte_values)
+        "([b, g]) => vwEncodingOf(new Uint8Array(b), g)", [list(byte_values), guessed]
     )
+
+
+def test_the_guessed_code_page_is_used_when_there_is_no_mark(loaded):
+    assert encoding_of(loaded, 0xC4, 0xE3, guessed="gb18030") == "gb18030"
+
+
+def test_a_mark_beats_the_guessed_code_page(loaded):
+    assert encoding_of(loaded, 0xFF, 0xFE, 0x41, 0x00, guessed="gb18030") == "utf-16le"
 
 
 def test_a_little_endian_mark_is_recognised(loaded):

@@ -8,6 +8,9 @@
   from 4PDA).
 - A .doc that Word saved as a single XML file, as some systems hand out their records, opens as
   a Word document, where Gander said it was not an OpenDocument file and showed nothing.
+- On a phone set to a larger font size, a search in a PDF marks the words it found, where it
+  marked a spot beside each, a whole word off in Persian or Arabic. Selected text is shaded over
+  the words too, where the shading ran past them.
 
 ## 2.9 (2026-11-08)
 

@@ -62,6 +62,10 @@
    */
   :root { --vw-shrink: 1; }
 
+  /* The WebView's text zoom, which Android takes from the phone's font size. pdf.mjs
+     writes it here (readTextZoom), and the text layer divides its type by it. */
+  :root { --vw-text-zoom: 1; }
+
   /*
    * Where the document sits when there is less of it than there is screen.
    *
@@ -318,10 +322,11 @@
        the size and transform in terms of them. Times --vw-shrink, since the box this
        layer fills is that fraction of the width --total-scale-factor was worked out
        for: pdf.js positions each span in percent, so the type is the one thing that
-       has to be told the page shrank. */
+       has to be told the page shrank. Over --vw-text-zoom, which the WebView multiplies
+       back in, so the words come out the size pdf.js measured them at. */
     --min-font-size: 1;
     --text-scale-factor:
-      calc(var(--total-scale-factor) * var(--min-font-size) * var(--vw-shrink));
+      calc(var(--total-scale-factor) * var(--min-font-size) * var(--vw-shrink) / var(--vw-text-zoom));
     --min-font-size-inv: calc(1 / var(--min-font-size));
   }
 

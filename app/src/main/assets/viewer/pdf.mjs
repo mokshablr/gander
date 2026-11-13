@@ -1508,6 +1508,26 @@ window.vwPdfShrink = function (s, y) {
 };
 
 /*
+ * The WebView's text zoom, for the text layer to divide its type by (--vw-text-zoom in
+ * pdf.html). Android sets it from the phone's font size, and it enlarges every font the page
+ * sets. pdf.js measures each run on a canvas, which no zoom reaches, and stretches its span to
+ * that width, so at a font size of 130% each run was drawn 30% wider than the words under it.
+ * A search highlight then sat beside its word: in Persian, which runs right to left from the
+ * span's far end, a whole word to the right. The page's own cards keep the phone's size.
+ */
+function readTextZoom() {
+  var probe = document.createElement("div");
+  probe.style.cssText = "position:absolute;visibility:hidden;font-size:100px";
+  document.body.appendChild(probe);
+  var zoom = parseFloat(getComputedStyle(probe).fontSize) / 100;
+  probe.remove();
+  if (zoom > 0 && isFinite(zoom) && zoom !== 1) {
+    document.documentElement.style.setProperty("--vw-text-zoom", String(zoom));
+  }
+}
+readTextZoom();
+
+/*
  * Lay the words of a page over the picture of it.
  *
  * The viewport handed in here is at CSS scale, not the canvas's device scale; see

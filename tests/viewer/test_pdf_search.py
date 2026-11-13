@@ -9,7 +9,7 @@ six-pages.pdf contains "tenancy" exactly three times, in three different
 cases, and nothing else in it matches.
 """
 
-from helpers import highlight_count, wait_for_band, wait_for_page, wait_for_pdf
+from helpers import highlight_count, wait_for_band, wait_for_page, wait_for_pdf, wait_for_text_layer
 
 
 def open_and_attach(viewer, page, port, fixture="six-pages.pdf"):
@@ -276,3 +276,34 @@ def test_a_command_that_is_nonsense_does_not_kill_the_channel(viewer, page, port
 
     p.query("tenancy")
     assert p.wait_for_count(1, 3)
+
+
+# ---------------------------------------------------------------------------
+# The phone's font size
+# ---------------------------------------------------------------------------
+
+def _first_span_font_px(page):
+    return page.evaluate(
+        "() => parseFloat(getComputedStyle(document.querySelector('#pages .pg .textLayer span')).fontSize)")
+
+
+def test_the_text_layer_divides_its_type_by_the_text_zoom(viewer, page):
+    """
+    Android's WebView enlarges every font a page sets by the phone's font size, the text
+    layer's included, while pdf.js measures each run on a canvas the zoom never reaches. At
+    130% each run was drawn 30% wider than the words under it, and a Persian search
+    highlight sat a word to the right. readTextZoom writes the zoom to --vw-text-zoom and the
+    layer's type is divided by it. Desktop Chromium has no text zoom (no blink setting
+    reproduces it), so it reads 1 here and the division is checked by setting it.
+    """
+    viewer("pdf.html", "six-pages.pdf")
+    wait_for_pdf(page)
+    wait_for_page(page, 0)
+    wait_for_text_layer(page)
+    zoom = page.evaluate(
+        "() => getComputedStyle(document.documentElement).getPropertyValue('--vw-text-zoom').trim()")
+    assert zoom == "1"
+    plain = _first_span_font_px(page)
+    page.evaluate("() => document.documentElement.style.setProperty('--vw-text-zoom', '1.3')")
+    divided = _first_span_font_px(page)
+    assert abs(divided - plain / 1.3) < 0.01, (plain, divided)

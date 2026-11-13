@@ -19,6 +19,7 @@ Usage:  python3 tests/fixtures/make_fixtures.py
 Needs:  reportlab python-docx openpyxl python-pptx pillow pillow-heif cryptography
 """
 
+import base64
 import hashlib
 import heapq
 import hmac
@@ -3556,6 +3557,74 @@ def prose() -> None:
     odt()
     rtf()
     doc()
+    word_package()
+
+
+def tiny_png(w: int, h: int, rgb: tuple) -> bytes:
+    """A solid-colour PNG, written by hand so its bytes never change with a library."""
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+    rows = b"".join(b"\x00" + bytes(rgb) * w for _ in range(h))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(rows, 9)) + chunk(b"IEND", b""))
+
+
+def word_package() -> None:
+    """A Word document saved as one XML file, Flat OPC, under a .doc name.
+
+    The shape of a file a user sent from an Iranian records system: Word's pkg:package with a
+    byte order mark, each part inline, and named .doc. One paragraph is Persian and runs right to
+    left, one is English, and a picture travels as base64 so the binary parts are repacked too.
+    """
+    W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    REL = "http://schemas.openxmlformats.org/package/2006/relationships"
+    picture = (
+        '<w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">'
+        '<wp:extent cx="914400" cy="457200"/><wp:docPr id="1" name="Swatch"/>'
+        '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+        '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+        '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+        '<pic:nvPicPr><pic:cNvPr id="1" name="swatch.png"/><pic:cNvPicPr/></pic:nvPicPr>'
+        '<pic:blipFill><a:blip r:embed="rIdSwatch"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+        '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="457200"/></a:xfrm>'
+        '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>'
+        '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>'
+    )
+    document = (
+        f'<w:document xmlns:w="{W}" xmlns:r="{R}"><w:body>'
+        '<w:p><w:pPr><w:bidi/></w:pPr><w:r><w:rPr><w:rtl/></w:rPr>'
+        '<w:t>گزارش بازدید از سامانه ویلومیر</w:t></w:r></w:p>'
+        '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Willowmere package marker</w:t></w:r></w:p>'
+        f'<w:p>{picture}</w:p>'
+        '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
+        '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>'
+        '</w:body></w:document>'
+    )
+    parts = [
+        ("/_rels/.rels", "application/vnd.openxmlformats-package.relationships+xml",
+         f'<Relationships xmlns="{REL}"><Relationship Id="rId1" Target="word/document.xml" '
+         f'Type="{R}/officeDocument"/></Relationships>'),
+        ("/word/_rels/document.xml.rels", "application/vnd.openxmlformats-package.relationships+xml",
+         f'<Relationships xmlns="{REL}"><Relationship Id="rIdSwatch" Target="media/swatch.png" '
+         f'Type="{R}/image"/></Relationships>'),
+        ("/word/document.xml",
+         "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml", document),
+    ]
+    body = "".join(
+        f'<pkg:part pkg:name="{name}" pkg:contentType="{kind}"><pkg:xmlData>{xml}</pkg:xmlData></pkg:part>'
+        for name, kind, xml in parts
+    )
+    swatch = base64.b64encode(tiny_png(8, 4, (0x2E, 0x7D, 0x32))).decode()
+    # Word wraps base64 at 76 characters, so the reader has to step over the line breaks
+    swatch = "\n".join(swatch[i:i + 76] for i in range(0, len(swatch), 76))
+    body += (f'<pkg:part pkg:name="/word/media/swatch.png" pkg:contentType="image/png" '
+             f'pkg:compression="store"><pkg:binaryData>{swatch}</pkg:binaryData></pkg:part>')
+    xml = ('<?xml version="1.0" encoding="utf-8"?><pkg:package '
+           'xmlns:pkg="http://schemas.microsoft.com/office/2006/xmlPackage">' + body + "</pkg:package>")
+    target = OUT / "word-package.doc"
+    target.write_bytes(b"\xef\xbb\xbf" + xml.encode("utf-8"))
+    written(target)
 
 
 # ---------------------------------------------------------------------------

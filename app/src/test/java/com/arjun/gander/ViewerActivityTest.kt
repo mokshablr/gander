@@ -856,6 +856,30 @@ class ViewerActivityTest {
         }
     }
 
+    /** Word's single-file XML named .doc opens in the Word page, which zips it back up. */
+    @Test
+    fun aWordXmlPackageDocOpensInTheWordPage() {
+        val controller = view(FixtureProvider.uriNamed("word-package.doc", "certificate.doc"))
+        assertThat(controller.pageName()).isEqualTo("docx.html")
+        assertThat(controller.underTheName()).isNull()
+    }
+
+    /** A mail app may hand over only the type, with no extension on the name, and it still goes there. */
+    @Test
+    fun aWordXmlPackageTypedAsWordOpensInTheWordPage() {
+        val uri = FixtureProvider.uriNamed("word-package.doc", "certificate")
+        assertThat(view(uri, "application/msword").pageName()).isEqualTo("docx.html")
+    }
+
+    /** The other files for the prose page still go to it, read the same way. */
+    @Test
+    fun theProsePageKeepsItsOwnFiles() {
+        for ((fixture, name) in listOf("legacy.doc" to "old.doc", "letter.odt" to "letter.odt", "memo.rtf" to "memo.rtf")) {
+            assertWithMessage(name).that(view(FixtureProvider.uriNamed(fixture, name)).pageName())
+                .isEqualTo("prose.html")
+        }
+    }
+
     /** A .ppt keeps its card though these bytes read as text, since the card says how to get it opened. */
     @Test
     fun aLegacyPowerPointKeepsItsCard() {

@@ -243,11 +243,59 @@ function vwDrawWordAgain(buf) {
   });
 }
 
+/*
+ * Word can save a document as a single XML file, a pkg:package holding every part a .docx
+ * zips together, XML parts as they are and binary ones in base64. Some systems hand these out
+ * named .doc, and the app sends those here once their first bytes show what they are
+ * (wordFileOpensAs). docx-preview reads only the zip, so the parts are zipped back up first.
+ * Anything that is not such a package, a .docx included, goes on to docx-preview untouched.
+ */
+var VW_XML_PACKAGE = "http://schemas.microsoft.com/office/2006/xmlPackage";
+
+function vwEscapeXml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+}
+
+function vwWordFromPackage(buf) {
+  var head = new Uint8Array(buf, 0, Math.min(buf.byteLength, 2));
+  if (head[0] === 0x50 && head[1] === 0x4B) return Promise.resolve(buf);
+  var xml = new DOMParser().parseFromString(new TextDecoder().decode(buf), "application/xml");
+  var root = xml.documentElement;
+  if (!root || root.namespaceURI !== VW_XML_PACKAGE || root.localName !== "package") {
+    return Promise.resolve(buf);
+  }
+  var zip = new JSZip();
+  var serializer = new XMLSerializer();
+  var types = "";
+  var parts = root.getElementsByTagNameNS(VW_XML_PACKAGE, "part");
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i];
+    var name = String(part.getAttributeNS(VW_XML_PACKAGE, "name") || "").replace(/^\/+/, "");
+    if (!name) continue;
+    var xmlData = part.getElementsByTagNameNS(VW_XML_PACKAGE, "xmlData")[0];
+    var binaryData = part.getElementsByTagNameNS(VW_XML_PACKAGE, "binaryData")[0];
+    if (xmlData && xmlData.firstElementChild) {
+      zip.file(name, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        serializer.serializeToString(xmlData.firstElementChild));
+    } else if (binaryData) {
+      zip.file(name, binaryData.textContent.replace(/\s+/g, ""), { base64: true });
+    } else {
+      continue;
+    }
+    types += '<Override PartName="/' + vwEscapeXml(name) + '" ContentType="' +
+      vwEscapeXml(part.getAttributeNS(VW_XML_PACKAGE, "contentType") || "") + '"/>';
+  }
+  zip.file("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' + types + "</Types>");
+  return zip.generateAsync({ type: "arraybuffer" });
+}
+
 /* Nothing is read below docx-preview's floor. The card is already up, and the library
    in the head may not even have parsed, which below Chromium 80 it cannot: issue #31,
    where this said "docx is not defined" instead. See vwWebViewTooOld in app.js. */
 if (!vwWebViewTooOld("Word documents")) {
   vwFetchDoc("buffer")
+    .then(vwWordFromPackage)
     .then(function (buf) {
       return vwDrawWord(buf)
         .then(function () {

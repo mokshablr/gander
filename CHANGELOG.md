@@ -6,6 +6,8 @@
   middle, so a folder of books named by author still shows each title and its year, where a name
   had one line and kept little more than the author (#77, thanks @XZY123lol for passing it on
   from 4PDA).
+- A .doc that Word saved as a single XML file, as some systems hand out their records, opens as
+  a Word document, where Gander said it was not an OpenDocument file and showed nothing.
 
 ## 2.9 (2026-11-08)
 

@@ -100,7 +100,8 @@ time with a **Show more** button, so they open instantly and can still be read e
 Word 97-2003 `.doc`, OpenDocument `.odt` and Rich Text `.rtf` are read by code written for
 Gander rather than by a bundled library: text and formatting, headings, lists, tables,
 pictures, footnotes, headers and footers, in any script. The file's first bytes choose the
-reader, so a `.doc` that is Rich Text inside, as many are, opens all the same. Word 6 and
+reader, so a `.doc` that is Rich Text inside, as many are, opens all the same, and one that
+Word saved as a single XML file opens as a Word document. Word 6 and
 Word 95 files show their text without formatting, and a Windows metafile picture shows a
 box saying it cannot be drawn.
 

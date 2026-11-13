@@ -365,10 +365,15 @@ open class ViewerActivity : AppCompatActivity() {
                 }
             }
         }
-        // Graphviz saves its graphs as .dot too, which the prose page cannot read: one that reads
-        // as text opens as text, while a Word template still goes to the prose page. Issue #58.
-        if (detected == FileKind.PROSE && ext == "dot") {
-            return whetherText(uri, ::dotOpensAsText) { text -> show(if (text) FileKind.TEXT else detected) }
+        // A file for the prose page may be Word's single-file XML, which only the Word page reads,
+        // whatever it is named or typed as, and a .dot may be a Graphviz graph, which opens as
+        // text (issue #58). See wordFileOpensAs.
+        if (detected == FileKind.PROSE) {
+            return offMain(::show) { app ->
+                runCatching {
+                    app.contentResolver.openInputStream(uri)?.use { wordFileOpensAs(it, ext) }
+                }.getOrNull() ?: detected
+            }
         }
         if (!FileKind.isUnknown(detected, ext)) return show(detected)
         // A file of no known format that reads as text opens as text, with no card to tap

@@ -212,3 +212,27 @@ def test_a_cell_runs_the_way_word_says(viewer, page, text, mode):
         text,
     )
     assert drawn == mode
+
+
+# ---------------------------------------------------------------------------
+# Word's single-file XML, which the app sends here when a .doc turns out to be one
+# ---------------------------------------------------------------------------
+
+def test_a_word_xml_package_is_zipped_up_and_drawn(viewer, page):
+    """
+    word-package.doc is a pkg:package under a .doc name, the shape of a file a user sent.
+    vwWordFromPackage zips its parts back into a .docx for docx-preview: the Persian paragraph
+    runs right to left, and the picture, which travels as base64, arrives as an image.
+    """
+    viewer("docx.html", "word-package.doc")
+    wait_for_document(page)
+    text = page.text_content("#container")
+    assert "Willowmere package marker" in text
+    assert "گزارش بازدید از سامانه ویلومیر" in text
+    page.wait_for_function(
+        "() => [...document.querySelectorAll('#container img')].some(i => i.complete && i.naturalWidth === 8)")
+    rtl = page.evaluate(
+        "() => [...document.querySelectorAll('#container p')]"
+        ".filter(p => p.textContent.includes('سامانه'))"
+        ".map(p => getComputedStyle(p).direction)")
+    assert rtl == ["rtl"]

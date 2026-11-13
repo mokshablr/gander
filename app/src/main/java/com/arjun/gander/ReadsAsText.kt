@@ -29,10 +29,32 @@ internal fun readsAsText(stream: InputStream): Boolean = isText(head(stream))
  * reads as text is not one. Rich Text and an OpenDocument saved as one XML file are text too,
  * and the prose page reads those, so they stay with it.
  */
-internal fun dotOpensAsText(stream: InputStream): Boolean {
+internal fun dotOpensAsText(stream: InputStream): Boolean = dotReadsAsText(head(stream))
+
+private fun dotReadsAsText(head: ByteArray): Boolean = isText(head) && !startsAsProseText(head)
+
+/**
+ * Which page a file bound for the prose page opens in, from its first bytes.
+ *
+ * Word can also save a document as one XML file holding every part of a .docx, and some systems
+ * hand those out named .doc. The prose page would take it for a flat OpenDocument and fail, so
+ * it goes to the Word page, which zips it back up. A .dot that reads as text is a Graphviz graph,
+ * as [dotOpensAsText] says, and everything else is a Word 97-2003 file for the prose page.
+ */
+internal fun wordFileOpensAs(stream: InputStream, ext: String): FileKind {
     val head = head(stream)
-    return isText(head) && !startsAsProseText(head)
+    return when {
+        startsAsWordXmlPackage(head) -> FileKind.DOCX
+        ext == "dot" && dotReadsAsText(head) -> FileKind.TEXT
+        else -> FileKind.PROSE
+    }
 }
+
+/** The namespace a single-file Office package's root is in, which nothing else uses. */
+private const val XML_PACKAGE_NS = "http://schemas.microsoft.com/office/2006/xmlPackage"
+
+private fun startsAsWordXmlPackage(head: ByteArray): Boolean =
+    startsAsProseText(head) && String(head, Charsets.UTF_8).contains(XML_PACKAGE_NS)
 
 private fun head(stream: InputStream): ByteArray {
     val head = ByteArray(TEXT_HEAD_BYTES)

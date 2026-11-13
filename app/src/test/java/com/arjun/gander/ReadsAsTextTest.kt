@@ -98,4 +98,30 @@ class ReadsAsTextTest {
         assertThat(dotIsText("<?xml version=\"1.0\"?>\n<office:document/>".toByteArray())).isFalse()
         assertThat(dotIsText("<office:document office:version=\"1.3\"/>".toByteArray())).isFalse()
     }
+
+    private fun opensAs(bytes: ByteArray, ext: String): FileKind =
+        wordFileOpensAs(ByteArrayInputStream(bytes), ext)
+
+    /**
+     * Word's single-file XML under a .doc or .dot name goes to the Word page, which zips it back
+     * up, since the prose page would take it for a flat OpenDocument and fail.
+     */
+    @Test
+    fun aWordXmlPackageOpensInTheWordPage() {
+        val pkg = Fixtures.bytes("word-package.doc")
+        assertThat(opensAs(pkg, "doc")).isEqualTo(FileKind.DOCX)
+        assertThat(opensAs(pkg, "dot")).isEqualTo(FileKind.DOCX)
+    }
+
+    /** Everything else keeps the page it had: Word 97 and flat OpenDocument the prose page, a graph text. */
+    @Test
+    fun otherDocAndDotFilesKeepTheirPages() {
+        assertThat(opensAs(Fixtures.bytes("legacy.doc"), "doc")).isEqualTo(FileKind.PROSE)
+        assertThat(opensAs(Fixtures.bytes("legacy.doc"), "dot")).isEqualTo(FileKind.PROSE)
+        assertThat(opensAs(Fixtures.bytes("memo.rtf"), "doc")).isEqualTo(FileKind.PROSE)
+        assertThat(opensAs("<?xml version=\"1.0\"?>\n<office:document/>".toByteArray(), "doc"))
+            .isEqualTo(FileKind.PROSE)
+        assertThat(opensAs("digraph G {\n  a -> b;\n}\n".toByteArray(), "dot")).isEqualTo(FileKind.TEXT)
+        assertThat(opensAs("digraph G {\n  a -> b;\n}\n".toByteArray(), "doc")).isEqualTo(FileKind.PROSE)
+    }
 }

@@ -103,6 +103,7 @@ should stay obviously so.
 | `release.nfo` | The notes that come with a download, as text. |
 | `pump.v` | A Verilog source, which goes to the text viewer by its extension. |
 | `legacy.doc` | A Word 97 file written by hand: a compound file with its text in UTF-16, a bold run and a two-by-two table. LibreOffice opens it. |
+| `word-package.doc` | A Word document saved as one XML file (Flat OPC, `pkg:package`) under a .doc name, as a user's file came: a Persian paragraph right to left, an English one and a base64 picture. The app sends it to `docx.html` (`wordFileOpensAs`), which zips its parts back up (`vwWordFromPackage`). |
 | `letter.odt` | The same document as OpenDocument: a heading style, a bold span, a bulleted list, a shaded table, a footnote, a picture, a page break and an A4 page with a header. |
 | `memo.rtf` | The same document as Rich Text, the way Word writes one: a code page, `\u` escapes for the Hindi, a Wingdings bullet, a footnote, a `\pngblip` picture and a page break. |
 | `exif-{1,3,5,6,7,8}.jpg` | `Thumbs.exifRotation`, including the transpose and transverse cases folded into 90 and 270. |

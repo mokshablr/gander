@@ -130,6 +130,11 @@ class ViewerFormatsTest {
     fun aWord97DocumentRenders() =
         expect("legacy.doc", "#container", "Field Survey")
 
+    // Word's single-file XML under a .doc name, which the app sends to docx.html instead
+    @Test
+    fun aWordXmlPackageDocRenders() =
+        expect("word-package.doc", "#container", "Willowmere package marker")
+
     @Test
     fun anOpenDocumentTextRenders() =
         expect("letter.odt", "#container", "Field Survey")

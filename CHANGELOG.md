@@ -10,6 +10,9 @@
   "fi" sits or the font changes inside the word, where it found nothing. It also finds a word
   whose accents the file keeps apart from their letters, and a Chinese word the file spells with
   a look-alike character.
+- Search in a PDF finds a Thai word, where it found nothing, and the highlight on a word whose
+  accents the file keeps apart from their letters reaches the word's last letter. PDFs are now
+  drawn by pdf.js 6.5.438, up from 6.3.289.
 - A search highlight in a PDF sits on the word it found in Turkish text, where every capital
   dotted İ before the word moved it one letter to the right.
 - A long file name in a folder's list takes up to two lines, and one longer than that loses its

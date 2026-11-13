@@ -20,7 +20,7 @@ Released under the MIT Licence, the full text of which appears below.
 
 | Project | Version | Licence |
 | --- | --- | --- |
-| pdf.js (legacy build, with worker) | 6.3.289 | Apache-2.0 |
+| pdf.js (legacy build, with worker) | 6.5.438 | Apache-2.0 |
 | docx-preview | 0.4.1 | Apache-2.0 |
 | SheetJS Community Edition | 0.20.3 | Apache-2.0 |
 | DOMPurify | 3.4.17 | Apache-2.0 (elected) |
@@ -34,9 +34,9 @@ Released under the MIT Licence, the full text of which appears below.
 | FileReader.js | 0.99 | MIT |
 | jQuery | 1.11.3 | MIT |
 | D3 | 3.5.10 | BSD-3-Clause |
-| Adobe CMap resources (bundled with pdf.js) | 1990-2009, via pdf.js 6.3.289 | BSD-3-Clause |
-| OpenJPEG, the JPEG 2000 decoder (bundled with pdf.js) | via pdf.js 6.3.289 | BSD-2-Clause |
-| PDFium's JBIG2 decoder (bundled with pdf.js) | via pdf.js 6.3.289 | BSD-3-Clause and Apache-2.0 |
+| Adobe CMap resources (bundled with pdf.js) | 1990-2009, via pdf.js 6.5.438 | BSD-3-Clause |
+| OpenJPEG, the JPEG 2000 decoder (bundled with pdf.js) | via pdf.js 6.5.438 | BSD-2-Clause |
+| PDFium's JBIG2 decoder (bundled with pdf.js) | via pdf.js 6.5.438 | BSD-3-Clause and Apache-2.0 |
 
 The minified files are unmodified upstream distribution artifacts.
 `docs/VENDORED.md` in the repository records where each one came from, and
@@ -166,7 +166,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Applies to the following bundled libraries:
 
-- pdf.js 6.3.289 and its worker, Copyright 2024 Mozilla Foundation
+- pdf.js 6.5.438 and its worker, Copyright 2024 Mozilla Foundation
 - The wasm image decoders in `viewer/lib/wasm/`, as compiled and wrapped by
   pdf.js, Copyright 2024-2026 Mozilla Foundation
 - docx-preview, Copyright Volodymyr Baydalka

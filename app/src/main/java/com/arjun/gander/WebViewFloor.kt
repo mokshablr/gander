@@ -11,7 +11,7 @@ package com.arjun.gander
 
 /**
  * Chromium major version the vendored pdf.js needs. Mozilla puts the legacy
- * build's floor at Chrome 125, and `lib/pdf.min.mjs` is pdfjs-dist 6.3.289
+ * build's floor at Chrome 125, and `lib/pdf.min.mjs` is pdfjs-dist 6.5.438
  * legacy. Below it, a PDF goes to the card or the simple view instead: see [pdfRoute].
  *
  * Read this before raising it alongside a pdf.js upgrade. Chromium 138 is the

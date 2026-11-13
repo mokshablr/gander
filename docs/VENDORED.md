@@ -15,12 +15,12 @@ commit.
 
 | File | Project | Version | License | Upstream |
 | --- | --- | --- | --- | --- |
-| `pdf.min.mjs` | pdf.js (legacy build) | 6.3.289 | Apache-2.0 | https://github.com/mozilla/pdf.js |
-| `pdf.worker.min.mjs` | pdf.js worker (legacy build) | 6.3.289 | Apache-2.0 | https://github.com/mozilla/pdf.js |
-| `cmaps/` (169 files) | Adobe CMap resources, redistributed by pdf.js | 1990-2009, via pdf.js 6.3.289 | BSD-3-Clause | https://github.com/adobe-type-tools/cmap-resources |
-| `wasm/openjpeg.wasm` | OpenJPEG, compiled and redistributed by pdf.js | via pdf.js 6.3.289 | BSD-2-Clause | https://github.com/uclouvain/openjpeg |
-| `wasm/jbig2.wasm` | PDFium's JBIG2 decoder, compiled and redistributed by pdf.js | via pdf.js 6.3.289 | BSD-3-Clause and Apache-2.0 | https://pdfium.googlesource.com/pdfium/ |
-| `wasm/LICENSE_*` (4 files) | licence texts for the two decoders above | via pdf.js 6.3.289 | see above | https://github.com/mozilla/pdf.js |
+| `pdf.min.mjs` | pdf.js (legacy build) | 6.5.438 | Apache-2.0 | https://github.com/mozilla/pdf.js |
+| `pdf.worker.min.mjs` | pdf.js worker (legacy build) | 6.5.438 | Apache-2.0 | https://github.com/mozilla/pdf.js |
+| `cmaps/` (169 files) | Adobe CMap resources, redistributed by pdf.js | 1990-2009, via pdf.js 6.5.438 | BSD-3-Clause | https://github.com/adobe-type-tools/cmap-resources |
+| `wasm/openjpeg.wasm` | OpenJPEG, compiled and redistributed by pdf.js | via pdf.js 6.5.438 | BSD-2-Clause | https://github.com/uclouvain/openjpeg |
+| `wasm/jbig2.wasm` | PDFium's JBIG2 decoder, compiled and redistributed by pdf.js | via pdf.js 6.5.438 | BSD-3-Clause and Apache-2.0 | https://pdfium.googlesource.com/pdfium/ |
+| `wasm/LICENSE_*` (4 files) | licence texts for the two decoders above | via pdf.js 6.5.438 | see above | https://github.com/mozilla/pdf.js |
 | `jszip3.min.js` | JSZip | 3.10.1 | MIT or GPL-3.0 dual | https://github.com/Stuk/jszip |
 | `docx-preview.min.js` | docx-preview | 0.4.1 | Apache-2.0 | https://github.com/VolodymyrBaydalka/docxjs |
 | `xlsx.full.min.js` | SheetJS Community Edition | 0.20.3 | Apache-2.0 | https://git.sheetjs.com/sheetjs/sheetjs |
@@ -55,8 +55,8 @@ silently for whatever was trimmed.
 ## The wasm image decoders
 
 `wasm/` holds the two image decoders pdf.js keeps in WebAssembly rather than in
-its bundle. Since pdf.js 4 the JPEG 2000 decoder (`openjpeg.wasm`, 252 KB) and
-the JBIG2 one (`jbig2.wasm`, 105 KB) are fetched by the worker at the moment it
+its bundle. Since pdf.js 4 the JPEG 2000 decoder (`openjpeg.wasm`, 221 KB) and
+the JBIG2 one (`jbig2.wasm`, 104 KB) are fetched by the worker at the moment it
 meets an image that needs one, and the `wasmUrl` option in `pdf.mjs` is the
 only way to say where they are.
 
@@ -232,7 +232,7 @@ it back with Unix ones, as Python's text mode does, leaves git showing every lin
 cannot parse never runs, so the page has no way to report the problem from inside
 itself. That makes the Chromium floor a fact to check rather than a preference.
 
-- The legacy build of 6.3.289 supports **Chromium 125 and newer**: pdf.js 6.0
+- The legacy build of 6.5.438 supports **Chromium 125 and newer**: pdf.js 6.0
   set that floor in PR 21152, the same number the FAQ gave for 5.7.284. That
   number is `PDFJS_MIN_CHROMIUM_MAJOR` in
   `app/src/main/java/com/arjun/gander/WebViewFloor.kt`, compared against the
@@ -261,7 +261,7 @@ itself. That makes the Chromium floor a fact to check rather than a preference.
   writes only `left`, `top`, `font-family` and three custom properties on each span:
   `--font-height`, `--scale-x` and `--rotate`. It never writes `font-size` or
   `transform`; the stylesheet has to turn those properties into both, and the scale
-  hook in 6.3.289 is `--total-scale-factor` (the older `--scale-factor` is not read).
+  hook in 6.5.438 is `--total-scale-factor` (the older `--scale-factor` is not read).
   Get any of it wrong and nothing throws and nothing looks broken, because the text is
   transparent and the picture underneath is still correct. It shows up only as a
   selection covering the wrong words or a search highlight stopping short of the word
@@ -273,7 +273,7 @@ itself. That makes the Chromium floor a fact to check rather than a preference.
   face as the chunks stream past, so pdf.js measures each run in the typeface the page
   was set in rather than in a generic. Without it, `--scale-x` corrects a run's total
   width and leaves every character position inside it wrong, which is a search
-  highlight landing short. Five things about 6.3.289 make it work, and none is
+  highlight landing short. Five things about 6.5.438 make it work, and none is
   documented API:
   - `textContent.styles` is keyed by `font.loadedName`, and `item.fontName` is that
     same key, so the mapping is direct rather than a lookup.

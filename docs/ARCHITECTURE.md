@@ -63,7 +63,7 @@ A native fast-scroll thumb serves every WebView page but `imgweb.html`, reading 
 
 Gradle: androidx core-ktx 1.15.0, appcompat 1.7.0, recyclerview 1.3.2, webkit 1.16.0, exifinterface 1.3.7, Material 1.12.0, Media3 ExoPlayer and UI 1.5.1, subsampling-scale-image-view 3.10.0. AGP 8.13.2, Kotlin 2.1.0, Gradle 8.14.6. Tests: JUnit 4, Truth, Robolectric 4.16.1, Espresso.
 
-Vendored JavaScript in `assets/viewer/lib/`, recorded in `docs/VENDORED.md` and fetched by `scripts/fetch-viewer-libs.sh`: pdf.js 6.3.289 legacy build with its CMaps and wasm decoders, docx-preview 0.4.1 with JSZip 3.10.1, SheetJS CE 0.20.3, marked 18.1.1, DOMPurify 3.4.17, and PPTXjs 1.21.1 with jQuery 1.11.3, D3 3.5.10, NVD3 1.8.1-dev and JSZip 2.4.0. PPTXjs is unmaintained and carries one patch (`scripts/pptxjs.patch`). `VendoredLibsTest` pins every library file's SHA-256.
+Vendored JavaScript in `assets/viewer/lib/`, recorded in `docs/VENDORED.md` and fetched by `scripts/fetch-viewer-libs.sh`: pdf.js 6.5.438 legacy build with its CMaps and wasm decoders, docx-preview 0.4.1 with JSZip 3.10.1, SheetJS CE 0.20.3, marked 18.1.1, DOMPurify 3.4.17, and PPTXjs 1.21.1 with jQuery 1.11.3, D3 3.5.10, NVD3 1.8.1-dev and JSZip 2.4.0. PPTXjs is unmaintained and carries one patch (`scripts/pptxjs.patch`). `VendoredLibsTest` pins every library file's SHA-256.
 
 ## Constraints and their guards
 

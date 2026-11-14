@@ -67,6 +67,16 @@ def frames(page, count=2):
     })""", count)
 
 
+def first_asked(server):
+    """
+    The first two pictures asked for, in page order. The page asks for two at once, on two
+    connections, so either can reach the server first, and a test that read only the first one
+    saw page 2 where the page had asked for 1.
+    """
+    until(lambda: len(server.pages_asked()) >= 2, "two pictures asked for")
+    return sorted(server.pages_asked()[:2])
+
+
 def until(check, what, timeout=15.0):
     """Waits for [check], asked of the server's side, to come true."""
     deadline = time.time() + timeout
@@ -412,7 +422,7 @@ def test_a_page_out_of_range_is_not_gone_to(page, server, port):
 
 def test_a_reopened_document_opens_at_its_page_and_draws_that_first(page, server, port):
     opened(page, server, [A4] * 300, resume=40)
-    assert server.pages_asked()[0] == (40, False)
+    assert first_asked(server) == [(40, False), (41, False)]
     drawn(page, 40)
     assert top_of(page, 40) == pytest.approx(0, abs=2)
     channel = port()
@@ -421,7 +431,7 @@ def test_a_reopened_document_opens_at_its_page_and_draws_that_first(page, server
 
 def test_a_resume_past_the_end_opens_at_the_top(page, server):
     opened(page, server, [A4] * 10, resume=11)
-    assert server.pages_asked()[0] == (1, False)
+    assert first_asked(server) == [(1, False), (2, False)]
 
 
 def test_night_mode_asks_for_every_page_turned_over_and_back(page, server, port):

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.10 (2026-11-15)
 
 - Several photos in a folder you added in Gander can be deleted together, with one prompt from
   Android for all of them, where each photo brought the prompt up again (#75, thanks @0xlne).

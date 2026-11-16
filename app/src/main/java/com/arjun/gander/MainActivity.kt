@@ -82,9 +82,9 @@ class MainActivity : AppCompatActivity() {
     private class Pending(val uri: String, val commit: () -> Unit)
 
     /**
-     * The photos picked to delete together in the folder on screen, by address, and null while a
-     * tap on a row opens it. Picking starts by holding a photo's row, or from Select photos in
-     * the menu, and then a tap picks a photo or lets it go. Android's one prompt covers them
+     * The photos, videos and audio picked to delete together in the folder on screen, by address,
+     * and null while a tap on a row opens it. Picking starts by holding one's row, or from Select
+     * files in the menu, and then a tap picks one or lets it go. Android's one prompt covers them
      * all, where deleting in the viewer brings it up for each photo. Issue #75.
      */
     private var picked: MutableSet<String>? = null
@@ -560,7 +560,7 @@ class MainActivity : AppCompatActivity() {
         // rather than one element that moves.
         toolbar.title = when {
             picking == null -> here?.label.orEmpty()
-            picking.isEmpty() -> getString(R.string.select_photos)
+            picking.isEmpty() -> getString(selectWord())
             else -> resources.getQuantityString(R.plurals.photos_selected, picking.size, picking.size)
         }
         lockup.visibility = if (here == null) View.VISIBLE else View.GONE
@@ -575,7 +575,10 @@ class MainActivity : AppCompatActivity() {
         val inFolder = here != null
         toolbar.menu.findItem(R.id.action_sort)?.isVisible = inFolder && picking == null
         toolbar.menu.findItem(R.id.action_filter)?.isVisible = inFolder && picking == null
-        toolbar.menu.findItem(R.id.action_select)?.isVisible = inFolder && picking == null && pickableIn == here
+        toolbar.menu.findItem(R.id.action_select)?.apply {
+            isVisible = inFolder && picking == null && pickableIn == here
+            setTitle(selectWord())
+        }
         toolbar.menu.findItem(R.id.action_delete)?.apply {
             isVisible = picking != null
             // It has nothing to ask about until a photo is picked
@@ -596,6 +599,10 @@ class MainActivity : AppCompatActivity() {
         }
         toolbar.subtitle = if (filterSummary != null) getString(R.string.filter_subtitle, filterSummary) else null
     }
+
+    /** Select photos where only photos can be picked here, and Select files where videos or audio can too. */
+    private fun selectWord(): Int =
+        if (allPictures(adapter.pickable.map { it.toUri() })) R.string.select_photos else R.string.select_files
 
     /** Starts picking photos to delete together, with [start] picked. */
     private fun pick(start: Set<String>) {
@@ -624,7 +631,7 @@ class MainActivity : AppCompatActivity() {
 
     /** After a yes in Android's prompt, the photos that left the folder leave the list, and the picking is over. */
     private fun trashed(gone: List<Uri>, stayed: List<Uri>) {
-        Toast.makeText(this, trashWord(this, gone.size, stayed.size), Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, trashWord(this, gone.size, stayed.size, allPictures(gone + stayed)), Toast.LENGTH_SHORT).show()
         if (gone.isEmpty()) return
         picked = null
         adapter.pick(null)
@@ -839,8 +846,8 @@ class MainActivity : AppCompatActivity() {
                     Thumbs.supported(FileKind.detect(ext, f.mime), ext)
                 },
                 thumbExt = ext,
-                // A photo Android can move to its bin, which is what picking is for
-                pickKey = fileUri.toString().takeIf { f.isPhoto() && mayTrash(fileUri) }
+                // A photo, video or audio file Android can move to its bin, which is what picking is for
+                pickKey = fileUri.toString().takeIf { binnedAs(f.name, f.mime) != null && mayTrash(fileUri) }
             )
         }
         if (rows.isEmpty()) {

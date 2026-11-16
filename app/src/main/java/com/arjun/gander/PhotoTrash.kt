@@ -19,11 +19,53 @@ import androidx.annotation.RequiresApi
 import androidx.core.net.toUri
 
 /*
- * Deleting photos in a folder added in Gander, issue #75. Gander keeps read access to a folder
- * and no more, so Android does the deleting: it shows its own prompt, and on a yes moves the
- * photos to its trash, which keeps them for 30 days. One prompt covers as many photos as it is
- * asked about, which is what makes picking many of them worth it.
+ * Deleting photos, videos and audio in a folder added in Gander, issue #75. Gander keeps read
+ * access to a folder and no more, so Android does the deleting: it shows its own prompt, and on a
+ * yes moves the files to its trash, which keeps them for 30 days. One prompt covers as many files
+ * as it is asked about, which is what makes picking many of them worth it. Android's trash takes
+ * media only, so other files can't be picked.
  */
+
+/** The media store's collections Android's trash takes a file from, by the store's media type. */
+internal enum class Binned(private val mediaType: Int) {
+    PICTURE(MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE),
+    VIDEO(MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO),
+    AUDIO(MediaStore.Files.FileColumns.MEDIA_TYPE_AUDIO);
+
+    fun entry(volume: String, id: Long): Uri = ContentUris.withAppendedId(
+        when (this) {
+            PICTURE -> MediaStore.Images.Media.getContentUri(volume)
+            VIDEO -> MediaStore.Video.Media.getContentUri(volume)
+            AUDIO -> MediaStore.Audio.Media.getContentUri(volume)
+        },
+        id,
+    )
+
+    companion object {
+        fun ofMediaType(type: Int): Binned? = entries.firstOrNull { it.mediaType == type }
+    }
+}
+
+/**
+ * Which collection a file named [name] would be in, going by its name and the type its folder
+ * gave, or null for a file Android's trash doesn't take. It is what the folder's list knows, and
+ * all Android 11 lets Gander know, since it may not read the store's entry there.
+ */
+internal fun binnedAs(name: String, mime: String?): Binned? {
+    val ext = name.substringAfterLast('.', "").lowercase()
+    return when (FileKind.detect(ext, mime)) {
+        FileKind.IMAGE, FileKind.IMAGE_WEB -> Binned.PICTURE
+        FileKind.PLAYER ->
+            if (FileKind.isAudioExt(ext) || mime?.startsWith("audio/") == true) Binned.AUDIO else Binned.VIDEO
+        else -> null
+    }
+}
+
+/** Whether every one of [files] is a picture, going by its name, for what is said about them afterwards. */
+internal fun allPictures(files: List<Uri>): Boolean = files.all {
+    binnedAs(runCatching { DocumentsContract.getDocumentId(it) }.getOrDefault("").substringAfterLast('/'), null) ==
+        Binned.PICTURE
+}
 
 /**
  * Whether Android can be asked to move [photo] to its trash: from Android 11, which brought the
@@ -33,36 +75,40 @@ internal fun mayTrash(photo: Uri, sdk: Int = Build.VERSION.SDK_INT): Boolean =
     sdk >= Build.VERSION_CODES.R && photo.authority == EXTERNAL_STORAGE_AUTHORITY
 
 /**
- * The request for Android's one prompt to move [photos] to its trash, or null where it can be
+ * The request for Android's one prompt to move [files] to its trash, or null where it can be
  * made for none of them.
  *
- * The prompt takes a photo by its entry among the media store's pictures, while getMediaUri
- * answers with its entry among all files, which the prompt refuses, so the same number is put
- * under the pictures. From Android 12 Gander may read that entry, and a file the store doesn't
- * count as a picture, such as one in a folder holding a .nomedia file, is left out here, since
- * the prompt would take it and then move nothing. So is a file the store doesn't list. What was
- * left out is found afterwards still in its folder, as a photo the prompt failed to move is.
+ * The prompt takes a file by its entry among the store's pictures, videos or audio, while
+ * getMediaUri answers with its entry among all files, which the prompt refuses, so the same
+ * number is put under the collection the file belongs to. From Android 12 Gander may read that
+ * entry, and the store's own media type says which. A file the store counts as none of them, such
+ * as one in a folder holding a .nomedia file, is left out, since the prompt would take it and
+ * then move nothing. So is a file the store doesn't list. Android 11 lets Gander read nothing,
+ * so there the file's name and type decide. What was left out is found afterwards still in its
+ * folder, as a file the prompt failed to move is.
  */
 @RequiresApi(Build.VERSION_CODES.R)
-internal fun trashRequest(context: Context, photos: List<Uri>, sdk: Int = Build.VERSION.SDK_INT): PendingIntent? {
-    val pictures = photos.mapNotNull { photo ->
+internal fun trashRequest(context: Context, files: List<Uri>, sdk: Int = Build.VERSION.SDK_INT): PendingIntent? {
+    val resolver = context.contentResolver
+    val entries = files.mapNotNull { document ->
         runCatching {
-            val file = MediaStore.getMediaUri(context, photo) ?: return@runCatching null
-            if (sdk >= Build.VERSION_CODES.S && !isPicture(context.contentResolver, file)) return@runCatching null
-            ContentUris.withAppendedId(
-                MediaStore.Images.Media.getContentUri(MediaStore.getVolumeName(file)),
-                ContentUris.parseId(file),
-            )
+            val file = MediaStore.getMediaUri(context, document) ?: return@runCatching null
+            val binned = if (sdk >= Build.VERSION_CODES.S) {
+                mediaType(resolver, file)?.let(Binned::ofMediaType)
+            } else {
+                binnedAs(DocumentsContract.getDocumentId(document).substringAfterLast('/'), resolver.getType(document))
+            }
+            binned?.entry(MediaStore.getVolumeName(file), ContentUris.parseId(file))
         }.getOrNull()
     }
-    if (pictures.isEmpty()) return null
-    return runCatching { MediaStore.createTrashRequest(context.contentResolver, pictures, true) }.getOrNull()
+    if (entries.isEmpty()) return null
+    return runCatching { MediaStore.createTrashRequest(resolver, entries, true) }.getOrNull()
 }
 
-private fun isPicture(resolver: ContentResolver, file: Uri): Boolean =
+private fun mediaType(resolver: ContentResolver, file: Uri): Int? =
     resolver.query(file, arrayOf(MediaStore.Files.FileColumns.MEDIA_TYPE), null, null, null)?.use {
-        it.moveToFirst() && it.getInt(0) == MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE
-    } == true
+        if (it.moveToFirst()) it.getInt(0) else null
+    }
 
 /**
  * Whether [photo] can still be found in its folder, asked after a yes in Android's prompt, which
@@ -172,14 +218,16 @@ internal class TrashPrompt(
 }
 
 /**
- * What to say once Android's prompt has been answered with a yes: how many of the photos went to
- * the bin, and how many are still in their folder.
+ * What to say once Android's prompt has been answered with a yes: how many of the files went to
+ * the bin, and how many are still in their folder. They are called photos where all of them are.
  */
-internal fun trashWord(context: Context, gone: Int, stayed: Int): String {
-    val went = context.resources.getQuantityString(R.plurals.photos_trashed, gone, gone)
-    val left = context.resources.getQuantityString(R.plurals.photos_not_trashed, stayed, stayed)
+internal fun trashWord(context: Context, gone: Int, stayed: Int, photos: Boolean = true): String {
+    val res = context.resources
+    val went = res.getQuantityString(if (photos) R.plurals.photos_trashed else R.plurals.files_trashed, gone, gone)
+    val left = res.getQuantityString(if (photos) R.plurals.photos_not_trashed else R.plurals.files_not_trashed, stayed, stayed)
+    val notOne = if (photos) R.string.photo_not_trashed else R.string.file_not_trashed
     return when {
-        gone + stayed == 1 -> context.getString(if (gone == 1) R.string.photo_trashed else R.string.photo_not_trashed)
+        gone + stayed == 1 -> context.getString(if (gone == 1) R.string.photo_trashed else notOne)
         stayed == 0 -> went
         gone == 0 -> left
         else -> context.getString(R.string.photos_trashed_some, went, left)

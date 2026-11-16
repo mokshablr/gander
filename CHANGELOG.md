@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Videos and audio in a folder you added in Gander can be deleted as photos can, from the
+  folder's list: hold one down or use Select files in the menu, pick photos, videos and audio
+  together, and Android asks once for all of them and keeps them in its bin for 30 days. Other
+  files, such as PDFs and documents, can't be picked, because Android's bin takes only photos,
+  videos and audio (#75).
+
 ## 2.10 (2026-11-15)
 
 - Several photos in a folder you added in Gander can be deleted together, with one prompt from

@@ -34,8 +34,8 @@ internal sealed interface Row {
         val thumbUri: Uri? = null,
         val thumbExt: String = "",
         /**
-         * What the row goes by while rows are picked to delete together, issue #75: a photo's
-         * address. Null for a row that can't be picked.
+         * What the row goes by while rows are picked to delete together, issue #75: the address
+         * of a photo, video or audio file. Null for a row that can't be picked.
          */
         val pickKey: String? = null
     ) : Row

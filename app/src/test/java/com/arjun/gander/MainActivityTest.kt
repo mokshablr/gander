@@ -1168,6 +1168,52 @@ class MainActivityTest {
         assertThat(controller.rowTitles()).contains(context.getString(R.string.folders))
     }
 
+    /**
+     * Videos and audio are picked as photos are and go to the bin in the same prompt, each asked
+     * for under its own collection. A document can't be: Android's prompt takes only media.
+     */
+    @Test
+    fun videosAndAudioArePickedWithPhotosAndGoToTheBinInTheSamePrompt() {
+        docs = FakeDocumentsProvider.install(EXTERNAL_STORAGE_AUTHORITY)
+            .folder(
+                "primary:Media", "Media",
+                ChildDoc("primary:Media/a.jpg", "a.jpg", "image/jpeg", 10, 1_000),
+                ChildDoc("primary:Media/clip.mp4", "clip.mp4", "video/mp4", 20, 2_000),
+                ChildDoc("primary:Media/notes.pdf", "notes.pdf", "application/pdf", 30, 3_000),
+                ChildDoc("primary:Media/song.mp3", "song.mp3", "audio/mpeg", 40, 4_000),
+            )
+        val tree = FakeDocumentsProvider.treeUri("primary:Media", EXTERNAL_STORAGE_AUTHORITY)
+        context.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        fun inMedia(tree: Uri, name: String) = DocumentsContract.buildDocumentUriUsingTree(tree, "primary:Media/$name")
+        media = FakeMediaStore.install()
+            .entry(inMedia(tree, "a.jpg"), 11)
+            .entry(inMedia(tree, "clip.mp4"), 12, MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO)
+            .entry(inMedia(tree, "notes.pdf"), 13, MediaStore.Files.FileColumns.MEDIA_TYPE_DOCUMENT)
+            .entry(inMedia(tree, "song.mp3"), 14, MediaStore.Files.FileColumns.MEDIA_TYPE_AUDIO)
+        val controller = home()
+        controller.clickRow("Media")
+        assertThat(controller.bar().menu.findItem(R.id.action_select).title).isEqualTo(context.getString(R.string.select_files))
+        assertThat(controller.holdRow("notes.pdf")).isFalse()
+
+        assertThat(controller.holdRow("clip.mp4")).isTrue()
+        controller.clickRow("song.mp3")
+        controller.clickRow("notes.pdf")
+        controller.clickRow("a.jpg")
+        assertThat(controller.barTitle()).isEqualTo("3 selected")
+
+        val prompt = controller.tapBin()!!
+        listOf("a.jpg", "clip.mp4", "song.mp3").forEach { docs.remove("primary:Media/$it") }
+        controller.answer(prompt, Activity.RESULT_OK)
+
+        assertThat(media.trashRequests.single().first).containsExactly(
+            MediaStore.Video.Media.getContentUri(FakeMediaStore.VOLUME, 12),
+            MediaStore.Audio.Media.getContentUri(FakeMediaStore.VOLUME, 14),
+            picture(11),
+        ).inOrder()
+        assertThat(ShadowToast.getTextOfLatestToast()).isEqualTo("3 files moved to the bin")
+        assertThat(controller.rowTitles()).containsExactly("notes.pdf")
+    }
+
     /** From the menu too, for whoever doesn't hold rows down: with nothing picked yet, and a bin that asks nothing. */
     @Test
     fun selectPhotosInTheMenuStartsPickingWithNothingPicked() {

@@ -189,6 +189,8 @@
          list, since Android's one prompt then covers them all. Asked for on issue #75, where
          its prompt for every photo was hundreds of extra taps. -->
     <string name="select_photos">Select photos</string>
+    <!-- The same in a folder's list, where videos and audio can be picked as well as photos -->
+    <string name="select_files">Select files</string>
     <plurals name="photos_selected">
         <item quantity="one">%d selected</item>
         <item quantity="other">%d selected</item>
@@ -205,6 +207,16 @@
     <plurals name="photos_not_trashed">
         <item quantity="one">%d photo could not be moved to the bin</item>
         <item quantity="other">%d photos could not be moved to the bin</item>
+    </plurals>
+    <!-- The same where videos or audio were among them -->
+    <string name="file_not_trashed">The file could not be moved to the bin</string>
+    <plurals name="files_trashed">
+        <item quantity="one">%d file moved to the bin</item>
+        <item quantity="other">%d files moved to the bin</item>
+    </plurals>
+    <plurals name="files_not_trashed">
+        <item quantity="one">%d file could not be moved to the bin</item>
+        <item quantity="other">%d files could not be moved to the bin</item>
     </plurals>
     <!-- Some went and some stayed: the two sentences above, one after the other. -->
     <string name="photos_trashed_some">%1$s. %2$s</string>

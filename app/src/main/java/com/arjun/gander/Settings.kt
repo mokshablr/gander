@@ -19,6 +19,7 @@ object Settings {
     private const val PREFS = "viewer"
     private const val KEY_NIGHT = "night"
     private const val KEY_SORT_ORDER = "folder_sort_order"
+
     // Named for books, which had it first; renaming it would lose the size already chosen
     private const val KEY_TEXT_SIZE = "book_text_size"
     private const val KEY_DELETE_FOR_GOOD = "delete_for_good"

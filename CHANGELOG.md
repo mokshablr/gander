@@ -7,6 +7,10 @@
   together, and Android asks once for all of them and keeps them in its bin for 30 days. Other
   files, such as PDFs and documents, can't be picked, because Android's bin takes only photos,
   videos and audio (#75).
+- Delete for good, in the menu of a folder you added, makes Delete ask Android to delete the
+  photos, videos and audio outright instead of moving them to its bin, which keeps them on the
+  phone for 30 days and which only some gallery apps can empty. Android still asks first, once
+  for all of them, in the folder's list and in the viewer alike (#75, thanks @0xlne).
 
 ## 2.10 (2026-11-15)
 

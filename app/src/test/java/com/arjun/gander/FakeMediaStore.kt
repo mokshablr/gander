@@ -16,7 +16,8 @@ import org.robolectric.Robolectric
 /**
  * A stand-in for Android's media store, for what deleting a photo asks of it, none of which
  * Robolectric answers: getMediaUri, which turns a document into the store's entry among all files,
- * that entry's media type, and createTrashRequest, which hands back the prompt to open.
+ * that entry's media type, and createTrashRequest and createDeleteRequest, which hand back the
+ * prompt to open.
  */
 internal class FakeMediaStore : ContentProvider() {
 
@@ -34,6 +35,9 @@ internal class FakeMediaStore : ContentProvider() {
     /** Each trash request: the entries it was for, and what it would set on them. */
     val trashRequests = mutableListOf<Pair<List<Uri>, ContentValues?>>()
 
+    /** Each request to delete for good: the entries it was for. */
+    val deleteRequests = mutableListOf<List<Uri>>()
+
     fun entry(document: Uri, id: Long, mediaType: Int = MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE) =
         apply { entries[document] = id to mediaType }
 
@@ -45,6 +49,14 @@ internal class FakeMediaStore : ContentProvider() {
             // As the store does for a file it doesn't list
             val (id, _) = entries[document] ?: throw IllegalArgumentException("Not listed: $document")
             Bundle().apply { putParcelable("uri", MediaStore.Files.getContentUri(VOLUME, id)) }
+        }
+        "create_delete_request" -> {
+            val clip = extras!!.getParcelable<ClipData>("clip_data")!!
+            deleteRequests += (0 until clip.itemCount).map { clip.getItemAt(it).uri }
+            val prompt = PendingIntent.getActivity(
+                context!!, 0, Intent("test.DELETE_PROMPT"), PendingIntent.FLAG_IMMUTABLE
+            )
+            Bundle().apply { putParcelable("result", prompt) }
         }
         "create_trash_request" -> {
             val clip = extras!!.getParcelable<ClipData>("clip_data")!!

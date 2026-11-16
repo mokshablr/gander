@@ -19,6 +19,14 @@
         android:title="@string/select_photos"
         android:visible="false"
         app:showAsAction="never" />
+    <!-- Whether Delete deletes for good rather than moving to Android's bin, issue #75. Shown
+         wherever Delete can be used in a folder, so it can be seen and changed just before. -->
+    <item
+        android:id="@+id/action_delete_for_good"
+        android:checkable="true"
+        android:title="@string/delete_for_good"
+        android:visible="false"
+        app:showAsAction="never" />
     <item
         android:id="@+id/action_delete"
         android:icon="@drawable/ic_delete"

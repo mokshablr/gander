@@ -20,6 +20,7 @@ object Settings {
     private const val KEY_NIGHT = "night"
     private const val KEY_SORT_ORDER = "folder_sort_order"
     private const val KEY_BOOK_TEXT = "book_text_size"
+    private const val KEY_DELETE_FOR_GOOD = "delete_for_good"
 
     /**
      * The sizes a book's text can be set to, as a percentage of the size it opens at. Nine
@@ -57,6 +58,19 @@ object Settings {
     fun setBookTextSize(context: Context, percent: Int) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit { putInt(KEY_BOOK_TEXT, percent) }
+    }
+
+    /**
+     * Whether Delete in an added folder asks Android to delete for good rather than move the
+     * files to its bin, which keeps them 30 days and which only some gallery apps can empty.
+     * Asked for on issue #75. Off unless turned on.
+     */
+    fun deleteForGood(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_DELETE_FOR_GOOD, false)
+
+    fun setDeleteForGood(context: Context, on: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit { putBoolean(KEY_DELETE_FOR_GOOD, on) }
     }
 
     fun sortOrder(context: Context): SortOrder {

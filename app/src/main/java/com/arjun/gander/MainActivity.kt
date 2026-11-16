@@ -194,6 +194,11 @@ class MainActivity : AppCompatActivity() {
                 R.id.action_filter -> { showFilterDialog(); true }
                 R.id.action_select -> { pick(emptySet()); true }
                 R.id.action_delete -> { askToTrash(); true }
+                R.id.action_delete_for_good -> {
+                    Settings.setDeleteForGood(this, !Settings.deleteForGood(this))
+                    drawBar()
+                    true
+                }
                 R.id.action_play -> { openPlayListing(); true }
                 R.id.action_share_app -> { shareGander(); true }
                 R.id.action_about -> { showAbout(); true }
@@ -579,6 +584,10 @@ class MainActivity : AppCompatActivity() {
             isVisible = inFolder && picking == null && pickableIn == here
             setTitle(selectWord())
         }
+        toolbar.menu.findItem(R.id.action_delete_for_good)?.apply {
+            isVisible = inFolder && pickableIn == here
+            isChecked = Settings.deleteForGood(this@MainActivity)
+        }
         toolbar.menu.findItem(R.id.action_delete)?.apply {
             isVisible = picking != null
             // It has nothing to ask about until a photo is picked
@@ -630,8 +639,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** After a yes in Android's prompt, the photos that left the folder leave the list, and the picking is over. */
-    private fun trashed(gone: List<Uri>, stayed: List<Uri>) {
-        Toast.makeText(this, trashWord(this, gone.size, stayed.size, allPictures(gone + stayed)), Toast.LENGTH_SHORT).show()
+    private fun trashed(gone: List<Uri>, stayed: List<Uri>, forGood: Boolean) {
+        val word = trashWord(this, gone.size, stayed.size, allPictures(gone + stayed), forGood)
+        Toast.makeText(this, word, Toast.LENGTH_SHORT).show()
         if (gone.isEmpty()) return
         picked = null
         adapter.pick(null)

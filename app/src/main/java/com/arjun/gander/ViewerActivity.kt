@@ -569,8 +569,8 @@ open class ViewerActivity : AppCompatActivity() {
      * The viewer closes where nothing is left to show: after the only photo, or when it was made
      * again while the prompt was up, around a photo that has now gone.
      */
-    private fun trashed(gone: List<Uri>, stayed: List<Uri>) {
-        Toast.makeText(this, trashWord(this, gone.size, stayed.size), Toast.LENGTH_SHORT).show()
+    private fun trashed(gone: List<Uri>, stayed: List<Uri>, forGood: Boolean) {
+        Toast.makeText(this, trashWord(this, gone.size, stayed.size, forGood = forGood), Toast.LENGTH_SHORT).show()
         if (gone.isEmpty()) return
         // What was picked has been dealt with, as far as it could be
         pickedBefore = null

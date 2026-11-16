@@ -1563,6 +1563,20 @@ class ViewerActivityTest {
         assertThat(ShadowToast.getTextOfLatestToast()).isEqualTo(context.getString(R.string.photo_trashed))
     }
 
+    /** With Delete for good turned on in a folder's menu, the viewer's Delete asks Android to delete outright. */
+    @Test
+    fun withDeleteForGoodOnThePhotoIsDeletedOutright() {
+        Settings.setDeleteForGood(context, true)
+        val viewer = openedFrom(dcim(), "primary:DCIM/b.jpg")
+
+        viewer.delete("primary:DCIM/b.jpg")
+
+        assertThat(media.trashRequests).isEmpty()
+        assertThat(media.deleteRequests.single()).containsExactly(MediaStore.Images.Media.getContentUri(FakeMediaStore.VOLUME, 12))
+        assertThat(viewer.get().photoPager!!.names).containsExactly("a.jpg", "c.png").inOrder()
+        assertThat(ShadowToast.getTextOfLatestToast()).isEqualTo(context.getString(R.string.photo_deleted))
+    }
+
     /** A no needs no word. Android answers yes after a move that failed too, which only looking catches. */
     @Test
     fun aPhotoStaysWhenThePromptIsTurnedDownOrNothingMoves() {

@@ -1214,6 +1214,46 @@ class MainActivityTest {
         assertThat(controller.rowTitles()).containsExactly("notes.pdf")
     }
 
+    /**
+     * Delete for good sits in the menu of a folder with things to delete, checked while it is on,
+     * and is kept. With it on, the bin asks Android to delete the picked photos outright.
+     */
+    @Test
+    fun deleteForGoodInTheMenuIsKeptAndDeletesThePickedPhotosOutright() {
+        grantedPhotos()
+        val controller = home()
+        val toggle = { controller.bar().menu.findItem(R.id.action_delete_for_good) }
+        assertThat(toggle().isVisible).isFalse()
+        controller.clickRow("DCIM")
+        assertThat(toggle().isVisible).isTrue()
+        assertThat(toggle().isChecked).isFalse()
+
+        controller.bar().menu.performIdentifierAction(R.id.action_delete_for_good, 0)
+        shadowOf(context.mainLooper).idle()
+        assertThat(toggle().isChecked).isTrue()
+        assertThat(Settings.deleteForGood(context)).isTrue()
+
+        // Still there while picking, to be seen just before the bin
+        controller.holdRow("a.jpg")
+        controller.clickRow("c.png")
+        assertThat(toggle().isVisible).isTrue()
+        val prompt = controller.tapBin()!!
+        docs.remove("primary:DCIM/a.jpg")
+        docs.remove("primary:DCIM/c.png")
+        controller.answer(prompt, Activity.RESULT_OK)
+
+        assertThat(media.trashRequests).isEmpty()
+        assertThat(media.deleteRequests.single()).containsExactly(picture(11), picture(13)).inOrder()
+        assertThat(ShadowToast.getTextOfLatestToast()).isEqualTo("2 photos deleted")
+        assertThat(controller.rowTitles()).containsExactly("Trip", "b.jpg", "notes.pdf").inOrder()
+
+        // And a tap turns it off again
+        controller.bar().menu.performIdentifierAction(R.id.action_delete_for_good, 0)
+        shadowOf(context.mainLooper).idle()
+        assertThat(toggle().isChecked).isFalse()
+        assertThat(Settings.deleteForGood(context)).isFalse()
+    }
+
     /** From the menu too, for whoever doesn't hold rows down: with nothing picked yet, and a bin that asks nothing. */
     @Test
     fun selectPhotosInTheMenuStartsPickingWithNothingPicked() {

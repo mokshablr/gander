@@ -218,6 +218,30 @@
         <item quantity="one">%d file could not be moved to the bin</item>
         <item quantity="other">%d files could not be moved to the bin</item>
     </plurals>
+    <!-- A switch in a folder's menu, asked for on issue #75: Delete then asks Android to delete
+         the files outright, where its bin keeps them on the phone for 30 days and only some
+         gallery apps can empty it. Android still asks first, in its own prompt. -->
+    <string name="delete_for_good">Delete for good</string>
+    <!-- What is said after a delete for good, as the lines above are after a move to the bin -->
+    <string name="photo_deleted">Deleted</string>
+    <string name="photo_not_deleted">The photo could not be deleted</string>
+    <string name="file_not_deleted">The file could not be deleted</string>
+    <plurals name="photos_deleted">
+        <item quantity="one">%d photo deleted</item>
+        <item quantity="other">%d photos deleted</item>
+    </plurals>
+    <plurals name="photos_not_deleted">
+        <item quantity="one">%d photo could not be deleted</item>
+        <item quantity="other">%d photos could not be deleted</item>
+    </plurals>
+    <plurals name="files_deleted">
+        <item quantity="one">%d file deleted</item>
+        <item quantity="other">%d files deleted</item>
+    </plurals>
+    <plurals name="files_not_deleted">
+        <item quantity="one">%d file could not be deleted</item>
+        <item quantity="other">%d files could not be deleted</item>
+    </plurals>
     <!-- Some went and some stayed: the two sentences above, one after the other. -->
     <string name="photos_trashed_some">%1$s. %2$s</string>
     <!-- Turns the photo on screen a quarter turn clockwise, to look at. The file stays as it is. -->

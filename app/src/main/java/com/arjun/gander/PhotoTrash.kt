@@ -23,7 +23,9 @@ import androidx.core.net.toUri
  * access to a folder and no more, so Android does the deleting: it shows its own prompt, and on a
  * yes moves the files to its trash, which keeps them for 30 days. One prompt covers as many files
  * as it is asked about, which is what makes picking many of them worth it. Android's trash takes
- * media only, so other files can't be picked.
+ * media only, so other files can't be picked. With Delete for good on, Android is asked instead to
+ * delete them outright, in a prompt of its own, since its bin keeps them on the phone for 30 days
+ * and only some gallery apps can empty it.
  */
 
 /** The media store's collections Android's trash takes a file from, by the store's media type. */
@@ -75,8 +77,8 @@ internal fun mayTrash(photo: Uri, sdk: Int = Build.VERSION.SDK_INT): Boolean =
     sdk >= Build.VERSION_CODES.R && photo.authority == EXTERNAL_STORAGE_AUTHORITY
 
 /**
- * The request for Android's one prompt to move [files] to its trash, or null where it can be
- * made for none of them.
+ * The request for Android's one prompt to move [files] to its trash, or to delete them outright
+ * where [forGood], or null where it can be made for none of them.
  *
  * The prompt takes a file by its entry among the store's pictures, videos or audio, while
  * getMediaUri answers with its entry among all files, which the prompt refuses, so the same
@@ -88,7 +90,12 @@ internal fun mayTrash(photo: Uri, sdk: Int = Build.VERSION.SDK_INT): Boolean =
  * folder, as a file the prompt failed to move is.
  */
 @RequiresApi(Build.VERSION_CODES.R)
-internal fun trashRequest(context: Context, files: List<Uri>, sdk: Int = Build.VERSION.SDK_INT): PendingIntent? {
+internal fun trashRequest(
+    context: Context,
+    files: List<Uri>,
+    sdk: Int = Build.VERSION.SDK_INT,
+    forGood: Boolean = false,
+): PendingIntent? {
     val resolver = context.contentResolver
     val entries = files.mapNotNull { document ->
         runCatching {
@@ -102,7 +109,9 @@ internal fun trashRequest(context: Context, files: List<Uri>, sdk: Int = Build.V
         }.getOrNull()
     }
     if (entries.isEmpty()) return null
-    return runCatching { MediaStore.createTrashRequest(resolver, entries, true) }.getOrNull()
+    return runCatching {
+        if (forGood) MediaStore.createDeleteRequest(resolver, entries) else MediaStore.createTrashRequest(resolver, entries, true)
+    }.getOrNull()
 }
 
 private fun mediaType(resolver: ContentResolver, file: Uri): Int? =
@@ -126,13 +135,14 @@ internal fun stillThere(resolver: ContentResolver, photo: Uri): Boolean = runCat
  * screen's list of a folder. Made with the activity, since an answer can only be registered for
  * before the activity starts.
  *
- * [done] is told which photos left their folder and which are still there, after a yes in the
- * prompt, or when the prompt couldn't be opened at all. A no moves nothing and needs no word.
+ * [done] is told which photos left their folder and which are still there, and whether they were
+ * to be deleted for good, after a yes in the prompt, or when the prompt couldn't be opened at all.
+ * A no moves nothing and needs no word.
  */
 internal class TrashPrompt(
     private val activity: ComponentActivity,
     private val worker: Worker,
-    private val done: (gone: List<Uri>, stayed: List<Uri>) -> Unit,
+    private val done: (gone: List<Uri>, stayed: List<Uri>, forGood: Boolean) -> Unit,
     /**
      * Whether the screen should show it is at work: while the prompt is got ready and while its
      * answer is looked into, each a question to Android for every photo, which hundreds of
@@ -150,6 +160,9 @@ internal class TrashPrompt(
      * prompt is up, since the answer comes back without them.
      */
     private var asked = emptyList<Uri>()
+
+    /** Whether the prompt up asks to delete for good, kept with [asked] for the same reason. */
+    private var askedForGood = false
 
     /** While the prompt is being got ready, when a second tap on Delete does nothing. */
     private var preparing = false
@@ -171,7 +184,7 @@ internal class TrashPrompt(
             working(true)
             worker.offMain({ stayed: List<Uri> ->
                 working(false)
-                done(photos - stayed.toSet(), stayed)
+                done(photos - stayed.toSet(), stayed, askedForGood)
             }) { app ->
                 val stayed = photos.filter { stillThere(app.contentResolver, it) }
                 // A photo that has gone leaves no small copy of itself behind in Gander
@@ -188,29 +201,36 @@ internal class TrashPrompt(
     @RequiresApi(Build.VERSION_CODES.R)
     fun ask(photos: List<Uri>, stillWanted: () -> Boolean) {
         if (photos.isEmpty() || preparing || asked.isNotEmpty()) return
+        val forGood = Settings.deleteForGood(activity)
         preparing = true
         working(true)
         worker.offMain({ request: PendingIntent? ->
             preparing = false
             working(false)
             if (!stillWanted()) return@offMain
-            if (request == null) return@offMain done(emptyList(), photos)
+            if (request == null) return@offMain done(emptyList(), photos, forGood)
             asked = photos
+            askedForGood = forGood
             runCatching { prompt.launch(IntentSenderRequest.Builder(request).build()) }.onFailure {
                 asked = emptyList()
-                done(emptyList(), photos)
+                done(emptyList(), photos, forGood)
             }
-        }) { app -> trashRequest(app, photos) }
+        }) { app -> trashRequest(app, photos, forGood = forGood) }
     }
 
-    fun save(state: Bundle) = state.putStringArrayList(STATE_ASKED, ArrayList(asked.map { it.toString() }))
+    fun save(state: Bundle) {
+        state.putStringArrayList(STATE_ASKED, ArrayList(asked.map { it.toString() }))
+        state.putBoolean(STATE_FOR_GOOD, askedForGood)
+    }
 
     fun restore(state: Bundle?) {
         asked = state?.getStringArrayList(STATE_ASKED).orEmpty().map { it.toUri() }
+        askedForGood = state?.getBoolean(STATE_FOR_GOOD) == true
     }
 
     private companion object {
         const val STATE_ASKED = "trash.asked"
+        const val STATE_FOR_GOOD = "trash.forGood"
 
         /** How long the work may take before the screen says anything about it, as a folder's reading may. */
         const val BUSY_AFTER_MS = 150L
@@ -219,15 +239,28 @@ internal class TrashPrompt(
 
 /**
  * What to say once Android's prompt has been answered with a yes: how many of the files went to
- * the bin, and how many are still in their folder. They are called photos where all of them are.
+ * the bin, or were deleted where [forGood], and how many are still in their folder. They are
+ * called photos where all of them are.
  */
-internal fun trashWord(context: Context, gone: Int, stayed: Int, photos: Boolean = true): String {
+internal fun trashWord(context: Context, gone: Int, stayed: Int, photos: Boolean = true, forGood: Boolean = false): String {
     val res = context.resources
-    val went = res.getQuantityString(if (photos) R.plurals.photos_trashed else R.plurals.files_trashed, gone, gone)
-    val left = res.getQuantityString(if (photos) R.plurals.photos_not_trashed else R.plurals.files_not_trashed, stayed, stayed)
-    val notOne = if (photos) R.string.photo_not_trashed else R.string.file_not_trashed
+    val wentRes = when {
+        forGood -> if (photos) R.plurals.photos_deleted else R.plurals.files_deleted
+        else -> if (photos) R.plurals.photos_trashed else R.plurals.files_trashed
+    }
+    val leftRes = when {
+        forGood -> if (photos) R.plurals.photos_not_deleted else R.plurals.files_not_deleted
+        else -> if (photos) R.plurals.photos_not_trashed else R.plurals.files_not_trashed
+    }
+    val went = res.getQuantityString(wentRes, gone, gone)
+    val left = res.getQuantityString(leftRes, stayed, stayed)
+    val one = if (forGood) R.string.photo_deleted else R.string.photo_trashed
+    val notOne = when {
+        forGood -> if (photos) R.string.photo_not_deleted else R.string.file_not_deleted
+        else -> if (photos) R.string.photo_not_trashed else R.string.file_not_trashed
+    }
     return when {
-        gone + stayed == 1 -> context.getString(if (gone == 1) R.string.photo_trashed else notOne)
+        gone + stayed == 1 -> context.getString(if (gone == 1) one else notOne)
         stayed == 0 -> went
         gone == 0 -> left
         else -> context.getString(R.string.photos_trashed_some, went, left)

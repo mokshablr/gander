@@ -92,6 +92,34 @@ class PhotoTrashTest {
 
     private fun file(name: String) = DocumentsContract.buildDocumentUriUsingTree(tree, "primary:DCIM/$name")
 
+    /** With Delete for good on, the same entries are asked to be deleted outright, and nothing is asked to go to the bin. */
+    @Test
+    fun deletingForGoodAsksForTheSameEntriesToBeDeletedOutright() {
+        val media = FakeMediaStore.install()
+            .entry(photo, 42)
+            .entry(file("clip.mp4"), 43, MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO)
+            .entry(file("notes.pdf"), 45, MediaStore.Files.FileColumns.MEDIA_TYPE_DOCUMENT)
+
+        assertThat(trashRequest(context, listOf(photo, file("clip.mp4"), file("notes.pdf")), sdk = 31, forGood = true))
+            .isNotNull()
+
+        assertThat(media.trashRequests).isEmpty()
+        assertThat(media.deleteRequests.single()).containsExactly(
+            MediaStore.Images.Media.getContentUri(FakeMediaStore.VOLUME, 42),
+            MediaStore.Video.Media.getContentUri(FakeMediaStore.VOLUME, 43),
+        ).inOrder()
+    }
+
+    @Test
+    fun whatIsSaidAfterADeleteForGoodSaysDeleted() {
+        assertThat(trashWord(context, gone = 1, stayed = 0, forGood = true)).isEqualTo("Deleted")
+        assertThat(trashWord(context, gone = 0, stayed = 1, forGood = true)).isEqualTo("The photo could not be deleted")
+        assertThat(trashWord(context, gone = 0, stayed = 1, photos = false, forGood = true)).isEqualTo("The file could not be deleted")
+        assertThat(trashWord(context, gone = 3, stayed = 0, forGood = true)).isEqualTo("3 photos deleted")
+        assertThat(trashWord(context, gone = 2, stayed = 1, photos = false, forGood = true))
+            .isEqualTo("2 files deleted. 1 file could not be deleted")
+    }
+
     /**
      * A video or audio file is asked for under the store's videos or audio, which the prompt
      * takes as it takes pictures. A document is left out: Android's prompt refuses anything but

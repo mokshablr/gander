@@ -1,7 +1,7 @@
 "use strict";
 
 /*
- * Night mode for Word, issue #47.
+ * Night mode for Word, issue #47, and for the prose page's .doc, .odt and .rtf.
  *
  * The page's own colours are turned over with the matrix pdf.html uses for a PDF, so ink goes
  * light and a blue heading stays blue. Not with a CSS filter on the page: that would dull every
@@ -11,6 +11,9 @@
  */
 var vwNightOn = vwParams.get("night") === "1";
 var vwNightReady = false;
+/* The style elements holding the document's own colours, set by the page once it has drawn
+   the document for the last time: a recolour of an earlier drawing would be thrown away */
+var vwNightSheets = null;
 if (vwNightOn) document.documentElement.classList.add("vw-night");
 
 var vwColourProbe = null;
@@ -70,13 +73,13 @@ function vwSplitSelectors(text) {
 }
 
 /*
- * docx-preview's stylesheets, as rules that win under html.vw-night. Its theme colours are
- * custom properties on .docx, turned over here too, so a colour given only by the theme
- * follows along.
+ * The document's stylesheets, as rules that win under html.vw-night. docx-preview's theme
+ * colours are custom properties on .docx, turned over here too, so a colour given only by the
+ * theme follows along.
  */
-function vwNightRules(container) {
+function vwNightRules(sheets) {
   var out = [];
-  container.querySelectorAll("style").forEach(function (el) {
+  Array.prototype.forEach.call(sheets, function (el) {
     var rules;
     try { rules = el.sheet && el.sheet.cssRules; } catch (e) { return; }
     for (var i = 0; rules && i < rules.length; i++) {
@@ -100,7 +103,7 @@ function vwNightRules(container) {
 
 /*
  * A colour written on an element goes in a custom property beside it, which a rule in
- * docx.html uses at night. Custom properties do nothing on their own, so by day and on paper
+ * night.css uses at night. Custom properties do nothing on their own, so by day and on paper
  * the element is as it was.
  */
 function vwNightInline(container) {
@@ -176,11 +179,11 @@ function vwNightPictures(container) {
 /* Once, the first time night is wanted after the document's last drawing */
 function vwPrepareNight() {
   var container = document.getElementById("container");
-  if (vwNightReady || !vwPages.settled || !container) return;
+  if (vwNightReady || !vwNightSheets || !container) return;
   vwNightReady = true;
   var style = document.createElement("style");
   style.id = "vw-night-rules";
-  style.textContent = "@media screen { " + vwNightRules(container).join("\n") + " }";
+  style.textContent = "@media screen { " + vwNightRules(vwNightSheets).join("\n") + " }";
   document.head.appendChild(style);
   vwNightInline(container);
   vwNightPictures(container);

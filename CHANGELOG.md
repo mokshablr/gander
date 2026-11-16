@@ -11,6 +11,9 @@
   photos, videos and audio outright instead of moving them to its bin, which keeps them on the
   phone for 30 days and which only some gallery apps can empty. Android still asks first, once
   for all of them, in the folder's list and in the viewer alike (#75, thanks @0xlne).
+- Night mode works in .doc, .odt and .rtf files too, as it does in Word's .docx: the page goes
+  black and the text light, colours keep their hue, and photographs are left as they were, where
+  these stayed white paper with night mode on.
 
 ## 2.10 (2026-11-15)
 

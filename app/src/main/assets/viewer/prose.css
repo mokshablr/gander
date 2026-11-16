@@ -138,6 +138,26 @@
   .vw-paper > section { box-shadow: 0 1px 8px rgba(0, 0, 0, 0.6); }
 }
 
+/*
+ * Night mode (night.js and night.css), as docx.html has it: black paper on a black ground,
+ * with a line at the top of each page and the foot of the last so the pages do not run
+ * together. The greys of this page's own boxes are turned over by hand, with the same matrix.
+ */
+@media screen {
+  html.vw-night body { background: #000; }
+  html.vw-night .vw-paper > section {
+    --vw-edge: calc(1px * var(--vw-zoom) / var(--vw-page-zoom, 1));
+    background: #000000;
+    color: #ffffff;
+    box-shadow: 0 calc(-1 * var(--vw-edge)) 0 #474747;
+  }
+  html.vw-night .vw-paper > section:last-of-type {
+    box-shadow: 0 calc(-1 * var(--vw-edge)) 0 #474747, 0 var(--vw-edge) 0 #474747;
+  }
+  html.vw-night .vw-paper .vw-nopicture { border-color: #514c40; color: #aca79c; }
+  html.vw-night .vw-paper .vw-notes { border-top-color: #7f7a6d; }
+}
+
 /* Print, as in docx.html: a sheet per page at its real size, with the document's own margins. */
 @media print {
   @page { margin: 0; }

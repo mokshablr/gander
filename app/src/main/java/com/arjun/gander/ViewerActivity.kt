@@ -660,7 +660,7 @@ open class ViewerActivity : AppCompatActivity() {
 
     /**
      * Turning a document's pages over for reading in the dark: a PDF's since issue #19,
-     * a Word document's since #47.
+     * a Word document's since #47, and a .doc, .odt or .rtf's on the prose page.
      *
      * Only where the page is handed the message port, see [pageGetsChannel], since that is the
      * whole of how it is told. Without it a document still opens in the right mode from the
@@ -1595,10 +1595,12 @@ open class ViewerActivity : AppCompatActivity() {
             WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_PORT_CLOSE)
 
     /**
-     * Whether the page is handed the channel: a page that searches itself, and a paged document
-     * whatever searches it, since its page counter and night mode go over the channel too.
+     * Whether the page is handed the channel: a page that searches itself, and a paged or
+     * night-mode document whatever searches it, since its page counter and night mode go over
+     * the channel too.
      */
-    private fun pageGetsChannel(kind: FileKind): Boolean = pageSearches || (kind.paged && canPortSearch())
+    private fun pageGetsChannel(kind: FileKind): Boolean =
+        pageSearches || ((kind.paged || kind.turnsOver) && canPortSearch())
 
     /**
      * Hand the page one end of a message channel: pdf.html, or a page that finds with find.js.

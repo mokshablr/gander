@@ -414,8 +414,8 @@ class FileKindTest {
 
     /** Night mode is for paper. A book's page follows the phone's theme and has none. */
     @Test
-    fun onlyPdfAndWordTurnOverAtNight() {
-        assertThat(FileKind.entries.filter { it.turnsOver }).containsExactly(PDF, PDF_SIMPLE, DOCX)
+    fun onlyPdfAndWordProcessorFilesTurnOverAtNight() {
+        assertThat(FileKind.entries.filter { it.turnsOver }).containsExactly(PDF, PDF_SIMPLE, DOCX, PROSE)
     }
 
     /**

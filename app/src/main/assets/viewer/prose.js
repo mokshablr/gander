@@ -36,6 +36,11 @@ function vwProseSniff(bytes) {
 
 var VW_PROSE_READERS = { odt: vwReadOdt, rtf: vwReadRtf, doc: vwReadDoc };
 
+/* What the app sends besides search: "i1" and "i0" for night mode */
+window.vwPageCommand = function (msg) {
+  if (msg.charAt(0) === "i") vwSetNight(msg.charAt(1) === "1");
+};
+
 vwFetchDoc("buffer")
   .then(function (buffer) {
     var kind = vwProseSniff(new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 80)));
@@ -47,6 +52,8 @@ vwFetchDoc("buffer")
     return VW_PROSE_READERS[kind](buffer, document.getElementById("container"));
   })
   .then(function (prose) {
+    vwNightSheets = [prose.css.ownerNode];
+    if (vwNightOn) vwPrepareNight();
     vwProseFit(prose);
     vwPrintSizes(prose.wrap.querySelectorAll(".vw-paper > section"));
     vwStatusDone();

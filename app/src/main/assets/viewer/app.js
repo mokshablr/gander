@@ -271,8 +271,8 @@ function vwDisarmLinks(root) {
 
 /*
  * invert(1) hue-rotate(180deg), written out as pdf.html's #vw-invert has it. Night mode turns a
- * colour over with this, so dark ink goes light and a blue heading stays blue: docx-night.js for a
- * Word page and xlsx-styles.js for a sheet's own colours.
+ * colour over with this, so dark ink goes light and a blue heading stays blue: night.js for a
+ * Word or prose page and xlsx-styles.js for a sheet's own colours.
  */
 var VW_NIGHT_MATRIX = [
   [0.574, -1.430, -0.144, 1],

@@ -7,6 +7,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">
 <title>Word document</title>
 <link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="night.css">
 <style>
   /* No viewport meta on this page, so the WebView lays out at its 980 CSS px default
      and zooms that down to fit the screen. That shrinks the status card along with
@@ -120,12 +121,11 @@
   .docx-wrapper > section.docx > article > .vw-page-end { margin-bottom: 0 !important; }
 
   /*
-   * Night mode (docx-night.js). The ground is black, as a PDF's is, and a line marks the top
-   * of each page and the foot of the last, or black pages would run together. Screen only,
-   * so a printout keeps the document's colours.
+   * Night mode (night.js, and night.css for what the prose page shares). The ground is black,
+   * as a PDF's is, and a line marks the top of each page and the foot of the last, or black
+   * pages would run together. Screen only, so a printout keeps the document's colours.
    */
   @media screen {
-    html.vw-night:not(.vw-night-ready) #container { visibility: hidden; }
     html.vw-night body,
     html.vw-night #container .docx-wrapper { background: #000 !important; }
     html.vw-night .docx-wrapper > section.docx {
@@ -135,22 +135,6 @@
     html.vw-night .docx-wrapper > section.docx:last-child {
       box-shadow: 0 calc(-1 * var(--vw-edge)) 0 #474747, 0 var(--vw-edge) 0 #474747 !important;
     }
-    /* Colours written on an element, each turned over into a property beside it */
-    html.vw-night #container [data-vw-n~="c"] { color: var(--vw-n-c) !important; }
-    html.vw-night #container [data-vw-n~="b"] { background-color: var(--vw-n-b) !important; }
-    html.vw-night #container [data-vw-n~="bt"] { border-top-color: var(--vw-n-bt) !important; }
-    html.vw-night #container [data-vw-n~="br"] { border-right-color: var(--vw-n-br) !important; }
-    html.vw-night #container [data-vw-n~="bb"] { border-bottom-color: var(--vw-n-bb) !important; }
-    html.vw-night #container [data-vw-n~="bl"] { border-left-color: var(--vw-n-bl) !important; }
-    html.vw-night #container [data-vw-n~="d"] { text-decoration-color: var(--vw-n-d) !important; }
-    html.vw-night #container [data-vw-n~="r"] { column-rule-color: var(--vw-n-r) !important; }
-    html.vw-night #container [data-vw-n~="f"] { fill: var(--vw-n-f) !important; }
-    html.vw-night #container [data-vw-n~="s"] { stroke: var(--vw-n-s) !important; }
-    /* A picture that reads as paper turns over with the page; a photograph does not */
-    html.vw-night #container img[data-vw-paper] { filter: invert(1) hue-rotate(180deg); }
-    /* The cards as well, as pdf.html has them, for a phone that is not set to dark */
-    html.vw-night .vw-status { background: #2D2A23; color: #E7E2D9; }
-    html.vw-night .vw-status.vw-error { background: #8C1D18; color: #F9DEDC; }
   }
 
   /* Print: each page starts a sheet of its own, at its real size, without the ground,
@@ -193,7 +177,7 @@
 <script src="find.js"></script>
 <script src="docx-pages.js"></script>
 <script src="docx-lines.js"></script>
-<script src="docx-night.js"></script>
+<script src="night.js"></script>
 <script src="docx.js"></script>
 </body>
 </html>

@@ -256,6 +256,25 @@ class ViewerActivityTest {
         assertThat(channels[0][0].outgoingMessages).containsExactly(bar, "i1").inOrder()
     }
 
+    /** So does an .odt's, for its night mode, which the prose page shares with Word's. */
+    @Test
+    fun aProseDocumentGetsTheChannelOnAWebViewTooOldToSearchIt() {
+        ShadowWebView.setCurrentWebViewPackage(PackageInfo().apply {
+            packageName = "com.google.android.webview"
+            versionName = "104.0.5112.97"
+        })
+        val prose = open("letter.odt")
+        val web = prose.webView()!!
+        web.webViewClient.onPageFinished(web, prose.loadedUrl())
+        val channels = shadowOf(web).createdPorts
+        assertThat(channels).hasSize(1)
+        val menu = prose.get().findViewById<MaterialToolbar>(R.id.toolbar).menu
+        assertThat(menu.findItem(R.id.action_night_mode).isVisible).isTrue()
+        menu.performIdentifierAction(R.id.action_night_mode, 0)
+        val bar = PortCommand.barHeight(prose.get().documentChrome!!.heightDp())
+        assertThat(channels[0][0].outgoingMessages).containsExactly(bar, "i1").inOrder()
+    }
+
     // ---------------------------------------------------------------
     // A PDF where pdf.js can't run
     // ---------------------------------------------------------------

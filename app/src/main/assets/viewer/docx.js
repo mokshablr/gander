@@ -313,6 +313,7 @@ if (!vwWebViewTooOld("Word documents")) {
     .then(function () {
       vwPages.settled = true;
       var container = document.getElementById("container");
+      vwNightSheets = container.querySelectorAll("style");
       container.style.visibility = "";
       vwDisarmLinks(container);
       fixSymbolChars(container);

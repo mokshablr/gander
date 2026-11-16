@@ -24,6 +24,7 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.shape.MaterialShapeDrawable
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import kotlin.math.pow
 import org.junit.After
 import org.junit.Before
@@ -165,19 +166,22 @@ class NightChromeTest {
     @Test
     fun aWordDocumentOpenedInNightModeOpensWithTheViewerDark() {
         Settings.setNight(context, true)
-        val parts = open("report.docx").parts()
+        // Word's own format, and an .odt, which the prose page draws
+        for (fixture in listOf("report.docx", "letter.odt")) {
+            val parts = open(fixture).parts()
 
-        assertThat(parts.toolbar).isEqualTo(Color.BLACK)
-        assertThat(parts.behindTheBars).isEqualTo(Color.BLACK)
-        assertThat(parts.searchBar).isEqualTo(Color.BLACK)
-        assertThat(parts.menu).isEqualTo(night.color(R.color.gander_surface_container))
+            assertWithMessage(fixture).that(parts.toolbar).isEqualTo(Color.BLACK)
+            assertWithMessage(fixture).that(parts.behindTheBars).isEqualTo(Color.BLACK)
+            assertWithMessage(fixture).that(parts.searchBar).isEqualTo(Color.BLACK)
+            assertWithMessage(fixture).that(parts.menu).isEqualTo(night.color(R.color.gander_surface_container))
+        }
     }
 
     @Test
     fun nightModeLeavesTheOtherFormatsAsThePhoneHasThem() {
         Settings.setNight(context, true)
         // A photo is dark around whatever night mode says, as a video is: see OverChromeTest
-        for (fixture in listOf("plain.txt", "letter.odt", "notes.md", "bracket.stl")) {
+        for (fixture in listOf("plain.txt", "notes.md", "bracket.stl")) {
             val parts = open(fixture).parts()
             assertThat(parts.behindTheBars).isEqualTo(context.color(R.color.gander_surface))
             assertThat(parts.searchBar).isEqualTo(context.color(R.color.gander_surface))

@@ -217,15 +217,17 @@ class ViewerActivityTest {
 
     /**
      * A model is drawn on a canvas, and the only words on its page are its size, so there is
-     * nothing to search for and no search button. A text file is the control: the same
-     * button on the same toolbar, offered.
+     * nothing to search for and no search button. Nor in a picture the page draws, an SVG's
+     * text included. A text file is the control: the same button on the same toolbar, offered.
      */
     @Test
-    fun aModelOffersNoSearch() {
+    fun aModelOrAPictureOffersNoSearch() {
         fun search(fixture: String) = open(fixture).get()
             .findViewById<MaterialToolbar>(R.id.toolbar).menu.findItem(R.id.action_search)
         assertThat(search("plain.txt").isVisible).isTrue()
-        assertThat(search("bracket.stl").isVisible).isFalse()
+        for (fixture in listOf("bracket.stl", "anim.gif", "icon.svg")) {
+            assertWithMessage(fixture).that(search(fixture).isVisible).isFalse()
+        }
     }
 
     /**

@@ -16,6 +16,8 @@
   these stayed white paper with night mode on.
 - Text size, in the menu, now sizes a text file, code, subtitles and Markdown as well as a book,
   and the lines rewrap to fit the screen at the larger size. It is the same size a book takes.
+- A GIF, AVIF, ICO or SVG has no Search button, since there are no words in it to find; even
+  an SVG's text was never found.
 
 ## 2.10 (2026-11-15)
 

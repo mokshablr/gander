@@ -1463,8 +1463,9 @@ open class ViewerActivity : AppCompatActivity() {
         val blocked = webViewFloorParamsFor(kind, web?.settings?.userAgentString).isNotEmpty()
         // A 3D model is a picture drawn on a canvas, and the only words on its page are its
         // size, so there is nothing in it to find. Nor in a PDF's simple view, which shows
-        // pictures of its pages.
-        val wordless = kind == FileKind.MODEL || kind == FileKind.PDF_SIMPLE
+        // pictures of its pages, or in a GIF, AVIF, ICO or SVG: even an SVG's text is inside an
+        // <img>, where the WebView's find does not look.
+        val wordless = kind == FileKind.MODEL || kind == FileKind.PDF_SIMPLE || kind == FileKind.IMAGE_WEB
         if (web == null || (kind == FileKind.PDF && !canPortSearch()) || blocked || wordless) {
             // No WebView at all, or one too old to carry a message channel, which is close to
             // unreachable since channels came long before the Chromium 125 pdf.html needs. Or a

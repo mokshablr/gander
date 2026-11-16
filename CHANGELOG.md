@@ -14,6 +14,8 @@
 - Night mode works in .doc, .odt and .rtf files too, as it does in Word's .docx: the page goes
   black and the text light, colours keep their hue, and photographs are left as they were, where
   these stayed white paper with night mode on.
+- Text size, in the menu, now sizes a text file, code, subtitles and Markdown as well as a book,
+  and the lines rewrap to fit the screen at the larger size. It is the same size a book takes.
 
 ## 2.10 (2026-11-15)
 

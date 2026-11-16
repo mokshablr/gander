@@ -482,6 +482,9 @@ open class ViewerActivity : AppCompatActivity() {
         }
         textSizeItem = toolbar.menu.findItem(R.id.action_text_size).apply {
             setOnMenuItemClickListener { askForTextSize(); true }
+            // Not over a card saying the WebView is too old, which has no text of the file's
+            isVisible = kind.sizesText && webView != null &&
+                webViewFloorParamsFor(kind, webView?.settings?.userAgentString).isEmpty()
         }
         rotateItem = toolbar.menu.findItem(R.id.action_rotate).apply {
             setOnMenuItemClickListener { turnPhoto(); true }
@@ -1117,10 +1120,11 @@ open class ViewerActivity : AppCompatActivity() {
     }
 
     /**
-     * Sets the size of a book's text by the WebView's own text zoom, which scales every letter
-     * and its line whatever unit the book gave the size in. A rule laid over the book's
-     * stylesheets would leave a book that sets its type in points where it was. The choice
-     * multiplies the zoom the WebView came with, so the phone's font size is where it starts.
+     * Sets the size of a book's text, or a text or Markdown file's, by the WebView's own text
+     * zoom, which scales every letter and its line whatever unit the book gave the size in. A
+     * rule laid over the book's stylesheets would leave a book that sets its type in points
+     * where it was. The choice multiplies the zoom the WebView came with, so the phone's font
+     * size is where it starts.
      *
      * A page of a fixed size gets neither: it was drawn around its type at the size its book
      * gave it, and larger letters run out of the boxes they were placed in.
@@ -1128,14 +1132,13 @@ open class ViewerActivity : AppCompatActivity() {
     private fun applyTextSize() {
         val web = webView ?: return
         web.settings.textZoom =
-            bookTextZoom(phoneTextZoom, Settings.bookTextSize(this), bookReflows)
+            readerTextZoom(phoneTextZoom, Settings.textSize(this), bookReflows)
     }
 
     /**
-     * A book's text size: a button either side of the size, each tap showing on the page at
-     * once. At the foot of the screen and with nothing dimmed, so the text being sized can be
-     * read above it. The same size for every book, since it is the reader's eyes that it
-     * suits and not the book. See [Settings.BOOK_TEXT_SIZES].
+     * The text size: a button either side of the size, each tap showing on the page at once.
+     * At the foot of the screen and with nothing dimmed, so the text being sized can be read
+     * above it. See [Settings.textSize].
      */
     private fun askForTextSize() {
         val themed = nightChrome.dialogs
@@ -1143,10 +1146,10 @@ open class ViewerActivity : AppCompatActivity() {
         val smaller = row.findViewById<View>(R.id.textSmaller)
         val larger = row.findViewById<View>(R.id.textLarger)
         val now = row.findViewById<TextView>(R.id.textSizeNow)
-        val sizes = Settings.BOOK_TEXT_SIZES
+        val sizes = Settings.TEXT_SIZES
 
         fun show() {
-            val percent = Settings.bookTextSize(this)
+            val percent = Settings.textSize(this)
             // Description before text, as the page readout does it
             now.contentDescription = getString(R.string.text_size_spoken, percent)
             now.text = getString(R.string.scroll_position, percent)
@@ -1154,8 +1157,8 @@ open class ViewerActivity : AppCompatActivity() {
             larger.isEnabled = percent < sizes.last()
         }
         fun step(by: Int) {
-            val to = sizes.getOrNull(sizes.indexOf(Settings.bookTextSize(this)) + by) ?: return
-            Settings.setBookTextSize(this, to)
+            val to = sizes.getOrNull(sizes.indexOf(Settings.textSize(this)) + by) ?: return
+            Settings.setTextSize(this, to)
             applyTextSize()
             show()
         }
@@ -2009,8 +2012,8 @@ open class ViewerActivity : AppCompatActivity() {
             if (kind == FileKind.XLSX) textZoom = 100
         }
         book = kind == FileKind.EPUB
+        if (book || kind.sizesText) applyTextSize()
         if (book) {
-            applyTextSize()
             // Its readout is no page number, so a tap on it has no page to ask for
             pageIndicator.isClickable = false
         }
@@ -2413,7 +2416,7 @@ open class ViewerActivity : AppCompatActivity() {
  * reader's size as a percentage of that, and [reflows] whether the chapter on screen is one
  * that takes either. See [ViewerActivity.applyTextSize].
  */
-internal fun bookTextZoom(phone: Int, chosen: Int, reflows: Boolean): Int =
+internal fun readerTextZoom(phone: Int, chosen: Int, reflows: Boolean): Int =
     if (reflows) phone * chosen / 100 else 100
 
 /**

@@ -60,6 +60,13 @@ enum class FileKind(val page: String) {
     val turnsOver: Boolean get() = this == PDF || this == PDF_SIMPLE || this == DOCX || this == PROSE
 
     /**
+     * Laid out at the screen's width, so larger letters rewrap rather than run off the side, and
+     * offered Text size from the start. A book is too, once its page says the chapter on screen
+     * reflows: see [ViewerActivity.applyTextSize]. Text covers code and subtitles as well.
+     */
+    val sizesText: Boolean get() = this == TEXT || this == MD
+
+    /**
      * Has its double tap zoomed by [DoubleTapZoom], and its page turns the WebView's own off. A
      * page or a picture is about as wide as the screen, so the WebView's own went in by a fifth
      * to two fifths. Not a sheet, whose page zooms itself, double taps included, so that its

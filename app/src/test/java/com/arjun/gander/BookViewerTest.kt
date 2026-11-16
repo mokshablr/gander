@@ -14,6 +14,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import java.io.File
 import java.time.Duration
 import java.util.concurrent.Executor
@@ -46,7 +47,7 @@ class BookViewerTest {
         FixtureProvider.install()
         Thumbs.resetForTests()
         File(context.noBackupFilesDir, "positions").delete()
-        Settings.setBookTextSize(context, 100)
+        Settings.setTextSize(context, 100)
     }
 
     /** The viewer for [fixture], its page loaded and handed the channel. */
@@ -286,17 +287,35 @@ class BookViewerTest {
     @Test
     fun aBookOpensAtTheTextSizeLastChosen() {
         assertThat(book().get().web.settings.textZoom).isEqualTo(100)
-        Settings.setBookTextSize(context, 130)
+        Settings.setTextSize(context, 130)
         assertThat(book().get().web.settings.textZoom).isEqualTo(130)
-        // The setting is a book's, and no other document is sized by it
+        // A text or Markdown file takes the same size, and a page of a fixed size does not
+        assertThat(open("notes.md").get().web.settings.textZoom).isEqualTo(130)
+        assertThat(open("plain.txt").get().web.settings.textZoom).isEqualTo(130)
         assertThat(open("six-pages.pdf").get().web.settings.textZoom).isEqualTo(100)
-        assertThat(open("notes.md").get().web.settings.textZoom).isEqualTo(100)
+        assertThat(open("letter.odt").get().web.settings.textZoom).isEqualTo(100)
+    }
+
+    /** Offered from the start where the page is laid out at the screen's width, and only there. */
+    @Test
+    fun textAndMarkdownOfferTextSizeAndTakeItAtOnce() {
+        for (fixture in listOf("plain.txt", "notes.md", "captions.srt")) {
+            assertWithMessage(fixture).that(open(fixture).get().menu.findItem(R.id.action_text_size).isVisible)
+                .isTrue()
+        }
+        for (fixture in listOf("six-pages.pdf", "report.docx", "letter.odt", "budget.xlsx", "anim.gif")) {
+            assertWithMessage(fixture).that(open(fixture).get().menu.findItem(R.id.action_text_size).isVisible)
+                .isFalse()
+        }
+        val viewer = open("plain.txt").get()
+        textSizeBox(viewer).findViewById<View>(R.id.textLarger)!!.performClick()
+        assertThat(viewer.web.settings.textZoom).isEqualTo(115)
     }
 
     /** It was drawn around its type, and larger letters run out of the boxes they were set in. */
     @Test
     fun aPageOfAFixedSizeIsLeftAtTheSizeItsBookGaveIt() {
-        Settings.setBookTextSize(context, 150)
+        Settings.setTextSize(context, 150)
         val viewer = book().get()
         viewer.pageSays("page 1 9", "reflow 0")
         assertThat(viewer.web.settings.textZoom).isEqualTo(100)
@@ -322,7 +341,7 @@ class BookViewerTest {
         assertThat(now.text.toString()).isEqualTo("115%")
         assertThat(now.contentDescription.toString()).isEqualTo("Text size 115%")
         assertThat(viewer.web.settings.textZoom).isEqualTo(115)
-        assertThat(Settings.bookTextSize(context)).isEqualTo(115)
+        assertThat(Settings.textSize(context)).isEqualTo(115)
 
         box.findViewById<View>(R.id.textSmaller)!!.performClick()
         box.findViewById<View>(R.id.textSmaller)!!.performClick()
@@ -332,7 +351,7 @@ class BookViewerTest {
 
     @Test
     fun aButtonStopsAtTheEndOfTheSizes() {
-        Settings.setBookTextSize(context, Settings.BOOK_TEXT_SIZES.last())
+        Settings.setTextSize(context, Settings.TEXT_SIZES.last())
         val viewer = book().get()
         viewer.pageSays("page 1 9")
         val box = textSizeBox(viewer)
@@ -341,8 +360,8 @@ class BookViewerTest {
         assertThat(larger.isEnabled).isFalse()
         assertThat(smaller.isEnabled).isTrue()
 
-        repeat(Settings.BOOK_TEXT_SIZES.size - 1) { smaller.performClick() }
-        assertThat(Settings.bookTextSize(context)).isEqualTo(Settings.BOOK_TEXT_SIZES.first())
+        repeat(Settings.TEXT_SIZES.size - 1) { smaller.performClick() }
+        assertThat(Settings.textSize(context)).isEqualTo(Settings.TEXT_SIZES.first())
         assertThat(smaller.isEnabled).isFalse()
         assertThat(larger.isEnabled).isTrue()
     }
@@ -350,8 +369,8 @@ class BookViewerTest {
     /** A size from a build with other steps is not one of these, and reads as the book's own. */
     @Test
     fun aSizeThatIsNotOneOfTheStepsIsTheBooksOwn() {
-        Settings.setBookTextSize(context, 123)
-        assertThat(Settings.bookTextSize(context)).isEqualTo(100)
+        Settings.setTextSize(context, 123)
+        assertThat(Settings.textSize(context)).isEqualTo(100)
     }
 
     /**
@@ -370,8 +389,8 @@ class BookViewerTest {
     /** With the phone's font size turned up the WebView starts above 100, and the choice multiplies that. */
     @Test
     fun theChoiceMultipliesTheSizeThePhoneIsSetTo() {
-        assertThat(bookTextZoom(phone = 130, chosen = 150, reflows = true)).isEqualTo(195)
-        assertThat(bookTextZoom(phone = 100, chosen = 80, reflows = true)).isEqualTo(80)
-        assertThat(bookTextZoom(phone = 130, chosen = 150, reflows = false)).isEqualTo(100)
+        assertThat(readerTextZoom(phone = 130, chosen = 150, reflows = true)).isEqualTo(195)
+        assertThat(readerTextZoom(phone = 100, chosen = 80, reflows = true)).isEqualTo(80)
+        assertThat(readerTextZoom(phone = 130, chosen = 150, reflows = false)).isEqualTo(100)
     }
 }

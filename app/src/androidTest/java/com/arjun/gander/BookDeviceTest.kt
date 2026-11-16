@@ -42,8 +42,8 @@ class BookDeviceTest {
     @Before
     fun setUp() {
         DeviceFixtures.clear()
-        theirs = Settings.bookTextSize(target)
-        Settings.setBookTextSize(target, 100)
+        theirs = Settings.textSize(target)
+        Settings.setTextSize(target, 100)
     }
 
     /**
@@ -53,7 +53,7 @@ class BookDeviceTest {
      */
     @After
     fun tearDown() {
-        Settings.setBookTextSize(target, theirs)
+        Settings.setTextSize(target, theirs)
         target.getSharedPreferences("viewer", Context.MODE_PRIVATE).edit().commit()
     }
 
@@ -184,14 +184,14 @@ class BookDeviceTest {
             WebViewProbe.await(
                 scenario, "Math.abs(${lineBelowTop(letter)}) < 2", "the line to be on top at the smaller size"
             )
-            assertThat(Settings.bookTextSize(target)).isEqualTo(90)
+            assertThat(Settings.textSize(target)).isEqualTo(90)
         }
     }
 
     /** A page drawn at a fixed size keeps its type as the book set it, whatever the reader chose. */
     @Test
     fun aPageOfAFixedSizeIsNotSized() {
-        Settings.setBookTextSize(target, 150)
+        Settings.setTextSize(target, 150)
         open("gazetteer.epub").use { scenario ->
             WebViewProbe.await(scenario, opened, "the book to open")
             val reflowing = number(scenario, gauge)

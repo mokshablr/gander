@@ -107,6 +107,49 @@ internal sealed interface PortMessage {
      * back to the fitted width: see [DoubleTapZoom.leftToPage].
      */
     data class Shrunk(val on: Boolean) : PortMessage
+
+    /**
+     * A document's contents list, a PDF's outline or a Word document's headings, for the viewer to
+     * list: see [ContentsList]. The one message that carries the document's words, as plain text
+     * that is only ever shown.
+     */
+    data class Contents(val entries: List<ContentsEntry>) : PortMessage
+}
+
+/**
+ * One line of a document's contents list. [depth] counts from nought at the top level, and
+ * [page] from one, or is nought for an entry that names no page of the document, which is listed
+ * and cannot be tapped.
+ */
+internal data class ContentsEntry(val depth: Int, val page: Int, val title: String)
+
+/** The most entries, and the longest title, app.js sends. A message past either is dropped. */
+internal const val CONTENTS_MOST = 5000
+internal const val CONTENTS_TITLE_MOST = 300
+
+/**
+ * "contents", then a line for each entry of "<depth> <page> <title>". The page is checked again
+ * against the document when an entry is tapped, since it is only a number here.
+ */
+private fun parseContents(data: String): PortMessage? {
+    // Long enough for the most entries at their longest, each letter two chars at worst
+    if (data.length > CONTENTS_MOST * (CONTENTS_TITLE_MOST * 2 + 16)) return null
+    val lines = data.split('\n')
+    if (lines.size - 1 > CONTENTS_MOST) return null
+    val entries = ArrayList<ContentsEntry>(lines.size - 1)
+    for (line in lines.subList(1, lines.size)) {
+        val parts = line.split(' ', limit = 3)
+        if (parts.size != 3) return null
+        val depth = parts[0].toIntOrNull() ?: return null
+        val page = parts[1].toIntOrNull() ?: return null
+        val title = parts[2]
+        if (depth < 0 || page < 0 || title.isBlank()) return null
+        if (title.codePointCount(0, title.length) > CONTENTS_TITLE_MOST) return null
+        entries += ContentsEntry(depth, page, title)
+    }
+    // A list with nowhere in it to go is no list
+    if (entries.none { it.page > 0 }) return null
+    return PortMessage.Contents(entries)
 }
 
 /**
@@ -129,6 +172,7 @@ internal fun parsePortMessage(data: String?): PortMessage? {
         "shrunk 1" -> return PortMessage.Shrunk(true)
         "shrunk 0" -> return PortMessage.Shrunk(false)
     }
+    if (data != null && data.startsWith("contents\n")) return parseContents(data)
     val said = data?.split(" ") ?: return null
     if (said.size != 3) return null
 

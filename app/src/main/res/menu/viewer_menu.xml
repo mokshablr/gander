@@ -9,7 +9,8 @@
         app:showAsAction="ifRoom" />
     <!-- A book's two, hidden until epub.html says the book has opened. Its contents list has a
          button of its own on the page, at the top of a chapter, which is seldom where a
-         reader is. Issue #50. -->
+         reader is. Issue #50. Contents is a PDF's and a Word document's as well, once
+         its page has sent the outline or the headings it has, issue #79. -->
     <item
         android:id="@+id/action_contents"
         android:title="@string/contents"

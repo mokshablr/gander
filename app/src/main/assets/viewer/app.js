@@ -270,6 +270,36 @@ function vwDisarmLinks(root) {
 }
 
 /*
+ * A document's contents list, issue #79, as the message the app reads (parseContents in
+ * PortMessage.kt): "contents" and then a line for each entry, "<depth> <page> <title>", from
+ * [entries] of { depth, page, title }. A PDF's comes from its outline (pdf.mjs) and a Word
+ * document's from its headings (docx.js). The app lists them itself, as both pages lay out at
+ * 980 px and a panel drawn here would be magnified with the pages under a pinch.
+ *
+ * Page 0 is an entry that names no page, a web address or a heading with nothing under it,
+ * which is listed and cannot be tapped. "" when no entry has a page, since that is no way round
+ * the document. The limits are a document's, which can say anything: an entry for every line of a
+ * long legal code is well inside them, a list written to choke the app is not, and the app drops
+ * a message past them.
+ */
+var VW_CONTENTS_MOST = 5000;
+var VW_CONTENTS_TITLE_MOST = 300;
+
+function vwContentsMessage(entries) {
+  var lines = [];
+  var any = false;
+  for (var i = 0; i < entries.length && lines.length < VW_CONTENTS_MOST; i++) {
+    /* On one line, since a line is an entry, and cut to a length a list can show */
+    var title = String(entries[i].title || "").replace(/[\s\u0000-\u001f\u007f-\u009f]+/g, " ").trim();
+    title = Array.from(title).slice(0, VW_CONTENTS_TITLE_MOST).join("");
+    if (!title) continue;
+    if (entries[i].page) any = true;
+    lines.push(entries[i].depth + " " + entries[i].page + " " + title);
+  }
+  return any ? "contents\n" + lines.join("\n") : "";
+}
+
+/*
  * invert(1) hue-rotate(180deg), written out as pdf.html's #vw-invert has it. Night mode turns a
  * colour over with this, so dark ink goes light and a blue heading stays blue: night.js for a
  * Word or prose page and xlsx-styles.js for a sheet's own colours.

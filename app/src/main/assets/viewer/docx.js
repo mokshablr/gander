@@ -39,6 +39,7 @@ function makeElement(spec) {
     drawLrTbAcross(this);
     vwWordLines(this);
   }
+  if (this && this.renderParagraph && !this.vwOutlineMarked) vwMarkOutline(this);
   var custom = vwWordElement(spec);
   var el = docx.defaultOptions.h(spec);
   for (var name in custom) el.style.setProperty(name, custom[name]);
@@ -194,7 +195,78 @@ window.vwPageCommand = function (msg) {
 window.vwPortReady = function () {
   vwPageSent = 0;
   vwReportPage();
+  if (vwContents) vwFind.post(vwContents);
 };
+
+/*
+ * The document's headings as its contents list, issue #79, the way Word's navigation pane makes
+ * one: a paragraph with an outline level, set on the paragraph itself or by its style, Heading 1
+ * to 9 and any style based on one. Each is marked data-vw-outline as it is drawn (vwMarkOutline)
+ * and read here once the pages are final. Levels are counted from the highest one used, so a
+ * document whose headings start at Heading 2 is not all set in by one. See vwContentsMessage in
+ * app.js.
+ */
+var vwContents = "";
+
+/*
+ * Each paragraph style's outline level, kept on it as vwOutline, read before drawing. A style
+ * takes the level of the one it is based on unless it sets its own, 9 for body text included.
+ * Drawing merges each style's settings with its base's, but the base's level wins there, which
+ * would make a style that sets body text over Heading 2 a heading, so the chain is walked here
+ * while each style still holds only its own.
+ */
+function vwOutlineLevels(doc) {
+  var styles = doc.stylesPart && doc.stylesPart.styles;
+  if (!styles) return;
+  var byId = {};
+  styles.forEach(function (style) { if (style.id) byId[style.id] = style; });
+  styles.forEach(function (style) {
+    var level = null;
+    for (var s = style, n = 0; s && level == null && n < 20; s = byId[s.basedOn], n++) {
+      level = s.paragraphProps ? s.paragraphProps.outlineLevel : null;
+    }
+    style.vwOutline = typeof level === "number" ? level : -1;
+  });
+}
+
+/*
+ * Marks each paragraph drawn with an outline level of 0 to 8 as data-vw-outline: its own level, a
+ * paragraph's setting outranking its style's as in Word, else its style's (vwOutlineLevels). Some
+ * writers set the level on each heading paragraph and on no style at all.
+ */
+function vwMarkOutline(renderer) {
+  var draw = renderer.renderParagraph;
+  renderer.vwOutlineMarked = true;
+  renderer.renderParagraph = function (p) {
+    var el = draw.call(this, p);
+    var style = p.styleName ? this.findStyle(p.styleName) : null;
+    var level = typeof p.outlineLevel === "number" ? p.outlineLevel : style ? style.vwOutline : -1;
+    if (el && level >= 0 && level <= 8) el.setAttribute("data-vw-outline", level);
+    return el;
+  };
+}
+
+function vwReadContents() {
+  var sheets = vwSheets();
+  if (sheets.length < 2) return;
+  var pageOf = new Map();
+  for (var i = 0; i < sheets.length; i++) pageOf.set(sheets[i], i + 1);
+  var found = [];
+  var top = 9;
+  var heads = document.querySelectorAll(".docx-wrapper > section.docx > article p[data-vw-outline]");
+  for (var j = 0; j < heads.length && found.length < VW_CONTENTS_MOST; j++) {
+    var p = heads[j];
+    /* The rest of a heading a page cut in two is the same heading */
+    if (p.classList.contains("vw-cont") || !p.textContent.trim()) continue;
+    var level = Number(p.getAttribute("data-vw-outline"));
+    found.push({ level: level, page: pageOf.get(p.closest("section.docx")) || 0, title: p.textContent });
+    top = Math.min(top, level);
+  }
+  vwContents = vwContentsMessage(found.map(function (e) {
+    return { depth: e.level - top, page: e.page, title: e.title };
+  }));
+  if (vwContents) vwFind.post(vwContents);
+}
 
 var VW_DRAW = {
   inWrapper: true,
@@ -215,6 +287,7 @@ function vwDrawWord(buf) {
   return docx.parseAsync(buf, VW_DRAW)
     .then(function (doc) {
       vwContextualSpacing(doc);
+      vwOutlineLevels(doc);
       var model = vwNumberModel(doc);
       if (vwPages.turns) vwAddTurns(model, vwPages.turns);
       return docx.renderDocument(doc, VW_DRAW);
@@ -329,6 +402,7 @@ if (!vwWebViewTooOld("Word documents")) {
       vwPrintSizes(vwSheets());
       vwStatusDone();
       vwFollowPages();
+      vwReadContents();
     })
     .catch(function (e) { vwError("Could not render this Word document", String(e)); });
 }

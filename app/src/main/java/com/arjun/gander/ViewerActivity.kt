@@ -478,7 +478,8 @@ open class ViewerActivity : AppCompatActivity() {
             setOnMenuItemClickListener { askForPage(); true }
         }
         contentsItem = toolbar.menu.findItem(R.id.action_contents).apply {
-            setOnMenuItemClickListener { tellPage(PortCommand.contents()); true }
+            // A book draws its own list. A PDF's or a Word document's comes to the app: see ContentsList
+            setOnMenuItemClickListener { if (book) tellPage(PortCommand.contents()) else showContentsList(); true }
         }
         textSizeItem = toolbar.menu.findItem(R.id.action_text_size).apply {
             setOnMenuItemClickListener { askForTextSize(); true }
@@ -883,6 +884,10 @@ open class ViewerActivity : AppCompatActivity() {
     /** Whether the chapter on screen takes the reader's text size. See [applyTextSize]. */
     private var bookReflows = true
 
+    /** A PDF's or a Word document's contents list, once its page has sent one. Empty for one with none. */
+    @androidx.annotation.VisibleForTesting
+    internal var listedContents: List<ContentsEntry> = emptyList()
+
     /** The text zoom the WebView came with, which is the phone's own font size setting. */
     private var phoneTextZoom = 100
 
@@ -1043,6 +1048,14 @@ open class ViewerActivity : AppCompatActivity() {
         // still goes.
         if (!touchExplorationOn() || pageTotal < 2) pageFader.restartIdle()
         else pageFader.cancelIdle()
+    }
+
+    /** A PDF's or a Word document's contents list, from the menu. See [ContentsList]. */
+    @androidx.annotation.VisibleForTesting
+    internal fun showContentsList() {
+        if (listedContents.isEmpty() || pageTotal < 2) return
+        // Dark over a document in night mode, like Go to page. Down the channel Go to page uses
+        ContentsList.show(nightChrome.dialogs, listedContents, pageAt, pageTotal) { tellPage(PortCommand.goToPage(it)) }
     }
 
     /**
@@ -1636,7 +1649,7 @@ open class ViewerActivity : AppCompatActivity() {
                         is PortMessage.Page -> if (kind.paged) {
                             if (pageTotal == 0) {
                                 goToPageItem?.isVisible = !book
-                                contentsItem?.isVisible = book
+                                contentsItem?.isVisible = book || listedContents.isNotEmpty()
                                 textSizeItem?.isVisible = book
                             }
                             pageAt = said.n
@@ -1661,6 +1674,11 @@ open class ViewerActivity : AppCompatActivity() {
                         is PortMessage.Reflows -> if (book) {
                             bookReflows = said.on
                             applyTextSize()
+                        }
+                        // A PDF's outline or a Word document's headings. A book draws its own
+                        is PortMessage.Contents -> if (kind == FileKind.PDF || kind == FileKind.DOCX) {
+                            listedContents = said.entries
+                            contentsItem?.isVisible = true
                         }
                         // Only the card that has the button may ask
                         PortMessage.SimpleView -> if (kind == FileKind.PDF && cardOffersSimple) askForSimpleView()
@@ -2265,6 +2283,7 @@ open class ViewerActivity : AppCompatActivity() {
         // and Text size would change the stored size with nothing on screen to show for it.
         // Its page can no longer answer Back either.
         contentsItem?.isVisible = false
+        listedContents = emptyList()
         textSizeItem?.isVisible = false
         coverBackCallback.isEnabled = false
         closeSearchChannel()

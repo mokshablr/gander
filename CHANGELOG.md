@@ -18,6 +18,9 @@
   and the lines rewrap to fit the screen at the larger size. It is the same size a book takes.
 - A GIF, AVIF, ICO or SVG has no Search button, since there are no words in it to find; even
   an SVG's text was never found.
+- Contents, in the menu, lists a PDF's own contents, the outline some PDFs carry and some apps
+  call bookmarks, and a Word document's headings, with the page each entry is on and the one you
+  are in marked. Tap one to go to its page (#79, thanks @asgsdbrseg).
 
 ## 2.10 (2026-11-15)
 

@@ -120,6 +120,11 @@
          same figures as the line above. A screen reader says the sign as "percent". -->
     <string name="book_position_spoken">%1$d%% through the book</string>
     <string name="contents">Contents</string>
+    <!-- The page beside an entry in a PDF's or a Word document's contents list, then what a screen
+         reader says for it, and for the entry the reader is in -->
+    <string name="contents_page">%1$d</string>
+    <string name="contents_page_spoken">Page %1$d</string>
+    <string name="contents_here">You are here</string>
     <string name="text_size">Text size</string>
     <!-- The two buttons show a small and a large letter. A screen reader says these. -->
     <string name="text_smaller">Smaller text</string>

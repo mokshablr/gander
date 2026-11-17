@@ -2301,6 +2301,58 @@ function reportLocked() {
   if (searchPort && locked) searchPort.postMessage("locked");
 }
 
+/*
+ * The contents list a PDF may carry, issue #79: its outline, which some readers call bookmarks,
+ * sent to the app to list. See vwContentsMessage in app.js for the message and its limits.
+ */
+var CONTENTS_DEEPEST = 32;
+var contentsMessage = "";
+
+function readContents() {
+  /* One page has nowhere to go, as it has no Go to page */
+  if (!doc || doc.numPages < 2) return;
+  doc.getOutline().then(function (outline) {
+    var flat = [];
+    (function walk(items, depth) {
+      for (var i = 0; items && i < items.length && flat.length < VW_CONTENTS_MOST; i++) {
+        flat.push({ depth: depth, item: items[i] });
+        if (depth < CONTENTS_DEEPEST) walk(items[i].items, depth + 1);
+      }
+    })(outline, 0);
+    var refs = {};
+    return Promise.all(flat.map(function (e) { return pageOf(e.item.dest, refs); })).then(function (at) {
+      contentsMessage = vwContentsMessage(flat.map(function (e, i) {
+        return { depth: e.depth, page: at[i], title: e.item.title };
+      }));
+      reportContents();
+    });
+  }).catch(function () { /* An outline that will not read is no list, and the pages are still fine */ });
+}
+
+/*
+ * The page, from 1, an outline entry's destination is on, or 0. A destination is a name to look
+ * up or the place itself, whose first item is the page's object or, from some writers, its index:
+ * the same two cases pdf.js's own viewer reads. Pages are asked for once each, however many
+ * entries are on them.
+ */
+function pageOf(dest, refs) {
+  var place = typeof dest === "string" ? doc.getDestination(dest) : Promise.resolve(dest);
+  return place.then(function (explicit) {
+    var target = Array.isArray(explicit) ? explicit[0] : null;
+    if (Number.isInteger(target)) return target + 1;
+    if (!target || typeof target !== "object" || !Number.isInteger(target.num)) return 0;
+    var key = target.num + "R" + target.gen;
+    if (!refs[key]) refs[key] = doc.getPageIndex(target).then(function (i) { return i + 1; });
+    return refs[key];
+  }).then(function (n) {
+    return Number.isInteger(n) && n >= 1 && n <= doc.numPages ? n : 0;
+  }, function () { return 0; });
+}
+
+function reportContents() {
+  if (searchPort && contentsMessage) searchPort.postMessage(contentsMessage);
+}
+
 function reportPage() {
   /* Not before PAGE_PITCH is set, which is when the boxes take the document's own shape
      and a reopened document is moved to its page. Before that the answer is page 1 of a
@@ -2454,6 +2506,7 @@ window.addEventListener("message", function (e) {
   reportPage();
   reportLocked();
   reportShrunk();
+  reportContents();
 });
 
 /* One letter of command, then the rest is payload. A query is arbitrary text and
@@ -2897,6 +2950,8 @@ if (!vwPdfBlocked) {
          without scrolling still has to be told how long it is, and the jump-to-page
          control has no total to check against until this has been sent. */
       reportPage();
+      /* After the first page, which nobody should wait on for a list they may never open */
+      readContents();
       /* Asked for before there was anything to ask. */
       if (finding.query) { buildIndex(); report(); }
     })

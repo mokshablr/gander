@@ -299,4 +299,63 @@ class PortMessageTest {
         // past Int.MAX_VALUE it stops being an integer, and is dropped
         assertThat(parsePortMessage("1 99999999999 1")).isNull()
     }
+
+    // ---------------------------------------------------------------
+    // Inbound: a PDF's contents list, issue #79
+    // ---------------------------------------------------------------
+
+    @Test
+    fun aContentsListIsReadEntryByEntry() {
+        assertThat(parsePortMessage("contents\n0 1 Front matter\n1 3 Section 1.1 and its two  spaces\n0 0 On the web"))
+            .isEqualTo(
+                PortMessage.Contents(
+                    listOf(
+                        ContentsEntry(0, 1, "Front matter"),
+                        ContentsEntry(1, 3, "Section 1.1 and its two  spaces"),
+                        ContentsEntry(0, 0, "On the web"),
+                    )
+                )
+            )
+    }
+
+    /** A title is the document's words, and nothing in it is read as anything else. */
+    @Test
+    fun aTitleIsTakenAsItIs() {
+        val said = parsePortMessage("contents\n0 2 page 2 6\n0 3 \u0641\u0635\u0644 cover 1") as PortMessage.Contents
+        assertThat(said.entries.map { it.title }).containsExactly("page 2 6", "\u0641\u0635\u0644 cover 1").inOrder()
+    }
+
+    /** One bad line and the whole list is dropped, as any other message that is not exact is. */
+    @Test
+    fun aContentsListThatIsNotExactIsDropped() {
+        assertThat(parsePortMessage("contents")).isNull()
+        assertThat(parsePortMessage("contents\n")).isNull()
+        assertThat(parsePortMessage("contents\n0 1")).isNull()
+        assertThat(parsePortMessage("contents\n0 1 ")).isNull()
+        assertThat(parsePortMessage("contents\n0 x Title")).isNull()
+        assertThat(parsePortMessage("contents\n-1 1 Title")).isNull()
+        assertThat(parsePortMessage("contents\n0 -1 Title")).isNull()
+        assertThat(parsePortMessage("contents\n0 1 Title\n0 1")).isNull()
+        assertThat(parsePortMessage("Contents\n0 1 Title")).isNull()
+        assertThat(parsePortMessage(" contents\n0 1 Title")).isNull()
+    }
+
+    @Test
+    fun aListWithNowhereToGoIsNoList() {
+        assertThat(parsePortMessage("contents\n0 0 On the web\n0 0 And another")).isNull()
+    }
+
+    @Test
+    fun aListPastTheLimitsIsDropped() {
+        val most = (1..CONTENTS_MOST).joinToString("\n") { "0 1 Entry $it" }
+        assertThat(parsePortMessage("contents\n$most")).isInstanceOf(PortMessage.Contents::class.java)
+        assertThat(parsePortMessage("contents\n$most\n0 1 One more")).isNull()
+
+        val longest = "x".repeat(CONTENTS_TITLE_MOST)
+        assertThat(parsePortMessage("contents\n0 1 $longest")).isInstanceOf(PortMessage.Contents::class.java)
+        assertThat(parsePortMessage("contents\n0 1 ${longest}x")).isNull()
+        // Counted in letters, as pdf.mjs cuts them, so a title of emoji is not cut at half its length
+        val emoji = "\uD83D\uDCD6".repeat(CONTENTS_TITLE_MOST)
+        assertThat(parsePortMessage("contents\n0 1 $emoji")).isInstanceOf(PortMessage.Contents::class.java)
+    }
 }

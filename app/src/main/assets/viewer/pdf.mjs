@@ -2303,10 +2303,12 @@ function reportLocked() {
 
 /*
  * The contents list a PDF may carry, issue #79: its outline, which some readers call bookmarks,
- * sent to the app to list. See vwContentsMessage in app.js for the message and its limits.
+ * sent to the app to list. See vwContents in app.js for the message and its limits.
  */
 var CONTENTS_DEEPEST = 32;
 var contentsMessage = "";
+/* The entries sent, in their order, which an "e" command counts in */
+var contentsKept = [];
 
 function readContents() {
   /* One page has nowhere to go, as it has no Go to page */
@@ -2321,9 +2323,11 @@ function readContents() {
     })(outline, 0);
     var refs = {};
     return Promise.all(flat.map(function (e) { return pageOf(e.item.dest, refs); })).then(function (at) {
-      contentsMessage = vwContentsMessage(flat.map(function (e, i) {
-        return { depth: e.depth, page: at[i], title: e.item.title };
+      var sent = vwContents(flat.map(function (e, i) {
+        return { depth: e.depth, place: at[i], title: e.item.title };
       }));
+      contentsMessage = sent.message;
+      contentsKept = sent.kept;
       reportContents();
     });
   }).catch(function () { /* An outline that will not read is no list, and the pages are still fine */ });
@@ -2538,24 +2542,31 @@ function onCommand(msg) {
     paint();
     report();
   } else if (verb === "g") {
-    /*
-     * Go to a page, put at the top wherever it is tall enough, since a jump means "start
-     * here" where a search hit is centred. Instant, because a smooth scroll would ask for
-     * every page on the way past to be drawn, which MAX_IN_FLIGHT and DRAW_PAGES are there
-     * to stop. The bounds are checked again, since a number off the port is only text.
-     */
-    var n = Math.floor(Number(msg.slice(1)));
-    if (!doc || !slots.length || !(n >= 1 && n <= slots.length)) return;
-    var target = slots[n - 1];
-    place(target).then(function () {
-      want(target);
-      pump();
-      reportPage();
-      /* A jump made while pinched in lands somewhere else on a page that is drawn but not
-         yet sharp here, and moves nothing that would fire a scroll to say so. */
-      scheduleRefine();
-    });
+    goToPage(Math.floor(Number(msg.slice(1))));
+  } else if (verb === "e") {
+    /* An entry of the contents list, by its number in the list sent */
+    var entry = vwContentsEntry(contentsKept, msg);
+    if (entry && entry.place) goToPage(entry.place);
   }
+}
+
+/*
+ * Go to page [n], put at the top wherever it is tall enough, since a jump means "start here"
+ * where a search hit is centred. Instant, because a smooth scroll would ask for every page on
+ * the way past to be drawn, which MAX_IN_FLIGHT and DRAW_PAGES are there to stop. The bounds
+ * are checked again, since a number off the port is only text.
+ */
+function goToPage(n) {
+  if (!doc || !slots.length || !(n >= 1 && n <= slots.length)) return;
+  var target = slots[n - 1];
+  place(target).then(function () {
+    want(target);
+    pump();
+    reportPage();
+    /* A jump made while pinched in lands somewhere else on a page that is drawn but not
+       yet sharp here, and moves nothing that would fire a scroll to say so. */
+    scheduleRefine();
+  });
 }
 
 /*

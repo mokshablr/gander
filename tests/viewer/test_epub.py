@@ -80,6 +80,12 @@ def wait_until_on_screen(page, selector):
     )
 
 
+def listed(channel):
+    """The contents list the book sent the app: (depth, chapter, way, language, title) for each entry."""
+    message = channel.wait_for(r"contents\n(?s:.*)")
+    return [tuple(line.split(" ", 4)) for line in message.split("\n")[1:]]
+
+
 def style_of(page, selector, name):
     return page.evaluate(
         "([s, name]) => getComputedStyle(document.querySelector('#book').shadowRoot"
@@ -208,10 +214,11 @@ def test_a_stylesheet_in_the_chapter_itself_applies(viewer, page):
 
 
 def test_the_books_stylesheet_does_not_reach_the_page_around_it(viewer, page):
-    """The contents list has an h1 of its own, which the book's h1 rule must not colour."""
+    """An h1 of the page's own, outside the book, which the book's h1 rule must not colour."""
     open_book(viewer, page)
     colour = page.evaluate(
-        "() => getComputedStyle(document.querySelector('#epub-contents-title')).color"
+        "() => { const h = document.body.appendChild(document.createElement('h1'));"
+        " h.textContent = 'Gander'; return getComputedStyle(h).color; }"
     )
     assert colour != "rgb(120, 40, 20)"
 
@@ -406,91 +413,66 @@ def test_next_and_previous_turn_the_chapter(viewer, page):
     assert page.is_disabled("#epub-next")
 
 
-def test_the_contents_list_is_the_books_own(viewer, page):
+def test_the_contents_list_is_the_books_own(viewer, page, port):
+    """
+    The book's list goes to the app, which shows it as it does a PDF's (ContentsList.kt), with
+    each entry's chapter in reading order, from one. The entry that goes nowhere has none.
+    """
     open_book(viewer, page)
-    page.click("#epub-contents-open")
-    assert page.is_visible("#epub-contents")
-    assert page.text_content("#epub-title") == "The Harbour at Low Tide"
-    labels = page.eval_on_selector_all(
-        "#epub-contents-list li", "els => els.map(e => e.textContent)"
-    )
-    assert labels == [
-        "Title page", "One: The Lamp Room", "The ledger", "Two: The Long Watch",
-        "Three: The Tide Table", "Notes, in the printed edition only",
+    channel = port()
+    assert [(d, at, title) for d, at, _, _, title in listed(channel)] == [
+        ("0", "1", "Title page"), ("0", "2", "One: The Lamp Room"), ("1", "2", "The ledger"),
+        ("0", "3", "Two: The Long Watch"), ("0", "4", "Three: The Tide Table"),
+        ("0", "0", "Notes, in the printed edition only"),
     ]
-    # The entry that goes nowhere is words and not a button
-    assert len(page.query_selector_all("#epub-contents-list button")) == 5
-    assert page.get_attribute("#epub-contents-list button[aria-current]", "data-n") == "0"
-
-    page.click("#epub-contents-list button >> text=Three: The Tide Table")
+    # An entry is asked for by its number in the list
+    channel.entry(4)
     wait_for_heading(page, "The Tide Table")
-    assert not page.is_visible("#epub-contents")
 
 
-def test_a_contents_entry_goes_to_its_place_in_a_chapter(viewer, page):
+def test_a_contents_entry_goes_to_its_place_in_a_chapter(viewer, page, port):
     open_book(viewer, page)
     page.set_viewport_size({"width": 390, "height": 300})
-    page.click("#epub-contents-open")
-    page.click("#epub-contents-list button >> text=The ledger")
+    channel = port()
+    channel.wait_for(r"contents\n(?s:.*)")
+    channel.entry(2)
     wait_for_heading(page, "The Lamp Room")
     wait_until_on_screen(page, "#ledger")
 
 
-def test_opening_and_closing_the_contents_does_not_move_the_page(viewer, page):
-    """
-    Clicked from script, because Playwright scrolls a button into view before it clicks it
-    and the button is at the top of the chapter. What is checked is that the list coming and
-    going, and the focus it hands back, leave the chapter where it was.
-    """
-    open_book(viewer, page)
-    turn_to(page, "The Long")
-    page.evaluate("() => window.scrollTo(0, 900)")
-    page.evaluate("() => document.querySelector('#epub-contents-open').click()")
-    assert page.is_visible("#epub-contents")
-    page.evaluate("() => document.querySelector('#epub-contents-close').click()")
-    assert not page.is_visible("#epub-contents")
-    assert page.evaluate("() => window.pageYOffset") == 900
-    assert "The Long" in page.text_content("#book h1")
-
-
-def test_the_apps_menu_opens_the_contents_and_back_closes_them(viewer, page, port):
-    """
-    The strip with the Contents button is at the top of a chapter and a reader is seldom
-    there, so the app's menu asks for the list too, and Back is the page's to answer while
-    the list is up: it tells the app when that is.
-    """
+def test_an_entry_that_goes_nowhere_or_is_not_in_the_list_moves_nothing(viewer, page, port):
     open_book(viewer, page)
     channel = port()
-    channel.wait_for(rf"page 1 {TOTAL}")
+    channel.wait_for(r"contents\n(?s:.*)")
     turn_to(page, "The Long")
     page.evaluate("() => window.scrollTo(0, 900)")
-
-    channel.contents()
-    page.wait_for_selector("#epub-contents", state="visible")
-    channel.wait_for(r"cover 1")
-    assert page.get_attribute("#epub-contents-list button[aria-current]", "data-n") == "3"
-
-    channel.clear_inbox()
-    channel.close_over()
-    page.wait_for_selector("#epub-contents", state="hidden")
-    channel.wait_for(r"cover 0")
+    for n in ("5", "6", "-1", "1.5", "x", ""):
+        channel.send("e" + n)
+    page.wait_for_timeout(300)
+    assert "The Long" in page.text_content("#book h1")
     assert page.evaluate("() => window.pageYOffset") == 900
 
-    # Closed by its own button, the app hears of it the same
-    channel.contents()
-    channel.wait_for(r"cover 1")
+
+def test_a_contents_entry_is_going_on_and_leaves_back_nothing_to_undo(viewer, page, port):
+    """Back after a link goes back to where the link was. After the contents it leaves the book."""
+    open_book(viewer, page)
+    channel = port()
+    channel.wait_for(r"contents\n(?s:.*)")
+    turn_to(page, "The Lamp Room")
     channel.clear_inbox()
-    page.click("#epub-contents-close")
-    channel.wait_for(r"cover 0")
+    channel.entry(3)
+    wait_for_heading(page, "The Long")
+    page.wait_for_timeout(300)
+    assert "cover 1" not in channel.messages()
 
 
-def test_the_menu_asks_for_no_contents_before_there_is_a_book(viewer, page, port, made):
+def test_a_file_that_is_not_a_book_sends_no_contents(viewer, page, port, made):
     viewer("epub.html", made("notes.epub", b"Plain words in a file named like a book."))
     page.wait_for_selector(".vw-error", timeout=15000)
     channel = port()
-    channel.contents()
+    channel.entry(0)
     page.wait_for_timeout(200)
-    assert not page.is_visible("#epub-contents")
+    assert not [m for m in channel.messages() if m.startswith("contents")]
 
 
 def test_a_web_link_shows_its_address_and_goes_nowhere(viewer, page, port):
@@ -1061,17 +1043,15 @@ def test_a_search_for_words_the_book_does_not_have_finds_nothing(viewer, page, p
 # The older kind of book, and the ones that cannot be opened
 # ---------------------------------------------------------------------------
 
-def test_an_epub_2_reads_with_its_ncx_contents(viewer, page):
+def test_an_epub_2_reads_with_its_ncx_contents(viewer, page, port):
     open_book(viewer, page, fixture="almanac.epub")
     assert page.text_content("#book h1") == "First Light"
     assert style_of(page, "h1", "fontVariantCaps") == "small-caps"
 
-    page.click("#epub-contents-open")
-    labels = page.eval_on_selector_all(
-        "#epub-contents-list li", "els => els.map(e => e.textContent)"
-    )
-    assert labels == ["First Light", "Second Watch", "The watch bell"]
-    page.click("#epub-contents-list button >> text=The watch bell")
+    channel = port()
+    assert [(d, at, title) for d, at, _, _, title in listed(channel)] == [
+        ("0", "1", "First Light"), ("0", "2", "Second Watch"), ("1", "2", "The watch bell")]
+    channel.entry(2)
     wait_for_heading(page, "Second Watch")
 
 
@@ -1200,8 +1180,8 @@ def without_layout_containment(page):
 def test_the_page_keeps_to_the_screen_on_an_engine_that_lets_a_chapter_widen_it(viewer, page):
     """
     On WebView 66 the note this book puts 2,000 pixels to the right made the page that wide:
-    it moved sideways under the finger, and the contents list, which covers the page, opened
-    out of sight. There the book's box cuts off what runs past it, and the note is still
+    it moved sideways under the finger, and what Gander opens over the page opened out of sight.
+    There the book's box cuts off what runs past it, and the note is still
     placed against the page.
     """
     taken = without_layout_containment(page)
@@ -1215,9 +1195,6 @@ def test_the_page_keeps_to_the_screen_on_an_engine_that_lets_a_chapter_widen_it(
     assert taken == [2]
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     assert box_of(page, "#far")["left"] == box_of(page, ".vw-page")["left"] + 2000
-    page.click("#epub-contents-open")
-    assert page.evaluate("document.querySelector('#epub-contents').getBoundingClientRect().width") \
-        == page.evaluate("window.innerWidth")
 
 
 def test_the_books_box_cuts_nothing_off_where_the_engine_keeps_a_chapter_to_its_page(viewer, page):
@@ -1449,15 +1426,14 @@ def test_a_picture_the_engine_cannot_draw_gives_way_to_the_one_named_in_its_stea
     )
 
 
-def test_a_contents_entry_that_is_a_picture_goes_by_what_the_picture_is_called(viewer, page, made):
+def test_a_contents_entry_that_is_a_picture_goes_by_what_the_picture_is_called(viewer, page, made, port):
     book = little_book(
         made, "pictured-contents.epub", [("", "", "<body><h1>The Light</h1></body>")],
         contents='<li><a href="c0.xhtml">Start</a></li>'
                  '<li><a href="c0.xhtml"><img src="light.png" alt="The harbour light"/></a></li>',
         extra={"light.png": a_plate()})
     open_book(viewer, page, fixture=book)
-    labels = page.eval_on_selector_all("#epub-contents-list li", "els => els.map(e => e.textContent)")
-    assert labels == ["Start", "The harbour light"]
+    assert [e[4] for e in listed(port())] == ["Start", "The harbour light"]
 
 
 def test_properties_under_epubs_old_names_apply(viewer, page, made):
@@ -1473,7 +1449,7 @@ def test_properties_under_epubs_old_names_apply(viewer, page, made):
     assert style_of(page, "#p", "textAlignLast") == "center"
 
 
-def test_an_id_the_document_has_a_property_by_is_kept(viewer, page):
+def test_an_id_the_document_has_a_property_by_is_kept(viewer, page, port):
     """
     "title" is the id of the heading, the name its stylesheet styles it by, and where the
     contents point. It is also a property of every document, for which DOMPurify drops it.
@@ -1482,8 +1458,9 @@ def test_an_id_the_document_has_a_property_by_is_kept(viewer, page):
     page.set_viewport_size({"width": 412, "height": 500})
     open_book(viewer, page, fixture=GAZETTEER)
     assert style_of(page, "#title", "letterSpacing") == "3px"
-    page.evaluate("document.querySelector('#epub-contents-open').click()")
-    page.click("#epub-contents-list button >> text=Fares")
+    channel = port()
+    titles = [e[4] for e in listed(channel)]
+    channel.entry(titles.index("Fares"))
     wait_until_on_screen(page, "#title")
 
 
@@ -1630,12 +1607,12 @@ def test_a_fixed_page_with_no_colours_of_its_own_is_black_on_white(viewer, page,
     assert style_of(page, "#p", "color") == "rgb(0, 0, 0)"
 
 
-def test_a_long_contents_list_is_shown_whole(viewer, page, made):
-    """An epic in 2,014 chapters lists every one, so a list of 2,100 is shown to its end."""
+def test_a_long_contents_list_is_shown_whole(viewer, page, made, port):
+    """An epic in 2,014 chapters lists every one, so a list of 2,100 goes to the app whole."""
     entries = "".join(f'<li><a href="c0.xhtml">Canto {n}</a></li>' for n in range(1, 2101))
     book = little_book(made, "epic.epub", [("", "", "<body><p>Sing.</p></body>")], contents=entries)
     open_book(viewer, page, fixture=book)
-    assert page.evaluate("document.querySelectorAll('#epub-contents-list button').length") == 2100
+    assert len(listed(port())) == 2100
 
 
 @pytest.mark.parametrize("direction,language,fixed,mirrored", [
@@ -1675,7 +1652,8 @@ def test_next_is_on_the_left_in_a_book_read_right_to_left(viewer, page, made, di
 
 
 @pytest.mark.parametrize("ncx", [False, True])
-def test_navigation_labels_keep_direction_and_language(viewer, page, made, ncx):
+def test_navigation_labels_keep_direction_and_language(viewer, page, made, ncx, port):
+    """Each entry's way and language go to the app, which sets the entry in by them (#54)."""
     labels = '<li><a href="c0.xhtml">الأول (1)</a><ol><li><a href="c1.xhtml">الثاني (2)</a></li>' \
              '<li dir="ltr" lang="en"><a href="c1.xhtml">English (3)</a></li></ol></li>'
     points = '<navPoint><navLabel><text>الأول (1)</text></navLabel><content src="c0.xhtml"/>' \
@@ -1688,49 +1666,35 @@ def test_navigation_labels_keep_direction_and_language(viewer, page, made, ncx):
         listed='<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>' if ncx else "",
         extra={"toc.ncx": '<ncx dir="rtl" xml:lang="ar"><navMap>' + points + '</navMap></ncx>'})
     open_book(viewer, page, fixture=book)
-    for selector in ("#epub-title", "#epub-where"):
-        assert page.get_attribute(selector, "dir") == "rtl"
-        assert page.get_attribute(selector, "lang") == "ar"
-    page.click("#epub-contents-open")
-    entries = page.locator("#epub-contents-list button")
-    assert entries.evaluate_all("els => els.map(e => e.dir)") == ["rtl", "rtl", "ltr"]
-    assert entries.evaluate_all("els => els.map(e => e.lang)") == ["ar", "ar", "en"]
-    assert entries.nth(1).evaluate("e => getComputedStyle(e).paddingRight") == "28px"
-    assert entries.nth(1).evaluate("e => getComputedStyle(e).paddingLeft") == "12px"
-    assert entries.nth(2).evaluate("e => getComputedStyle(e).paddingLeft") == "28px"
-    entries.nth(1).click()
+    assert page.get_attribute("#epub-where", "dir") == "rtl"
+    assert page.get_attribute("#epub-where", "lang") == "ar"
+    channel = port()
+    assert [(d, way, lang) for d, _, way, lang, _ in listed(channel)] == [
+        ("0", "rtl", "ar"), ("1", "rtl", "ar"), ("1", "ltr", "en")]
+    channel.entry(1)
     page.wait_for_function("() => vwFindParts.shown() === 1")
     assert page.get_attribute("#epub-where", "dir") == "rtl"
-    page.click("#epub-contents-open")
-    assert entries.nth(1).get_attribute("aria-current") == "true"
 
 
-def test_empty_book_title_does_not_use_the_toc_label_fallback(viewer, page, made):
+def test_empty_book_title_does_not_use_the_toc_label_fallback(viewer, page, made, port):
     book = little_book(made, "empty-title.epub", [("", "", "<body><p>Text</p></body>")],
         title_xml='<dc:title title="Not the book title"/>',
         contents='<li><a href="c0.xhtml" title="TOC fallback"/></li>')
     open_book(viewer, page, fixture=book)
-    page.click("#epub-contents-open")
-    assert page.text_content("#epub-title") == ""
-    assert page.text_content("#epub-contents-list button") == "TOC fallback"
+    assert [e[4] for e in listed(port())] == ["TOC fallback"]
     assert page.text_content("#epub-where") == "TOC fallback"
 
 
-def test_navigation_without_direction_uses_automatic_bidi(viewer, page, made):
-    """And labels that name no language, the title among them, are in the book's"""
+def test_navigation_without_direction_uses_automatic_bidi(viewer, page, made, port):
+    """And labels that name no language are in the book's. The app reads auto from the words."""
     book = little_book(made, "auto.epub", [("", "", "<body><p>Text</p></body>")],
         contents='<li><a href="c0.xhtml">الأول (1)</a></li><li><a href="c0.xhtml">English (2)</a></li>',
         spine='page-progression-direction="rtl"', html='dir="invalid"', language="ar")
     open_book(viewer, page, fixture=book)
-    assert page.get_attribute("#epub-title", "lang") == "ar"
-    page.click("#epub-contents-open")
-    entries = page.locator("#epub-contents-list button")
-    assert entries.evaluate_all("els => els.map(e => e.dir)") == ["auto", "auto"]
-    assert entries.evaluate_all("els => els.map(e => getComputedStyle(e).direction)") == ["rtl", "ltr"]
-    assert entries.evaluate_all("els => els.map(e => e.lang)") == ["ar", "ar"]
+    assert [(way, lang) for _, _, way, lang, _ in listed(port())] == [("auto", "ar"), ("auto", "ar")]
 
 
-def test_navigation_inherits_resolved_auto_and_can_clear_language(viewer, page, made):
+def test_navigation_inherits_resolved_auto_and_can_clear_language(viewer, page, made, port):
     book = little_book(made, "inherited-auto.epub", [("", "", "<body><p>Text</p></body>")],
         contents='<li dir="auto" lang="ar"><span dir="ltr" lang="en">English first</span><ol>'
                  '<li><a lang="" href="c0.xhtml">العربية</a></li>'
@@ -1738,23 +1702,23 @@ def test_navigation_inherits_resolved_auto_and_can_clear_language(viewer, page, 
                  '<li dir="rtl"><span>العربية</span><ol><li dir="auto">'
                  '<a href="c0.xhtml">123</a></li></ol></li>')
     open_book(viewer, page, fixture=book)
-    page.click("#epub-contents-open")
-    entries = page.locator("#epub-contents-list button, #epub-contents-list span")
-    assert entries.evaluate_all("els => els.map(e => e.dir)") == ["ltr", "rtl", "rtl", "rtl", "ltr"]
-    # An empty language is kept as the book wrote it; only one never named is the book's
-    assert entries.evaluate_all("els => els.map(e => e.lang)") == ["en", "", "", "en", "en"]
+    entries = listed(port())
+    assert [way for _, _, way, _, _ in entries] == ["ltr", "rtl", "rtl", "rtl", "ltr"]
+    # An empty language is no language, as one never named is to the app's list: "-" for both,
+    # where the book's own is named only for a label that says nothing either way
+    assert [lang for _, _, _, lang, _ in entries] == ["en", "-", "-", "en", "en"]
 
 
-def test_navigation_metadata_is_not_markup(viewer, page, made):
+def test_navigation_metadata_is_not_markup(viewer, page, made, port):
     attrs = 'dir="rtl&quot; onclick=&quot;alert(1)" lang="ar&quot; onclick=&quot;alert(1)"'
     book = little_book(made, "labels-safe.epub", [("", "", "<body><p>Text</p></body>")],
         html=attrs, package=attrs,
         contents='<li><a href="c0.xhtml">&lt;img src=x onerror=alert(1)&gt;</a></li>')
     open_book(viewer, page, fixture=book)
-    page.click("#epub-contents-open")
-    assert page.locator("#epub-contents-list button").inner_text() == "<img src=x onerror=alert(1)>"
+    # The way and the language are words of a fixed shape or none, and the title only text
+    assert listed(port()) == [("0", "1", "auto", "-", "<img src=x onerror=alert(1)>")]
     assert page.get_attribute("#epub-where", "dir") == "auto"
-    assert page.locator("#epub-contents img, #epub-contents [onclick], #epub-where[onclick]").count() == 0
+    assert page.locator("#epub-where[onclick], #epub-where img").count() == 0
 
 
 def test_rtl_progress_and_exact_resume(viewer, page, port, made):
@@ -1957,8 +1921,7 @@ def test_a_rule_drawn_in_black_takes_the_pages_ink_on_a_dark_phone(viewer, page,
 # ---------------------------------------------------------------------------
 
 OWN_WORDS = [
-    ("#epub-contents-open", 15), ("#epub-where", 13), ("#epub-next", 15), ("#epub-contents-title", 17),
-    ("#epub-contents-close", 15), ("#epub-title", 13), ("#epub-contents-list button", 15),
+    ("#epub-where", 13), ("#epub-next", 15),
     ("#epub-link-title", 17), ("#epub-link-address", 15), (".epub-link-note", 13),
 ]
 
@@ -1993,28 +1956,6 @@ def test_a_page_not_told_the_phones_size_leaves_its_own_words_alone(viewer, page
     set_type(page, 250)
     page.wait_for_timeout(250)
     assert own_sizes(page) == [px for _, px in OWN_WORDS]
-
-
-def test_the_contents_heading_stays_in_sight_where_the_list_opens_deep_in_a_book(viewer, page, made, port):
-    """The list opens at the chapter being read, and its heading and Close used to scroll off with the top of it."""
-    entries = "".join(f'<li><a href="c{n}.xhtml">Chapter {n + 1}</a></li>' for n in range(60))
-    chapters = [("", "", f"<body><h1>Chapter {n + 1}</h1><p>Words.</p></body>") for n in range(60)]
-    page.set_viewport_size({"width": 390, "height": 600})
-    open_book(viewer, page, fixture=little_book(made, "sixty.epub", chapters, contents=entries), top=56)
-    go_to(page, 50)
-    port().contents()
-    page.wait_for_selector("#epub-contents", state="visible")
-    seen = page.evaluate(
-        """() => {
-          const box = (s) => { const r = document.querySelector(s).getBoundingClientRect(); return [r.top, r.bottom]; };
-          return { bar: vwTopPx, down: document.querySelector('#epub-contents').scrollTop,
-                   close: box('#epub-contents-close'), now: box('#epub-contents-list button[aria-current]') };
-        }"""
-    )
-    assert seen["bar"] > 0 and seen["down"] > 1000
-    # Under the title bar, and the chapter being read below it and not behind it
-    assert seen["bar"] - 1 <= seen["close"][0] and seen["close"][1] <= seen["bar"] + 60
-    assert seen["close"][1] <= seen["now"][0] and seen["now"][1] <= 600
 
 
 def test_next_and_previous_take_a_tap_anywhere_on_their_half_of_the_strip(viewer, page):
@@ -2167,22 +2108,8 @@ def test_going_on_with_the_book_leaves_back_for_leaving(viewer, page, made, port
     if how == "next":
         page.evaluate("() => document.querySelector('#epub-next').click()")
     else:
-        page.evaluate("() => document.querySelector('#epub-contents-open').click()")
-        page.evaluate("() => document.querySelector('#epub-contents-list button').click()")
+        channel.entry(0)
     channel.wait_for(r"cover 0")
-
-
-def test_back_closes_the_contents_before_it_goes_back(viewer, page, made, port):
-    """The app stops listening for Back each time it passes one on, so it is told again while there is more to do."""
-    channel, was = follow_the_note(viewer, page, made, port)
-    channel.contents()
-    page.wait_for_selector("#epub-contents", state="visible")
-    channel.close_over()
-    page.wait_for_selector("#epub-contents", state="hidden")
-    channel.wait_for(r"cover 1")
-    assert page.evaluate("() => window.pageYOffset") > was + 1000
-    channel.close_over()
-    page.wait_for_function("(was) => Math.abs(window.pageYOffset - was) < 30", arg=was)
 
 
 # ---------------------------------------------------------------------------

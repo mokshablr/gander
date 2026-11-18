@@ -184,18 +184,24 @@ function vwPrintFooters(sheets) {
   }
 }
 
-/* What the app sends besides search: "g<n>" to go to a page, "i1" and "i0" for night mode */
+/* What the app sends besides search: "g<n>" to go to a page, "e<n>" to go to an entry of the
+   contents list, "i1" and "i0" for night mode */
 window.vwPageCommand = function (msg) {
   var verb = msg.charAt(0);
   if (verb === "g") vwGoToPage(Math.floor(Number(msg.slice(1))));
+  else if (verb === "e") vwGoToEntry(vwContentsEntry(vwContentsKept, msg));
   else if (verb === "i") vwSetNight(msg.charAt(1) === "1");
 };
+
+function vwGoToEntry(entry) {
+  if (entry && entry.place) vwGoToPage(entry.place);
+}
 
 /* The document may be up before the port arrives, and would otherwise say nothing until scrolled */
 window.vwPortReady = function () {
   vwPageSent = 0;
   vwReportPage();
-  if (vwContents) vwFind.post(vwContents);
+  if (vwContentsSaid) vwFind.post(vwContentsSaid);
 };
 
 /*
@@ -203,10 +209,12 @@ window.vwPortReady = function () {
  * one: a paragraph with an outline level, set on the paragraph itself or by its style, Heading 1
  * to 9 and any style based on one. Each is marked data-vw-outline as it is drawn (vwMarkOutline)
  * and read here once the pages are final. Levels are counted from the highest one used, so a
- * document whose headings start at Heading 2 is not all set in by one. See vwContentsMessage in
+ * document whose headings start at Heading 2 is not all set in by one. See vwContents in
  * app.js.
  */
-var vwContents = "";
+var vwContentsSaid = "";
+/* The entries sent, in their order, which an "e" command counts in */
+var vwContentsKept = [];
 
 /*
  * Each paragraph style's outline level, kept on it as vwOutline, read before drawing. A style
@@ -259,13 +267,15 @@ function vwReadContents() {
     /* The rest of a heading a page cut in two is the same heading */
     if (p.classList.contains("vw-cont") || !p.textContent.trim()) continue;
     var level = Number(p.getAttribute("data-vw-outline"));
-    found.push({ level: level, page: pageOf.get(p.closest("section.docx")) || 0, title: p.textContent });
+    found.push({ level: level, place: pageOf.get(p.closest("section.docx")) || 0, title: p.textContent });
     top = Math.min(top, level);
   }
-  vwContents = vwContentsMessage(found.map(function (e) {
-    return { depth: e.level - top, page: e.page, title: e.title };
+  var sent = vwContents(found.map(function (e) {
+    return { depth: e.level - top, place: e.place, title: e.title };
   }));
-  if (vwContents) vwFind.post(vwContents);
+  vwContentsSaid = sent.message;
+  vwContentsKept = sent.kept;
+  if (vwContentsSaid) vwFind.post(vwContentsSaid);
 }
 
 var VW_DRAW = {

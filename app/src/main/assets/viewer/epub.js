@@ -215,8 +215,6 @@ var vwEpub = (function () {
   /* The contents list: { label, depth, at, frag }, label a caption (see captionOf) and at
      being -1 for a heading that goes nowhere */
   var contents = [];
-  /* A caption too, or null */
-  var bookTitle = null;
   var total = 0;
 
   var shown = -1;
@@ -292,10 +290,6 @@ var vwEpub = (function () {
   var turnBar = document.getElementById("epub-turn");
   var prev = document.getElementById("epub-prev");
   var next = document.getElementById("epub-next");
-  var panel = document.getElementById("epub-contents");
-  var list = document.getElementById("epub-contents-list");
-  var openContents = document.getElementById("epub-contents-open");
-  var closeContents = document.getElementById("epub-contents-close");
   var linkBox = document.getElementById("epub-link");
   var linkAddress = document.getElementById("epub-link-address");
   var linkCopy = document.getElementById("epub-link-copy");
@@ -606,7 +600,6 @@ var vwEpub = (function () {
     var tongue = all(doc, "language")[0];
     if (tongue && clean(tongue.textContent)) host.lang = clean(tongue.textContent);
     // After the language, which the title takes where the package names none
-    bookTitle = captionOf(all(doc, "title")[0]);
 
     var spineEl = all(doc, "spine")[0];
     var goes = spineEl ? clean(spineEl.getAttribute("page-progression-direction")).toLowerCase() : "";
@@ -1933,11 +1926,11 @@ var vwEpub = (function () {
     top: topEdge
   };
 
-  /* What the app sends besides search: "o" for the contents, from its menu, and "x" for
-     Back while something of the page's own is open over the book */
+  /* What the app sends besides search: "e<n>" for an entry of the contents list, which the app
+     shows, and "x" for Back while something of the page's own is open over the book */
   window.vwPageCommand = function (msg) {
     var verb = msg.charAt(0);
-    if (verb === "o" && opened) showContents(true);
+    if (verb === "e" && opened) goToEntry(vwContentsEntry(contentsKept, msg));
     else if (verb === "x") closeOver();
   };
 
@@ -1947,6 +1940,7 @@ var vwEpub = (function () {
     told = "";
     toldFlow = "";
     toldOver = false;
+    if (contentsSaid) vwFind.post(contentsSaid);
     if (shown < 0 || !onPage) return;
     flow();
     report();
@@ -1958,55 +1952,39 @@ var vwEpub = (function () {
   // The page's own parts: the two buttons, the contents, and links in a chapter
   // ---------------------------------------------------------------------------------------
 
-  function buildContents() {
-    putCaption(document.getElementById("epub-title"), bookTitle);
-    // An epic in two thousand short chapters lists every one, so the limit is well past that
-    for (var i = 0; i < contents.length && i < 20000; i++) {
-      var li = document.createElement("li");
-      var el = document.createElement(contents[i].at < 0 ? "span" : "button");
-      if (contents[i].at >= 0) {
-        el.type = "button";
-        el.setAttribute("data-n", i);
-      }
-      putCaption(el, contents[i].label);
-      // From the side the entry's words start on. The prefixed name, as WebView 66 has no
-      // padding-inline-start
-      el.style.webkitPaddingStart = (12 + 16 * Math.min(contents[i].depth, 4)) + "px";
-      li.appendChild(el);
-      list.appendChild(li);
-    }
+  /*
+   * The book's contents list goes to the app, which shows it full screen as it does a PDF's and
+   * a Word document's (ContentsList.kt), with each entry's chapter in reading order, from one, as
+   * its place. See vwContents in app.js.
+   */
+  var contentsSaid = "";
+  /* The entries sent, in their order, which an "e" command counts in */
+  var contentsKept = [];
+
+  function sendContents() {
+    var sent = vwContents(contents.map(function (e) {
+      return {
+        depth: e.depth, place: e.at >= 0 ? e.at + 1 : 0, title: e.label.text,
+        dir: e.label.dir, lang: e.label.lang, at: e.at, frag: e.frag
+      };
+    }));
+    contentsSaid = sent.message;
+    contentsKept = sent.kept;
+    if (contentsSaid) vwFind.post(contentsSaid);
   }
 
-  function showContents(on) {
-    if (on) {
-      var here = nameOf(shown);
-      var buttons = list.querySelectorAll("button");
-      var current = null;
-      for (var i = 0; i < buttons.length; i++) {
-        var e = contents[Number(buttons[i].getAttribute("data-n"))];
-        var is = !current && e.at === shown && e.label === here;
-        if (is) {
-          buttons[i].setAttribute("aria-current", "true");
-          current = buttons[i];
-        } else {
-          buttons[i].removeAttribute("aria-current");
-        }
-      }
-      showLink("");
-      panel.hidden = false;
-      if (current) current.scrollIntoView({ block: "center" });
-      closeContents.focus({ preventScroll: true });
-    } else {
-      panel.hidden = true;
-      openContents.focus({ preventScroll: true });
-    }
-    over();
+  /* Choosing an entry is going on with the book, and Back is for leaving, as for Next */
+  function goToEntry(to) {
+    if (!to || to.at < 0) return;
+    forget();
+    showLink("");
+    go(to.at, to.frag ? { frag: to.frag } : null);
   }
 
   /* Tells the app whether Back has something to do on this page before it leaves the book:
-     the contents or a link's address to close, or a place to go back to. See PortMessage.kt */
+     a link's address to close, or a place to go back to. See PortMessage.kt */
   function over() {
-    var is = !panel.hidden || !linkBox.hidden || !!before;
+    var is = !linkBox.hidden || !!before;
     if (is !== toldOver && vwFind.post(is ? "cover 1" : "cover 0")) toldOver = is;
   }
 
@@ -2014,8 +1992,6 @@ var vwEpub = (function () {
   function closeOver() {
     if (!linkBox.hidden) {
       showLink("");
-    } else if (!panel.hidden) {
-      showContents(false);
     } else if (before) {
       var to = before;
       before = null;
@@ -2105,8 +2081,6 @@ var vwEpub = (function () {
     }
   }
 
-  openContents.addEventListener("click", function () { showContents(true); });
-  closeContents.addEventListener("click", function () { showContents(false); });
   // Turning the chapter or choosing one is going on with the book, and Back is for leaving
   prev.addEventListener("click", function () { forget(); go(shown - 1, null); });
   next.addEventListener("click", function () { forget(); go(shown + 1, null); });
@@ -2114,15 +2088,6 @@ var vwEpub = (function () {
   linkClose.addEventListener("click", function () { showLink(""); });
   // A tap beside the box, on the book behind it, puts it away as well
   linkBox.addEventListener("click", function (e) { if (e.target === linkBox) showLink(""); });
-
-  list.addEventListener("click", function (e) {
-    var el = e.target;
-    if (!el || !el.getAttribute || el.getAttribute("data-n") === null) return;
-    var to = contents[Number(el.getAttribute("data-n"))];
-    forget();
-    showContents(false);
-    go(to.at, to.frag ? { frag: to.frag } : null);
-  });
 
   /*
    * The link a tap on [el] is inside: the nearest a or area above it with an address. An a
@@ -2265,7 +2230,7 @@ var vwEpub = (function () {
    */
   document.addEventListener("click", function (e) {
     if (e.defaultPrevented || e.detail === 0 || selectedAtDown || shown < 0 || !onPage) return;
-    if (!panel.hidden || !linkBox.hidden) return;
+    if (!linkBox.hidden) return;
     var vv = window.visualViewport;
     if (vv && vv.scale > 1.01) return;
     if (!onTheBook(e)) return;
@@ -2382,7 +2347,7 @@ var vwEpub = (function () {
   }
 
   vwFetchDoc("buffer").then(open).then(function () {
-    buildContents();
+    sendContents();
     // The place the book was left at, which the app keeps and sends back: the chapter by
     // its number in the reading order, and how much of it was above the screen
     var left = /^(\d+)\.(\d+)$/.exec(vwParams.get("at") || "");

@@ -51,8 +51,9 @@ class Port:
     def night_mode(self, on):
         self.send("i1" if on else "i0")
 
-    def contents(self):
-        self.send("o")
+    def entry(self, n):
+        """An entry of the contents list the page sent, by its number in it."""
+        self.send(f"e{n}")
 
     def close_over(self):
         self.send("x")

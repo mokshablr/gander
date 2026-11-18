@@ -21,6 +21,9 @@
 - Contents, in the menu, lists a PDF's own contents, the outline some PDFs carry and some apps
   call bookmarks, and a Word document's headings, with the page each entry is on and the one you
   are in marked. Tap one to go to its page (#79, thanks @asgsdbrseg).
+- A book's Contents is the same full-screen list as a PDF's and a Word document's, from the
+  menu, with the chapter you are in marked. The button at the top of a chapter has gone, as the
+  menu is where Contents is for every kind of document.
 
 ## 2.10 (2026-11-15)
 

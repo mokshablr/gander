@@ -2,6 +2,7 @@ package com.arjun.gander
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Typeface
 import android.os.Looper
 import android.view.View
 import android.webkit.WebMessage
@@ -74,6 +75,10 @@ class BookViewerTest {
     private val ViewerActivity.menu get() = findViewById<MaterialToolbar>(R.id.toolbar).menu
     private val ViewerActivity.readout get() = findViewById<TextView>(R.id.pageIndicator)
 
+    /** What harbour.epub's page sends of its list, in the shape of test_epub.py's. */
+    private val bookList = "contents\n0 1 auto en Title page\n0 2 auto en One: The Lamp Room\n" +
+        "0 3 auto en Two: The Long Watch\n0 0 auto en Notes, in the printed edition only"
+
     /** Something the page says up the channel, heard as the app hears it. */
     private fun ViewerActivity.pageSays(vararg messages: String) {
         val mine = shadowOf(web).createdPorts.single()[0]
@@ -100,7 +105,7 @@ class BookViewerTest {
         assertThat(viewer.menu.findItem(R.id.action_contents).isVisible).isFalse()
         assertThat(viewer.menu.findItem(R.id.action_text_size).isVisible).isFalse()
 
-        viewer.pageSays("page 1 9")
+        viewer.pageSays("page 1 9", bookList)
         assertThat(viewer.menu.findItem(R.id.action_contents).isVisible).isTrue()
         assertThat(viewer.menu.findItem(R.id.action_text_size).isVisible).isTrue()
         // What a book counts is no page anybody could ask for
@@ -116,12 +121,36 @@ class BookViewerTest {
         assertThat(viewer.menu.findItem(R.id.action_text_size).isVisible).isFalse()
     }
 
+    /** The list the book sent, shown by the app, with no pages, the chapter on screen marked. */
     @Test
-    fun contentsAsksThePageForItsList() {
+    fun contentsShowsTheBooksListAndAnEntryGoesBackToThePage() {
+        val viewer = book().get()
+        viewer.pageSays("page 1 9", bookList, "at 2 40")
+        viewer.menu.performIdentifierAction(R.id.action_contents, 0)
+        settle()
+        val screen = org.robolectric.shadows.ShadowDialog.getLatestDialog() as androidx.appcompat.app.AppCompatDialog
+        val list = screen.findViewById<android.widget.ListView>(R.id.contents_list)!!
+        val rows = (0 until list.adapter.count).map { list.adapter.getView(it, null, list) }
+        assertThat(rows.map { it.findViewById<TextView>(R.id.contents_page).visibility }.distinct())
+            .containsExactly(android.view.View.GONE)
+        // Chapter 2 counts from nought in the place, so it is the third in reading order
+        assertThat(rows.map { it.findViewById<TextView>(R.id.contents_title).typeface?.style == Typeface.BOLD })
+            .containsExactly(false, false, true, false).inOrder()
+
+        list.performItemClick(rows[1], 1, 1)
+        settle()
+        assertThat(viewer.said().last()).isEqualTo(PortCommand.contentsEntry(1))
+        assertThat(screen.isShowing).isFalse()
+    }
+
+    /** A book with no list of its own sends its chapters by number, so a book always has one. */
+    @Test
+    fun aBooksMenuShowsNoContentsUntilItsListComes() {
         val viewer = book().get()
         viewer.pageSays("page 1 9")
-        viewer.menu.performIdentifierAction(R.id.action_contents, 0)
-        assertThat(viewer.said().last()).isEqualTo(PortCommand.contents())
+        assertThat(viewer.menu.findItem(R.id.action_contents).isVisible).isFalse()
+        viewer.pageSays(bookList)
+        assertThat(viewer.menu.findItem(R.id.action_contents).isVisible).isTrue()
     }
 
     // ---------------------------------------------------------------
@@ -161,7 +190,7 @@ class BookViewerTest {
     @Test
     fun aBookWhoseRendererHasGoneOffersNothingThatNeedsItsPage() {
         val viewer = book().get()
-        viewer.pageSays("page 1 9", "cover 1")
+        viewer.pageSays("page 1 9", bookList, "cover 1")
         assertThat(viewer.menu.findItem(R.id.action_contents).isVisible).isTrue()
 
         val web = viewer.web

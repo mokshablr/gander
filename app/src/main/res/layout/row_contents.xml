@@ -1,16 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One entry of a PDF's or a Word document's contents list, issue #79. Its start padding is
-     set from the entry's depth in ContentsList.kt. No background: the dialog's list draws the
-     press, as it does for its own rows. -->
+<!-- One entry of a document's contents list, issue #79. Its start padding is set from the
+     entry's depth in ContentsList.kt. No background: the list draws the press itself. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:gravity="center_vertical"
     android:minHeight="48dp"
     android:orientation="horizontal"
-    android:paddingStart="24dp"
+    android:paddingStart="16dp"
     android:paddingTop="8dp"
-    android:paddingEnd="24dp"
+    android:paddingEnd="16dp"
     android:paddingBottom="8dp">
 
     <TextView

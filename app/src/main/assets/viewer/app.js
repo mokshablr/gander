@@ -271,32 +271,55 @@ function vwDisarmLinks(root) {
 
 /*
  * A document's contents list, issue #79, as the message the app reads (parseContents in
- * PortMessage.kt): "contents" and then a line for each entry, "<depth> <page> <title>", from
- * [entries] of { depth, page, title }. A PDF's comes from its outline (pdf.mjs) and a Word
- * document's from its headings (docx.js). The app lists them itself, as both pages lay out at
- * 980 px and a panel drawn here would be magnified with the pages under a pinch.
+ * PortMessage.kt): "contents" and then a line for each entry, "<depth> <place> <dir> <lang>
+ * <title>", from [entries] of { depth, place, title } and, for a book, the title's dir and lang. A PDF's comes from its outline (pdf.mjs), a Word
+ * document's from its headings (docx.js) and a book's from its own list (epub.js). The app shows
+ * it full screen (ContentsList.kt), the one list for all three, and sends back "e<n>" for the
+ * entry tapped, counting from nought in the order sent.
  *
- * Page 0 is an entry that names no page, a web address or a heading with nothing under it,
- * which is listed and cannot be tapped. "" when no entry has a page, since that is no way round
- * the document. The limits are a document's, which can say anything: an entry for every line of a
- * long legal code is well inside them, a list written to choke the app is not, and the app drops
- * a message past them.
+ * The place is a page for a PDF or a Word document, which the list shows beside the entry, and a
+ * chapter in reading order for a book, from one. Both tell the app which entry the reader is in.
+ * Place 0 is an entry that goes nowhere, a web address or a heading with nothing under it, which
+ * is listed and cannot be tapped. The message is "" when no entry goes anywhere, since that is no
+ * way round the document. The limits are a document's, which can say anything: an entry for every
+ * line of a long legal code is well inside them, a list written to choke the app is not, and the
+ * app drops a message past them.
+ *
+ * dir is auto, ltr or rtl, auto where none is given, as a book's labels say which way they read
+ * (#54). lang is the title's language, or "-" for none said.
+ *
+ * Returns the message and the entries it holds, in its order, which "e<n>" is counted in.
  */
 var VW_CONTENTS_MOST = 5000;
 var VW_CONTENTS_TITLE_MOST = 300;
 
-function vwContentsMessage(entries) {
+function vwContents(entries) {
   var lines = [];
+  var kept = [];
   var any = false;
   for (var i = 0; i < entries.length && lines.length < VW_CONTENTS_MOST; i++) {
     /* On one line, since a line is an entry, and cut to a length a list can show */
     var title = String(entries[i].title || "").replace(/[\s\u0000-\u001f\u007f-\u009f]+/g, " ").trim();
     title = Array.from(title).slice(0, VW_CONTENTS_TITLE_MOST).join("");
     if (!title) continue;
-    if (entries[i].page) any = true;
-    lines.push(entries[i].depth + " " + entries[i].page + " " + title);
+    if (entries[i].place) any = true;
+    var dir = /^(ltr|rtl)$/.test(entries[i].dir) ? entries[i].dir : "auto";
+    var lang = /^[A-Za-z0-9-]{1,35}$/.test(entries[i].lang || "") ? entries[i].lang : "-";
+    lines.push(entries[i].depth + " " + entries[i].place + " " + dir + " " + lang + " " + title);
+    kept.push(entries[i]);
   }
-  return any ? "contents\n" + lines.join("\n") : "";
+  return any ? { message: "contents\n" + lines.join("\n"), kept: kept } : { message: "", kept: [] };
+}
+
+/*
+ * The entry "e<n>" names, or null for a number the list does not have. The number is checked
+ * here because it is only text off the port.
+ */
+function vwContentsEntry(kept, msg) {
+  /* Digits only: Number reads "" and " " as nought */
+  var digits = msg.slice(1);
+  var n = /^\d{1,9}$/.test(digits) ? Number(digits) : -1;
+  return n >= 0 && n < kept.length ? kept[n] : null;
 }
 
 /*

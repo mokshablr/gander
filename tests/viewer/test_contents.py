@@ -48,8 +48,14 @@ def outlined_pdf(tmp_path_factory):
 
 
 def contents_of(port, timeout=15.0):
+    """Each entry's depth, place and title. A PDF's and a Word document's titles say no way or language."""
     message = port.wait_for(r"contents\n(?s:.*)", timeout)
-    return [line.split(" ", 2) for line in message.split("\n")[1:]]
+    entries = []
+    for line in message.split("\n")[1:]:
+        depth, place, way, lang, title = line.split(" ", 4)
+        assert (way, lang) == ("auto", "-"), line
+        entries.append([depth, place, title])
+    return entries
 
 
 def test_the_outline_comes_as_one_line_an_entry_with_its_depth_and_page(viewer, page, port, outlined_pdf):

@@ -51,8 +51,11 @@ internal object PortCommand {
      */
     fun barGone(dp: String) = "b$dp"
 
-    /** Show a book's contents list, which its own button for is at the top of a chapter. */
-    fun contents() = "o"
+    /**
+     * Go to entry [n] of the contents list the page sent, counting from nought in its order. The
+     * page checks the number against its list again. See [ContentsList].
+     */
+    fun contentsEntry(n: Int) = "e$n"
 
     /** Back, for a page that has said it has something to do first. See [PortMessage.Covered]. */
     fun closeOver() = "x"
@@ -86,9 +89,9 @@ internal sealed interface PortMessage {
     data class Place(val chapter: Int, val past: Int) : PortMessage
 
     /**
-     * The page has something for Back to do before it leaves the viewer, or no longer has: a
-     * book's contents list or the address of a link open over the document, or a place to go
-     * back to after a link inside the book.
+     * The page has something for Back to do before it leaves the viewer, or no longer has: the
+     * address of a link open over the document, or a place to go back to after a link inside the
+     * book.
      */
     data class Covered(val on: Boolean) : PortMessage
 
@@ -109,27 +112,39 @@ internal sealed interface PortMessage {
     data class Shrunk(val on: Boolean) : PortMessage
 
     /**
-     * A document's contents list, a PDF's outline or a Word document's headings, for the viewer to
-     * list: see [ContentsList]. The one message that carries the document's words, as plain text
-     * that is only ever shown.
+     * A document's contents list, a PDF's outline, a Word document's headings or a book's own list,
+     * for the viewer to show: see [ContentsList]. The one message that carries the document's
+     * words, as plain text that is only ever shown.
      */
     data class Contents(val entries: List<ContentsEntry>) : PortMessage
 }
 
 /**
- * One line of a document's contents list. [depth] counts from nought at the top level, and
- * [page] from one, or is nought for an entry that names no page of the document, which is listed
- * and cannot be tapped.
+ * One line of a document's contents list. [depth] counts from nought at the top level. [place] is
+ * where the entry goes, from one: a page of a PDF or a Word document, or a chapter of a book in
+ * reading order. It is nought for an entry that goes nowhere, which is listed and cannot be tapped.
+ * [dir] is which way the title reads, "auto", "ltr" or "rtl", and [lang] its language tag, empty
+ * for none: a book's labels say both (#54).
  */
-internal data class ContentsEntry(val depth: Int, val page: Int, val title: String)
+internal data class ContentsEntry(
+    val depth: Int,
+    val place: Int,
+    val title: String,
+    val dir: String = "auto",
+    val lang: String = "",
+)
+
+private val CONTENTS_DIRS = setOf("auto", "ltr", "rtl")
+private val CONTENTS_LANG = Regex("[A-Za-z0-9-]{1,35}")
 
 /** The most entries, and the longest title, app.js sends. A message past either is dropped. */
 internal const val CONTENTS_MOST = 5000
 internal const val CONTENTS_TITLE_MOST = 300
 
 /**
- * "contents", then a line for each entry of "<depth> <page> <title>". The page is checked again
- * against the document when an entry is tapped, since it is only a number here.
+ * "contents", then a line for each entry of "<depth> <place> <dir> <lang> <title>", lang "-" for
+ * none. A tap goes back to the
+ * page as the entry's number in the list, which the page checks against the list it sent.
  */
 private fun parseContents(data: String): PortMessage? {
     // Long enough for the most entries at their longest, each letter two chars at worst
@@ -138,17 +153,23 @@ private fun parseContents(data: String): PortMessage? {
     if (lines.size - 1 > CONTENTS_MOST) return null
     val entries = ArrayList<ContentsEntry>(lines.size - 1)
     for (line in lines.subList(1, lines.size)) {
-        val parts = line.split(' ', limit = 3)
-        if (parts.size != 3) return null
+        val parts = line.split(' ', limit = 5)
+        if (parts.size != 5) return null
         val depth = parts[0].toIntOrNull() ?: return null
-        val page = parts[1].toIntOrNull() ?: return null
-        val title = parts[2]
-        if (depth < 0 || page < 0 || title.isBlank()) return null
+        val place = parts[1].toIntOrNull() ?: return null
+        val dir = parts[2].takeIf { it in CONTENTS_DIRS } ?: return null
+        val lang = when {
+            parts[3] == "-" -> ""
+            CONTENTS_LANG.matches(parts[3]) -> parts[3]
+            else -> return null
+        }
+        val title = parts[4]
+        if (depth < 0 || place < 0 || title.isBlank()) return null
         if (title.codePointCount(0, title.length) > CONTENTS_TITLE_MOST) return null
-        entries += ContentsEntry(depth, page, title)
+        entries += ContentsEntry(depth, place, title, dir, lang)
     }
     // A list with nowhere in it to go is no list
-    if (entries.none { it.page > 0 }) return null
+    if (entries.none { it.place > 0 }) return null
     return PortMessage.Contents(entries)
 }
 

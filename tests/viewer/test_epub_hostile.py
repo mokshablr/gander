@@ -343,7 +343,7 @@ def test_nothing_is_asked_of_any_host_however_a_book_names_it(viewer, page, made
 OVER_CSS = """:host, :host(#book), :host(main#book#book#book) { position: fixed !important; top: 0 !important;
   left: 0 !important; width: 100vw !important; height: 100vh !important; overflow: auto !important;
   z-index: 2147483647 !important; background: rgb(200, 0, 0) !important; }
-html, body, #epub-bar, .epub-bar, #epub-turn, #epub-contents, #epub-link, #vw-status { display: none !important; }
+html, body, #epub-bar, .epub-bar, #epub-turn, #epub-link, #vw-status { display: none !important; }
 :host-context(body) h1 { color: rgb(1, 2, 3); }
 """
 
@@ -353,8 +353,8 @@ def test_a_book_cannot_draw_over_any_part_of_gander(viewer, page, made, port):
     A stylesheet in the shadow tree can reach the element the tree hangs on, and nothing
     outranks what it says there with !important, so a book could lay itself over the whole
     screen and take the taps meant for the bar above it. A book's :host matches nothing, and
-    the bar, Next, the contents and the address a link leaves for are each on top where they
-    are and take a real tap.
+    the bar, Next and the address a link leaves for are each on top where they are and take a
+    real tap.
     """
     book = little_book(
         made, "over.epub",
@@ -371,18 +371,17 @@ def test_a_book_cannot_draw_over_any_part_of_gander(viewer, page, made, port):
       const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
       return !!(el && el.closest(sel));
     }"""
-    for part in ("#epub-contents-open", "#epub-where", "#epub-next"):
+    for part in ("#epub-where", "#epub-next"):
         assert page.evaluate(on_top, part), part
     assert page.evaluate("() => getComputedStyle(document.querySelector('#book')).position") != "fixed"
     assert style_of(page, "h1", "color") != "rgb(1, 2, 3)"
 
-    box = page.evaluate("""() => { const r = document.querySelector('#epub-contents-open').getBoundingClientRect();
+    box = page.evaluate("""() => { const r = document.querySelector('#epub-next').getBoundingClientRect();
                              return [r.left + r.width / 2, r.top + r.height / 2]; }""")
     page.mouse.click(box[0], box[1])
-    page.wait_for_function("() => !document.querySelector('#epub-contents').hidden")
-    assert page.evaluate(on_top, "#epub-contents")
-    port().close_over()
-    page.wait_for_function("() => document.querySelector('#epub-contents').hidden")
+    wait_for_heading(page, "Second")
+    page.evaluate("() => document.querySelector('#epub-prev').click()")
+    wait_for_heading(page, "Over everything")
 
     page.click("#book #out")
     page.wait_for_function("() => !document.querySelector('#epub-link').hidden")
@@ -418,10 +417,8 @@ def test_a_books_font_is_not_what_gander_writes_in(viewer, page, made):
     open_book(viewer, page, book)
     wait_for_heading(page, "Faces")
     page.click("#book #out")
+    # The address stays up while the fonts are read: it is Gander's words on the page
     page.wait_for_function("() => !document.querySelector('#epub-link').hidden")
-    page.click("#epub-link-close")
-    page.click("#epub-contents-open")
-    page.wait_for_function("() => !document.querySelector('#epub-contents').hidden")
     page.evaluate("() => document.fonts.ready")
     page.wait_for_timeout(300)
 

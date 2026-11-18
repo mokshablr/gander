@@ -478,8 +478,8 @@ open class ViewerActivity : AppCompatActivity() {
             setOnMenuItemClickListener { askForPage(); true }
         }
         contentsItem = toolbar.menu.findItem(R.id.action_contents).apply {
-            // A book draws its own list. A PDF's or a Word document's comes to the app: see ContentsList
-            setOnMenuItemClickListener { if (book) tellPage(PortCommand.contents()) else showContentsList(); true }
+            // A PDF's, a Word document's or a book's, which its page sent: see ContentsList
+            setOnMenuItemClickListener { showContentsList(); true }
         }
         textSizeItem = toolbar.menu.findItem(R.id.action_text_size).apply {
             setOnMenuItemClickListener { askForTextSize(); true }
@@ -884,7 +884,7 @@ open class ViewerActivity : AppCompatActivity() {
     /** Whether the chapter on screen takes the reader's text size. See [applyTextSize]. */
     private var bookReflows = true
 
-    /** A PDF's or a Word document's contents list, once its page has sent one. Empty for one with none. */
+    /** A PDF's, a Word document's or a book's contents list, once its page has sent one. Empty for one with none. */
     @androidx.annotation.VisibleForTesting
     internal var listedContents: List<ContentsEntry> = emptyList()
 
@@ -1050,12 +1050,21 @@ open class ViewerActivity : AppCompatActivity() {
         else pageFader.cancelIdle()
     }
 
-    /** A PDF's or a Word document's contents list, from the menu. See [ContentsList]. */
+    /**
+     * The document's contents list, from the menu. See [ContentsList]. A PDF's and a Word
+     * document's entries are pages, and the reader is on [pageAt]. A book's are chapters in
+     * reading order from one, and the reader is in the one its place names, which its page does
+     * not count past.
+     */
     @androidx.annotation.VisibleForTesting
     internal fun showContentsList() {
-        if (listedContents.isEmpty() || pageTotal < 2) return
-        // Dark over a document in night mode, like Go to page. Down the channel Go to page uses
-        ContentsList.show(nightChrome.dialogs, listedContents, pageAt, pageTotal) { tellPage(PortCommand.goToPage(it)) }
+        if (listedContents.isEmpty() || (!book && pageTotal < 2)) return
+        val here = if (book) (bookPlace?.chapter ?: -1) + 1 else pageAt
+        val last = if (book) Int.MAX_VALUE else pageTotal
+        // Dark over a document in night mode, like Go to page
+        ContentsList.show(nightChrome.dialogs, listedContents, here, last, byChapter = book) {
+            tellPage(PortCommand.contentsEntry(it))
+        }
     }
 
     /**
@@ -1649,7 +1658,7 @@ open class ViewerActivity : AppCompatActivity() {
                         is PortMessage.Page -> if (kind.paged) {
                             if (pageTotal == 0) {
                                 goToPageItem?.isVisible = !book
-                                contentsItem?.isVisible = book || listedContents.isNotEmpty()
+                                contentsItem?.isVisible = listedContents.isNotEmpty()
                                 textSizeItem?.isVisible = book
                             }
                             pageAt = said.n
@@ -1675,8 +1684,8 @@ open class ViewerActivity : AppCompatActivity() {
                             bookReflows = said.on
                             applyTextSize()
                         }
-                        // A PDF's outline or a Word document's headings. A book draws its own
-                        is PortMessage.Contents -> if (kind == FileKind.PDF || kind == FileKind.DOCX) {
+                        // A PDF's outline, a Word document's headings or a book's own list
+                        is PortMessage.Contents -> if (kind == FileKind.PDF || kind == FileKind.DOCX || book) {
                             listedContents = said.entries
                             contentsItem?.isVisible = true
                         }

@@ -1,6 +1,6 @@
 /*
  * epub.html, outside the book: the ground, the strip above a chapter, the two buttons under
- * it and the contents list. The chapter itself is styled in epub.js, since a shadow tree
+ * it and a link's address. The contents list is the app's (ContentsList.kt). The chapter itself is styled in epub.js, since a shadow tree
  * takes no rule from here.
  *
  * A book is prose, so this page follows the phone's theme as md.html and text.html do, and
@@ -41,8 +41,8 @@ body { font-family: sans-serif; }
  */
 
 /*
- * Around the book, so that nothing a book says of itself is weighed against the contents or
- * a link's address, which open over it: a stylesheet in a shadow tree can place the element
+ * Around the book, so that nothing a book says of itself is weighed against a link's address,
+ * which opens over it: a stylesheet in a shadow tree can place the element
  * the tree hangs on anywhere and give it any z-index, and nothing here outranks it there.
  */
 .epub-frame { isolation: isolate; }
@@ -57,7 +57,7 @@ body { font-family: sans-serif; }
 /* An element with a display of its own would otherwise ignore the attribute */
 [hidden] { display: none !important; }
 
-.epub-bar, .epub-turn, .epub-contents-head {
+.epub-bar, .epub-turn {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -71,7 +71,7 @@ body { font-family: sans-serif; }
 .epub-turn { border-top: 1px solid var(--epub-line); padding-bottom: 24px; }
 
 /* 48 px, the least Android asks of anything tapped, and this page is laid out in dp */
-.epub-bar button, .epub-turn button, .epub-contents button, .epub-link button {
+.epub-bar button, .epub-turn button, .epub-link button {
   min-height: 48px;
   padding: 0 12px;
   border: 0;
@@ -105,91 +105,8 @@ body { font-family: sans-serif; }
 }
 
 /*
- * The contents, over the chapter rather than in place of it, so closing them leaves the
- * reader where they were. Under the status card, which is 1000. overscroll-behavior keeps a
- * short list from handing its scrolling on to the chapter behind it.
- */
-.epub-contents {
-  position: fixed;
-  z-index: 900;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  box-sizing: border-box;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  background: #ffffff;
-  background: var(--epub-paper);
-  color: #1E1B15;
-  color: var(--epub-ink);
-}
-
-/*
- * The heading and Close stay at the top while the list scrolls under them. Deep in a book
- * the list opens at the chapter being read, which used to leave both off the top of the
- * screen. The room for the title bar, which is over this page, is the heading's own padding
- * and not the list's: engines disagree on whether a list's padding is part of the top a
- * thing sticks to, and WebView 66 put the heading behind the bar. The scroll padding keeps
- * an entry the keyboard moves to from stopping behind the two.
- */
-.epub-contents { scroll-padding-top: calc(var(--vw-top, 0px) + 56px); }
-
-.epub-contents .epub-contents-head {
-  position: sticky;
-  z-index: 1;
-  top: 0;
-  padding-top: var(--vw-top, 0px);
-  border-bottom: 1px solid var(--epub-line);
-  background: #ffffff;
-  background: var(--epub-paper);
-}
-
-.epub-contents-head h1 {
-  margin: 0;
-  padding: 0 12px;
-  font-size: 17px;
-  font-size: calc(17px * var(--epub-own, 1));
-  font-weight: 600;
-}
-
-.epub-title {
-  max-width: 42em;
-  margin: 0 auto;
-  padding: 16px 20px 4px;
-  box-sizing: border-box;
-  font-size: 13px;
-  font-size: calc(13px * var(--epub-own, 1));
-  color: var(--epub-quiet);
-}
-
-.epub-contents-list {
-  max-width: 42em;
-  margin: 0 auto;
-  padding: 0 8px 32px;
-  box-sizing: border-box;
-  list-style: none;
-}
-
-.epub-contents-list button, .epub-contents-list span {
-  display: block;
-  box-sizing: border-box;
-  width: 100%;
-  padding: 12px;
-  text-align: start;
-  font-size: 15px;
-  font-size: calc(15px * var(--epub-own, 1));
-  line-height: 1.35;
-  color: var(--epub-ink);
-}
-
-.epub-contents-list button { font-weight: 400; }
-.epub-contents-list span { color: var(--epub-quiet); }
-.epub-contents-list button[aria-current] { font-weight: 600; color: var(--vw-accent); }
-
-/*
- * A link's address, in a box at the foot of the screen with the book dimmed behind it. Over
- * the contents and under the status card. The address breaks anywhere, since one long word
+ * A link's address, in a box at the foot of the screen with the book dimmed behind it. Under
+ * the status card. The address breaks anywhere, since one long word
  * is what it is, and scrolls in its own box where it is longer than a few lines.
  */
 .epub-link {
@@ -254,5 +171,5 @@ body { font-family: sans-serif; }
 /* A book printed from here would be the one chapter on screen, so nothing offers it; this
    only keeps the page's own parts off any paper that does come out. */
 @media print {
-  .epub-bar, .epub-turn, .epub-contents, .epub-link { display: none !important; }
+  .epub-bar, .epub-turn, .epub-link { display: none !important; }
 }

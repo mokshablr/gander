@@ -8,7 +8,10 @@ import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.espresso.UiController
 import androidx.test.espresso.ViewAction
+import androidx.test.espresso.assertion.ViewAssertions.doesNotExist
+import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.RootMatchers.isDialog
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.isEnabled
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -204,21 +207,16 @@ class BookDeviceTest {
         }
     }
 
+    /** The book's list is the app's, full screen, and Back puts it away and stays in the book. */
     @Test
     fun backClosesTheContentsAndStaysInTheBook() {
         open("harbour.epub").use { scenario ->
             WebViewProbe.await(scenario, opened, "the book to open")
             chooseFromMenu(scenario, R.id.action_contents)
-            WebViewProbe.await(
-                scenario, "!document.getElementById('epub-contents').hidden", "the contents to open"
-            )
-            // The page tells the app the list is up before Back is its to close
-            Thread.sleep(300)
+            onView(withId(R.id.contents_list)).inRoot(isDialog()).check(matches(isDisplayed()))
 
             pressBack()
-            WebViewProbe.await(
-                scenario, "document.getElementById('epub-contents').hidden", "Back to close the contents"
-            )
+            onView(withId(R.id.contents_list)).check(doesNotExist())
             assertThat(scenario.state).isEqualTo(Lifecycle.State.RESUMED)
         }
     }

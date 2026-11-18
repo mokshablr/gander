@@ -15,8 +15,8 @@
 <body>
 <div id="vw-status" class="vw-status vw-wait">Opening book…</div>
 
+<!-- The chapter's name. The contents list is the app's, from its menu, as a PDF's is -->
 <div id="epub-bar" class="epub-bar" hidden>
-  <button type="button" id="epub-contents-open">Contents</button>
   <span id="epub-where" class="epub-where"></span>
 </div>
 
@@ -27,16 +27,6 @@
 <div id="epub-turn" class="epub-turn" hidden>
   <button type="button" id="epub-prev">Previous</button>
   <button type="button" id="epub-next">Next</button>
-</div>
-
-<div id="epub-contents" class="epub-contents" role="dialog" aria-modal="true"
-     aria-labelledby="epub-contents-title" hidden>
-  <div class="epub-contents-head">
-    <h1 id="epub-contents-title">Contents</h1>
-    <button type="button" id="epub-contents-close">Close</button>
-  </div>
-  <p id="epub-title" class="epub-title"></p>
-  <ol id="epub-contents-list" class="epub-contents-list"></ol>
 </div>
 
 <!-- A web address a link in the book points to, shown and never opened: see epub.js -->

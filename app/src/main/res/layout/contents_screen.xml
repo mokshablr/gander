@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A document's contents list, full screen over the viewer, issue #79: a PDF's, a Word
+     document's and a book's alike. See ContentsList.kt, which pads it clear of the system bars. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/contents_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <!-- As the viewer's own title bar is, so the list reads as a screen of the viewer -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/contents_bar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorSurface"
+        android:elevation="4dp"
+        app:navigationContentDescription="@string/back"
+        app:navigationIcon="@drawable/ic_back"
+        app:title="@string/contents"
+        app:titleTextAppearance="?attr/textAppearanceTitleMedium" />
+
+    <!-- The thumb shows only on a list several screens long, where it is the quick way through -->
+    <ListView
+        android:id="@+id/contents_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:divider="@null"
+        android:fastScrollEnabled="true"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:scrollbarStyle="outsideOverlay" />
+</LinearLayout>

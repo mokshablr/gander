@@ -7,10 +7,9 @@
         android:title="@string/search_in_document"
         android:visible="false"
         app:showAsAction="ifRoom" />
-    <!-- A book's two, hidden until epub.html says the book has opened. Its contents list has a
-         button of its own on the page, at the top of a chapter, which is seldom where a
-         reader is. Issue #50. Contents is a PDF's and a Word document's as well, once
-         its page has sent the outline or the headings it has, issue #79. -->
+    <!-- Contents, hidden until the page sends a list: a PDF's outline, a Word document's
+         headings or a book's own, shown full screen by ContentsList.kt. Issues #50 and #79.
+         Then Text size, a book's and a text file's. -->
     <item
         android:id="@+id/action_contents"
         android:title="@string/contents"

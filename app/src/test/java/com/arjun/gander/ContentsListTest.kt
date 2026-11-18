@@ -4,12 +4,16 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Typeface
 import android.os.Looper
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ListView
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatDialog
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.common.truth.Truth.assertThat
+import java.util.Locale
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -18,9 +22,9 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowDialog
 
 /**
- * A PDF's or a Word document's contents list, issue #79: which entry the reader is in, and the
- * list as it is shown. What the pages send is checked in tests/viewer/test_contents.py, and how
- * it is read in PortMessageTest.
+ * A document's contents list, issue #79: which entry the reader is in, and the list as it is
+ * shown, full screen, for a PDF, a Word document and a book alike. What the pages send is checked
+ * in tests/viewer/test_contents.py and test_epub.py, and how it is read in PortMessageTest.
  */
 @RunWith(AndroidJUnit4::class)
 class ContentsListTest {
@@ -54,6 +58,14 @@ class ContentsListTest {
         assertThat(ContentsList.current(outline, 6)).isEqualTo(5)
     }
 
+    /** A book says which chapter is on screen and not how far in, so of a chapter's entries the first. */
+    @Test
+    fun inABookTheReaderIsInTheFirstEntryOfTheirChapter() {
+        assertThat(ContentsList.current(outline, 2, firstOfTies = true)).isEqualTo(1)
+        assertThat(ContentsList.current(outline, 3, firstOfTies = true)).isEqualTo(1)
+        assertThat(ContentsList.current(outline, 4, firstOfTies = true)).isEqualTo(3)
+    }
+
     @Test
     fun beforeTheFirstEntryTheReaderIsInNone() {
         assertThat(ContentsList.current(listOf(ContentsEntry(0, 3, "Chapter 1")), 2)).isEqualTo(-1)
@@ -79,61 +91,130 @@ class ContentsListTest {
         }
     }
 
-    private fun AlertDialog.rows() =
-        (0 until listView.adapter.count).map { listView.adapter.getView(it, null, listView) }
+    private fun AppCompatDialog.list() = findViewById<ListView>(R.id.contents_list)!!
+
+    private fun AppCompatDialog.bar() = findViewById<MaterialToolbar>(R.id.contents_bar)!!
+
+    private fun AppCompatDialog.rows() =
+        list().let { list -> (0 until list.adapter.count).map { list.adapter.getView(it, null, list) } }
+
+    private fun View.title() = findViewById<TextView>(R.id.contents_title)
+
+    private fun View.page() = findViewById<TextView>(R.id.contents_page)
 
     @Test
-    fun theMenuShowsTheListWithTheEntryTheReaderIsInMarked() {
+    fun theMenuShowsTheListFullScreen() {
         val viewer = openPdf()
         viewer.findViewById<MaterialToolbar>(R.id.toolbar).menu.performIdentifierAction(R.id.action_contents, 0)
         shadowOf(Looper.getMainLooper()).idle()
-        val box = ShadowDialog.getLatestDialog() as AlertDialog
-        assertThat(box.isShowing).isTrue()
-        val rows = box.rows()
-        assertThat(rows.map { it.findViewById<TextView>(R.id.contents_title).text.toString() })
+        val screen = ShadowDialog.getLatestDialog() as AppCompatDialog
+        assertThat(screen.isShowing).isTrue()
+        assertThat(screen.window!!.attributes.width).isEqualTo(ViewGroup.LayoutParams.MATCH_PARENT)
+        assertThat(screen.window!!.attributes.height).isEqualTo(ViewGroup.LayoutParams.MATCH_PARENT)
+        assertThat(screen.bar().title.toString()).isEqualTo(context.getString(R.string.contents))
+        val rows = screen.rows()
+        assertThat(rows.map { it.title().text.toString() })
             .containsExactly("Front matter", "Chapter 1", "Section 1.1", "Section 1.2", "On the web", "Chapter 2")
             .inOrder()
         // Before the document says where it is, the readout is at nought and nothing is marked
-        assertThat(rows.none { it.findViewById<TextView>(R.id.contents_title).typeface?.isBold == true }).isTrue()
-        assertThat(rows[1].findViewById<TextView>(R.id.contents_page).text.toString()).isEqualTo("2")
+        assertThat(rows.none { it.title().typeface?.isBold == true }).isTrue()
+        assertThat(rows[1].page().text.toString()).isEqualTo("2")
         assertThat(rows[2].paddingStart).isGreaterThan(rows[1].paddingStart)
     }
 
     @Test
-    fun anEntryWithNoPageIsListedAndCannotBeTapped() {
+    fun theBackArrowClosesTheList() {
         val viewer = openPdf()
-        var went = 0
-        ContentsList.show(viewer, outline, 4, 6) { went = it }
-        val box = ShadowDialog.getLatestDialog() as AlertDialog
-        assertThat(box.listView.adapter.isEnabled(4)).isFalse()
-        assertThat(box.listView.adapter.isEnabled(5)).isTrue()
-        assertThat(box.rows()[4].findViewById<TextView>(R.id.contents_page).visibility)
-            .isEqualTo(android.view.View.GONE)
-        // The one the reader is in, on page 4
-        assertThat(box.rows()[3].findViewById<TextView>(R.id.contents_title).typeface?.style)
-            .isEqualTo(Typeface.BOLD)
-        assertThat(went).isEqualTo(0)
+        val screen = ContentsList.show(viewer, outline, 1, 6, byChapter = false) { }
+        assertThat(screen.bar().navigationContentDescription.toString()).isEqualTo(context.getString(R.string.back))
+        val arrow = (0 until screen.bar().childCount).map { screen.bar().getChildAt(it) }
+            .single { it.contentDescription == context.getString(R.string.back) }
+        arrow.performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertThat(screen.isShowing).isFalse()
     }
 
     @Test
-    fun tappingAnEntryGoesToItsPageAndClosesTheList() {
+    fun anEntryThatGoesNowhereIsListedAndCannotBeTapped() {
         val viewer = openPdf()
-        var went = 0
-        ContentsList.show(viewer, outline, 1, 6) { went = it }
-        val box = ShadowDialog.getLatestDialog() as AlertDialog
-        val list = box.listView
+        var went = -1
+        val screen = ContentsList.show(viewer, outline, 4, 6, byChapter = false) { went = it }
+        val adapter = screen.list().adapter
+        assertThat(adapter.isEnabled(4)).isFalse()
+        assertThat(adapter.isEnabled(5)).isTrue()
+        assertThat(screen.rows()[4].page().visibility).isEqualTo(View.GONE)
+        // The one the reader is in, on page 4
+        assertThat(screen.rows()[3].title().typeface?.style).isEqualTo(Typeface.BOLD)
+        assertThat(went).isEqualTo(-1)
+    }
+
+    @Test
+    fun tappingAnEntryHandsOnItsNumberInTheListAndCloses() {
+        val viewer = openPdf()
+        var went = -1
+        val screen = ContentsList.show(viewer, outline, 1, 6, byChapter = false) { went = it }
+        val list = screen.list()
         list.performItemClick(list.adapter.getView(5, null, list), 5, 5)
         shadowOf(Looper.getMainLooper()).idle()
         assertThat(went).isEqualTo(5)
-        assertThat(box.isShowing).isFalse()
+        assertThat(screen.isShowing).isFalse()
     }
 
-    /** A page past the end is the outline's mistake, and goes nowhere. */
+    /** A place past the end is the list's mistake, and goes nowhere. */
     @Test
     fun anEntryPastTheLastPageCannotBeTapped() {
         val viewer = openPdf()
-        ContentsList.show(viewer, listOf(ContentsEntry(0, 2, "Real"), ContentsEntry(0, 40, "Gone")), 1, 6) { }
-        val box = ShadowDialog.getLatestDialog() as AlertDialog
-        assertThat(box.listView.adapter.isEnabled(1)).isFalse()
+        val screen = ContentsList.show(
+            viewer,
+            listOf(ContentsEntry(0, 2, "Real"), ContentsEntry(0, 40, "Gone")),
+            1,
+            6,
+            byChapter = false,
+        ) { }
+        assertThat(screen.list().adapter.isEnabled(1)).isFalse()
+    }
+
+    /** A book's place is a chapter's number in reading order, which is no page and is not shown. */
+    @Test
+    fun aBooksEntriesShowNoPage() {
+        val viewer = openPdf()
+        val screen = ContentsList.show(viewer, outline, 2, Int.MAX_VALUE, byChapter = true) { }
+        assertThat(screen.rows().map { it.page().visibility }.distinct()).containsExactly(View.GONE)
+        assertThat(screen.rows()[1].title().typeface?.style).isEqualTo(Typeface.BOLD)
+    }
+
+    /** As the book's own list read them (#54): its way, the side it is set in from, and its language. */
+    @Test
+    fun anEntryReadsTheWayAndInTheLanguageItSays() {
+        val viewer = openPdf()
+        val arabic = "الأول"
+        val screen = ContentsList.show(
+            viewer,
+            listOf(
+                ContentsEntry(0, 1, arabic, "auto", "ar"),
+                ContentsEntry(1, 1, "English first", "rtl", ""),
+                ContentsEntry(1, 1, "English", "ltr", "ja"),
+                ContentsEntry(0, 1, "Plain", "auto", ""),
+            ),
+            1,
+            6,
+            byChapter = true,
+        ) { }
+        val rows = screen.rows()
+        assertThat(rows.map { it.layoutDirection }).containsExactly(
+            View.LAYOUT_DIRECTION_RTL,
+            View.LAYOUT_DIRECTION_RTL,
+            View.LAYOUT_DIRECTION_LTR,
+            View.LAYOUT_DIRECTION_LTR,
+        ).inOrder()
+        assertThat(rows.map { it.title().textDirection }).containsExactly(
+            View.TEXT_DIRECTION_FIRST_STRONG,
+            View.TEXT_DIRECTION_RTL,
+            View.TEXT_DIRECTION_LTR,
+            View.TEXT_DIRECTION_FIRST_STRONG,
+        ).inOrder()
+        assertThat(rows[0].title().textLocale).isEqualTo(Locale.forLanguageTag("ar"))
+        assertThat(rows[2].title().textLocale).isEqualTo(Locale.forLanguageTag("ja"))
+        assertThat(rows[3].title().textLocale).isEqualTo(Locale.getDefault())
     }
 }

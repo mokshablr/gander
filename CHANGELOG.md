@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.11 (2026-11-24)
 
 - Videos and audio in a folder you added in Gander can be deleted as photos can, from the
   folder's list: hold one down or use Select files in the menu, pick photos, videos and audio

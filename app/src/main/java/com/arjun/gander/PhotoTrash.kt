@@ -178,13 +178,15 @@ internal class TrashPrompt(
     private val prompt =
         activity.registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
             val photos = asked
+            // Read now, since another Delete may ask again before the looking below is done
+            val forGood = askedForGood
             asked = emptyList()
             if (photos.isEmpty() || result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
             // Android answers yes after a move that failed as well, which only looking catches
             working(true)
             worker.offMain({ stayed: List<Uri> ->
                 working(false)
-                done(photos - stayed.toSet(), stayed, askedForGood)
+                done(photos - stayed.toSet(), stayed, forGood)
             }) { app ->
                 val stayed = photos.filter { stillThere(app.contentResolver, it) }
                 // A photo that has gone leaves no small copy of itself behind in Gander

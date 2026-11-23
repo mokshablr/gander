@@ -11,7 +11,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.provider.DocumentsContract
 import android.util.LruCache
 import android.view.View
 import android.widget.ImageView
@@ -205,10 +204,7 @@ object Thumbs {
     internal fun folderDir(ctx: Context, uri: Uri): File? = folderKey(uri)?.let { File(diskDir(ctx), it) }
 
     /** The folder grant [uri] was reached through, as a key, or null for a file opened on its own. */
-    private fun folderKey(uri: Uri): String? = runCatching {
-        if (!DocumentsContract.isTreeUri(uri)) return null
-        md5(DocumentsContract.buildTreeDocumentUri(uri.authority, DocumentsContract.getTreeDocumentId(uri)).toString())
-    }.getOrNull()
+    private fun folderKey(uri: Uri): String? = Recents.folderOf(uri)?.let(::md5)
 
     private fun fromDisk(file: File): Bitmap? {
         if (!file.exists()) return null

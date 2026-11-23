@@ -186,7 +186,10 @@ internal class TrashPrompt(
             working(true)
             worker.offMain({ stayed: List<Uri> ->
                 working(false)
-                done(photos - stayed.toSet(), stayed, forGood)
+                val gone = photos - stayed.toSet()
+                // A file opened from its folder is in Recents, where it would stay as a dead row
+                gone.forEach { Recents.remove(activity, it.toString()) }
+                done(gone, stayed, forGood)
             }) { app ->
                 val stayed = photos.filter { stillThere(app.contentResolver, it) }
                 // A photo that has gone leaves no small copy of itself behind in Gander

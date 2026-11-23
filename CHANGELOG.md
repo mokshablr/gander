@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- A file opened from a folder you added in Gander shows in Recent files, where only files opened
+  with Open a file did (#82, thanks @BenjaminSk-04). Removing the folder takes its files out of
+  Recent files, and removing one from Recent files leaves it in its folder. A photo opened from
+  Recent files this way swipes to its folder's other photos, as it does from the folder.
+
 ## 2.11 (2026-11-24)
 
 - Videos and audio in a folder you added in Gander can be deleted as photos can, from the

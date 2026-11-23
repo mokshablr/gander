@@ -71,6 +71,8 @@
          over a bin, so each question says the thing itself stays where it is. -->
     <string name="remove_recent_title">Remove from recent files?</string>
     <string name="remove_recent_message">%1$s stays where it is, but Gander will lose access to it. Opening it again means finding it in the system picker.</string>
+    <!-- A file opened from a folder added in Gander, which the folder keeps open -->
+    <string name="remove_recent_in_folder_message">%1$s stays where it is, and you can still open it from its folder.</string>
     <string name="remove_folder_title">Remove folder?</string>
     <string name="remove_folder_message">Nothing in %1$s is deleted, but Gander will lose access to it. Granting it back means finding it in the system picker again.</string>
     <!-- Also the TalkBack label for removing a row, which the swipe does -->

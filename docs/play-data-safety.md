@@ -102,7 +102,7 @@ and performance, device or other IDs): **not declared.** None of it is touched.
 
 | What | Where | Notes |
 | --- | --- | --- |
-| Recents: file name, content URI, timestamp, max 25 | `SharedPreferences` (`Recents.kt`) | Filtered at read time against the URIs still holding a persisted read grant |
+| Recents: file name, content URI, timestamp, max 25 | `SharedPreferences` (`Recents.kt`) | Filtered at read time against the URIs still holding a persisted read grant, or lying in an added folder that holds one. A folder's files are dropped when it is removed |
 | Reading positions: a PDF's page, or a book's place (its chapter and how far into it), and a timestamp, max 100 | `noBackupFilesDir/positions` (`Positions.kt`) | Keyed by a SHA-256 of the file's length and first 64 KiB, so no file name or URI is stored. A PDF's first and last pages are not kept; a book's end is. `BackupAgent` always excludes `no_backup`, from cloud backup and device-to-device transfer alike |
 | Viewer settings: night mode, the folder sort order, the text size of books, text and Markdown, and whether Delete deletes for good | `SharedPreferences` (`Settings.kt`) | Four values, no file names |
 | Folder grants | Held by the system, not by the app (`MainActivity.kt`) | Released when the folder is removed from Gander |

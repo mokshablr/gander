@@ -688,6 +688,69 @@ class MainActivityTest {
         assertThat(controller.rowTitles()).doesNotContain("Documents")
     }
 
+    /** A file opened from the folder, as it sits in Recents (#82). */
+    private fun recentInFolder(tree: android.net.Uri): android.net.Uri =
+        DocumentsContract.buildDocumentUriUsingTree(tree, "f1").also { Recents.add(context, it, "zeta.pdf") }
+
+    /** The folder's files leave Recents with it, and adding the folder again does not bring them back. */
+    @Test
+    fun removingAFolderTakesItsFilesOutOfRecents() {
+        val tree = grantedFolder()
+        recentInFolder(tree)
+        val controller = home()
+        assertThat(controller.rowTitles()).contains("zeta.pdf")
+
+        controller.swipeRow("Documents")
+        answer(AlertDialog.BUTTON_POSITIVE)
+
+        // Gone with the folder's row while its Undo bar is up
+        assertThat(controller.rowTitles()).containsNoneOf("zeta.pdf", "Documents")
+        waitOutTheUndoBar()
+        context.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        assertThat(Recents.all(context)).isEmpty()
+    }
+
+    @Test
+    fun undoingAFoldersRemovalBringsItsFilesBackToRecents() {
+        recentInFolder(grantedFolder())
+        val controller = home()
+        controller.swipeRow("Documents")
+        answer(AlertDialog.BUTTON_POSITIVE)
+
+        controller.undo()!!.performClick()
+        shadowOf(context.mainLooper).idle()
+        waitOutTheUndoBar()
+
+        assertThat(controller.rowTitles()).containsAtLeast("zeta.pdf", "Documents")
+        assertThat(Recents.all(context).map { it.name }).containsExactly("zeta.pdf")
+    }
+
+    /** A folder's file removed from Recents is still in its folder, so the question says so and the folder stays. */
+    @Test
+    fun removingAFolderFileFromRecentsKeepsTheFolder() {
+        val tree = grantedFolder()
+        val file = recentInFolder(tree)
+        // Its small picture, which the folder's list still shows
+        val thumb = File(checkNotNull(Thumbs.folderDir(context, tree)), md5(file.toString()) + ".png")
+            .apply { parentFile!!.mkdirs(); writeBytes(Fixtures.bytes("tiny.png")) }
+        Recents.add(context, DocumentsContract.buildDocumentUriUsingTree(tree, "f2"), "alpha.pdf")
+        val controller = home()
+
+        controller.swipeRow("zeta.pdf")
+        assertThat(latestDialog()!!.findViewById<TextView>(android.R.id.message)!!.text.toString())
+            .isEqualTo(context.getString(R.string.remove_recent_in_folder_message, "zeta.pdf"))
+        answer(AlertDialog.BUTTON_POSITIVE)
+        // Only that one waits on the Undo bar, not the folder's other files
+        assertThat(controller.rowTitles()).contains("alpha.pdf")
+        assertThat(controller.rowTitles()).doesNotContain("zeta.pdf")
+        waitOutTheUndoBar()
+
+        assertThat(Recents.all(context).map { it.name }).containsExactly("alpha.pdf")
+        assertThat(persistedUris()).contains(tree.toString())
+        assertThat(controller.rowTitles()).contains("Documents")
+        assertThat(thumb.exists()).isTrue()
+    }
+
     /** And the thumbnails of the files in it, each a copy of a picture in it, only smaller. */
     @Test
     fun removingAFolderTakesItsThumbnailsWithIt() {
@@ -1102,6 +1165,8 @@ class MainActivityTest {
         val thumbs = checkNotNull(Thumbs.folderDir(context, tree)).apply { mkdirs() }
         fun thumb(name: String) = File(thumbs, md5(photoUri(tree, name).toString()) + ".png")
         listOf("a.jpg", "b.jpg", "c.png").forEach { thumb(it).writeBytes(Fixtures.bytes("tiny.png")) }
+        // Two of them opened before, which put them in Recents
+        listOf("a.jpg", "b.jpg").forEach { Recents.add(context, photoUri(tree, it), it) }
         val controller = home()
         controller.clickRow("DCIM")
         controller.holdRow("a.jpg")
@@ -1124,6 +1189,8 @@ class MainActivityTest {
         assertThat(thumb("a.jpg").exists()).isFalse()
         assertThat(thumb("c.png").exists()).isFalse()
         assertThat(thumb("b.jpg").exists()).isTrue()
+        // Nor a row in Recents
+        assertThat(Recents.all(context).map { it.name }).containsExactly("b.jpg")
     }
 
     /** A no in the prompt moves nothing, and a yes that moved nothing says so. Either way the photos stay picked. */

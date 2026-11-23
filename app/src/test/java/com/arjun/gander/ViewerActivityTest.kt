@@ -2342,6 +2342,20 @@ class ViewerActivityTest {
         assertThat(Recents.all(context).map { it.name }).containsExactly("Alder Court.pdf")
     }
 
+    /** A file in an added folder goes in under the folder's grant, which keeps it open (#82). */
+    @Test
+    fun openingAFileFromAnAddedFolderRemembersItWithoutAGrantOfItsOwn() {
+        context.getSharedPreferences("recents", Context.MODE_PRIVATE).edit().clear().commit()
+        val tree = notesFolder()
+        context.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+        openedFrom(tree, "notes/drafts/todo.txt")
+
+        val file = DocumentsContract.buildDocumentUriUsingTree(tree, "notes/drafts/todo.txt")
+        assertThat(Recents.all(context).map { it.uri to it.name }).containsExactly(file.toString() to "todo.txt")
+        assertThat(context.contentResolver.persistedUriPermissions.map { it.uri }).doesNotContain(file)
+    }
+
     /**
      * Recents fills from Gander's own screens, which is where the picker is. Another app
      * offering a grant Gander could keep would otherwise put an entry there, under a name of

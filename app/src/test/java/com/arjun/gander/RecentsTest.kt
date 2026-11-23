@@ -3,6 +3,7 @@ package com.arjun.gander
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
@@ -196,6 +197,103 @@ class RecentsTest {
     fun aFileWithNoPersistedGrantIsNeverListed() {
         Recents.add(context, FixtureProvider.uriFor("a.pdf"), "Opened once")
         assertThat(Recents.all(context)).isEmpty()
+    }
+
+    // ---------------------------------------------------------------
+    // Files in a folder the reader added (#82)
+    // ---------------------------------------------------------------
+
+    private fun addedFolder(id: String = "primary:Docs"): Uri =
+        DocumentsContract.buildTreeDocumentUri("test.documents", id).also {
+            context.contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+    /** A file as the folder's list opens it, by a URI under the folder's grant. */
+    private fun inFolder(tree: Uri, docId: String): Uri = DocumentsContract.buildDocumentUriUsingTree(tree, docId)
+
+    /** The folder's grant keeps its files open, so a file there is listed with no grant of its own. */
+    @Test
+    fun aFileInAnAddedFolderIsListedUnderTheFoldersGrant() {
+        val tree = addedFolder()
+        val file = inFolder(tree, "primary:Docs/Leases/lease.pdf")
+        assertThat(Recents.inAddedFolder(context, file)).isTrue()
+
+        Recents.add(context, file, "lease.pdf")
+
+        assertThat(names()).containsExactly("lease.pdf")
+        assertThat(kept(file)).isFalse()
+        assertThat(Recents.folderOf(file)).isEqualTo(tree.toString())
+    }
+
+    @Test
+    fun aFileInAFolderThatIsNotAddedIsNotInOne() {
+        addedFolder("primary:Docs")
+        val elsewhere = inFolder(DocumentsContract.buildTreeDocumentUri("test.documents", "primary:Music"), "primary:Music/a.mp3")
+        assertThat(Recents.inAddedFolder(context, elsewhere)).isFalse()
+        assertThat(Recents.inAddedFolder(context, granted("a.pdf"))).isFalse()
+        assertThat(Recents.folderOf(FixtureProvider.uriFor("a.pdf"))).isNull()
+
+        Recents.add(context, elsewhere, "a.mp3")
+        assertThat(names()).isEmpty()
+    }
+
+    @Test
+    fun aFolderFileGoesFromTheListWhenItsFolderDoes() {
+        val tree = addedFolder()
+        Recents.add(context, inFolder(tree, "primary:Docs/lease.pdf"), "lease.pdf")
+        Recents.add(context, granted("a.pdf"), "Picked")
+
+        context.contentResolver.releasePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+        assertThat(names()).containsExactly("Picked")
+    }
+
+    /** A grant and a file can spell the folder differently, here its colon bare or escaped; it is still one folder. */
+    @Test
+    fun aFolderIsMatchedHoweverItsGrantSpellsIt() {
+        val tree = Uri.parse("content://test.documents/tree/primary:Docs")
+        context.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val file = inFolder(tree, "primary:Docs/lease.pdf")
+        Recents.add(context, file, "lease.pdf")
+
+        assertThat(names()).containsExactly("lease.pdf")
+        Recents.forgetFolder(context, tree)
+        assertThat(names()).isEmpty()
+    }
+
+    /** Removing the folder forgets its files, so adding it again does not bring old rows back. */
+    @Test
+    fun forgettingAFolderDropsOnlyItsOwnFiles() {
+        val tree = addedFolder("primary:Docs")
+        val other = addedFolder("primary:Music")
+        Recents.add(context, inFolder(tree, "primary:Docs/lease.pdf"), "lease.pdf")
+        Recents.add(context, inFolder(other, "primary:Music/a.mp3"), "a.mp3")
+        Recents.add(context, granted("a.pdf"), "Picked")
+
+        Recents.forgetFolder(context, tree)
+
+        assertThat(names()).containsExactly("Picked", "a.mp3").inOrder()
+    }
+
+    /** A folder file's entry has no grant of its own, and giving one back must not take the folder's. */
+    @Test
+    fun removingAFolderFileLeavesTheFoldersGrant() {
+        val tree = addedFolder()
+        val file = inFolder(tree, "primary:Docs/lease.pdf")
+        Recents.add(context, file, "lease.pdf")
+
+        Recents.remove(context, file.toString())
+
+        assertThat(names()).isEmpty()
+        assertThat(kept(tree)).isTrue()
+    }
+
+    @Test
+    fun aFolderFilePushedOffTheEndLeavesTheFoldersGrant() {
+        val tree = addedFolder()
+        (1..26).forEach { Recents.add(context, inFolder(tree, "primary:Docs/f$it.pdf"), "File $it") }
+        assertThat(Recents.all(context)).hasSize(25)
+        assertThat(kept(tree)).isTrue()
     }
 
     // ---------------------------------------------------------------

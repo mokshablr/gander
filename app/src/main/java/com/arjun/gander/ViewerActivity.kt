@@ -313,17 +313,18 @@ open class ViewerActivity : AppCompatActivity() {
         val ext = name.substringAfterLast('.', "").lowercase()
         val mime = runCatching { contentResolver.getType(uri) }.getOrNull() ?: intent.type
 
-        // Picker selections carry a persistable grant; keep those in Recents.
-        // Open-with and folder-browsed URIs throw here and are simply skipped. A file
-        // inside a zip would too, but is kept out by name rather than by that: nothing
-        // in a zip is written to the phone, and Recents is on the phone. Only from
-        // Gander's own screens, which is where the picker is: another app offering a
-        // persistable grant would otherwise get an entry, under a name of its choosing.
+        // Picker selections carry a persistable grant, and a file in an added folder is kept
+        // open by the folder's; both go in Recents. Anything else throws here and is skipped.
+        // A file inside a zip is kept out by name: nothing in a zip is written to the phone,
+        // and Recents is on the phone. Only from Gander's own screens: another app offering
+        // a persistable grant would otherwise get an entry, under a name of its choosing.
         if (fromGander && uri.scheme == "content" && !ArchiveProvider.isEntry(this, uri)) {
             runCatching {
-                contentResolver.takePersistableUriPermission(
-                    uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
+                if (!Recents.inAddedFolder(this, uri)) {
+                    contentResolver.takePersistableUriPermission(
+                        uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                }
                 Recents.add(this, uri, name)
             }
         }
@@ -528,7 +529,7 @@ open class ViewerActivity : AppCompatActivity() {
         }
 
         // Only among a folder's photos, where photos are gone through one after another to keep
-        // or delete. A photo from Recents would leave its entry behind.
+        // or delete.
         val deletable = photoPager != null && photosListed && mayTrash(uri)
         toolbar.menu.findItem(R.id.action_delete).apply {
             isVisible = deletable

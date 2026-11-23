@@ -742,7 +742,12 @@ class MainActivity : AppCompatActivity() {
         // the ordinary list comes back for good. A row waiting on its Undo bar still
         // counts, so undoing the last one never has to bring the list back.
         if (recents.isEmpty() && roots.isEmpty()) return Screen(emptyList(), welcome = true)
-        val shownRecents = recents.filter { it.uri != hidden }
+        // A folder waiting on its Undo bar takes its files' rows out with it. Its URI is the
+        // tree's alone, where a file's goes on to name the file.
+        val hiddenFolder = hidden?.toUri()?.takeIf { it.pathSegments.size == 2 }?.let(Recents::folderOf)
+        val shownRecents = recents.filter {
+            it.uri != hidden && (hiddenFolder == null || Recents.folderOf(it.uri.toUri()) != hiddenFolder)
+        }
         val shownRoots = roots.filter { (perm, _) -> perm.uri.toString() != hidden }
 
         val rows = mutableListOf<Row>()
@@ -759,14 +764,20 @@ class MainActivity : AppCompatActivity() {
                     DateUtils.getRelativeTimeSpanString(r.time).toString(),
                     onClick = { openInViewer(uri) },
                     onRemove = { kept ->
+                        // A folder's file stays open through the folder, so it loses nothing
+                        val inFolder = Recents.folderOf(uri) != null
                         askToRemove(
                             R.string.remove_recent_title,
-                            getString(R.string.remove_recent_message, r.name),
+                            getString(
+                                if (inFolder) R.string.remove_recent_in_folder_message else R.string.remove_recent_message,
+                                r.name
+                            ),
                             kept
                         ) {
                             removeLater(r.uri) {
                                 Recents.remove(this, r.uri)
-                                Thumbs.evict(this, r.uri)
+                                // The folder's list still shows its thumbnail
+                                if (!inFolder) Thumbs.evict(this, r.uri)
                             }
                         }
                     },
@@ -805,6 +816,7 @@ class MainActivity : AppCompatActivity() {
                                 )
                             }
                             Thumbs.forgetFolder(this, perm.uri)
+                            Recents.forgetFolder(this, perm.uri)
                         }
                     }
                 }

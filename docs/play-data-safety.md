@@ -104,7 +104,7 @@ and performance, device or other IDs): **not declared.** None of it is touched.
 | --- | --- | --- |
 | Recents: file name, content URI, timestamp, max 25 | `SharedPreferences` (`Recents.kt`) | Filtered at read time against the URIs still holding a persisted read grant |
 | Reading positions: a PDF's page, or a book's place (its chapter and how far into it), and a timestamp, max 100 | `noBackupFilesDir/positions` (`Positions.kt`) | Keyed by a SHA-256 of the file's length and first 64 KiB, so no file name or URI is stored. A PDF's first and last pages are not kept; a book's end is. `BackupAgent` always excludes `no_backup`, from cloud backup and device-to-device transfer alike |
-| Viewer settings: night mode, the folder sort order, the text size of books, text and Markdown | `SharedPreferences` (`Settings.kt`) | Three values, no file names |
+| Viewer settings: night mode, the folder sort order, the text size of books, text and Markdown, and whether Delete deletes for good | `SharedPreferences` (`Settings.kt`) | Four values, no file names |
 | Folder grants | Held by the system, not by the app (`MainActivity.kt`) | Released when the folder is removed from Gander |
 | Thumbnails, about 192 px | `cacheDir/thumbs/` (`Thumbs.kt`), a folder's in a subfolder of their own | From photos, a video's first frame, or a PDF's first page. Dropped when their file is removed from Recents or their folder from Gander |
 | Shared-text temp file | `cacheDir/shared/shared-text.txt` (`ViewerActivity.kt`) | Deleted when its viewer closes |

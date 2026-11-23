@@ -1051,6 +1051,15 @@ open class ViewerActivity : AppCompatActivity() {
     }
 
     /**
+     * Contents is offered only where [showContentsList] would open: a book with its list, or a
+     * document with entries once it has said it has two pages or more. A PDF's or Word
+     * document's list can come before its first page count, and a tap then did nothing.
+     */
+    private fun showContentsItem() {
+        contentsItem?.isVisible = listedContents.isNotEmpty() && (book || pageTotal >= 2)
+    }
+
+    /**
      * The document's contents list, from the menu. See [ContentsList]. A PDF's and a Word
      * document's entries are pages, and the reader is on [pageAt]. A book's are chapters in
      * reading order from one, and the reader is in the one its place names, which its page does
@@ -1658,11 +1667,11 @@ open class ViewerActivity : AppCompatActivity() {
                         is PortMessage.Page -> if (kind.paged) {
                             if (pageTotal == 0) {
                                 goToPageItem?.isVisible = !book
-                                contentsItem?.isVisible = listedContents.isNotEmpty()
                                 textSizeItem?.isVisible = book
                             }
                             pageAt = said.n
                             pageTotal = said.of
+                            showContentsItem()
                             setPageIndicatorText()
                             showPageIndicator()
                         }
@@ -1687,7 +1696,7 @@ open class ViewerActivity : AppCompatActivity() {
                         // A PDF's outline, a Word document's headings or a book's own list
                         is PortMessage.Contents -> if (kind == FileKind.PDF || kind == FileKind.DOCX || book) {
                             listedContents = said.entries
-                            contentsItem?.isVisible = true
+                            showContentsItem()
                         }
                         // Only the card that has the button may ask
                         PortMessage.SimpleView -> if (kind == FileKind.PDF && cardOffersSimple) askForSimpleView()

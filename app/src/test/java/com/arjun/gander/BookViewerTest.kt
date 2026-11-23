@@ -121,6 +121,25 @@ class BookViewerTest {
         assertThat(viewer.menu.findItem(R.id.action_text_size).isVisible).isFalse()
     }
 
+    /**
+     * A PDF's or Word document's list can come before its first page count, and the list does
+     * not open until that count says two pages or more. Contents waits for it, whichever of the
+     * two the page sends first.
+     */
+    @Test
+    fun aDocumentsContentsWaitsForASecondPage() {
+        val outline = "contents\n0 1 auto en Chapter 1\n0 4 auto en Chapter 2"
+        val alone = open("six-pages.pdf").get()
+        alone.pageSays(outline)
+        assertThat(alone.menu.findItem(R.id.action_contents).isVisible).isFalse()
+        alone.pageSays("page 1 6")
+        assertThat(alone.menu.findItem(R.id.action_contents).isVisible).isTrue()
+
+        val paged = open("six-pages.pdf").get()
+        paged.pageSays("page 1 6", outline)
+        assertThat(paged.menu.findItem(R.id.action_contents).isVisible).isTrue()
+    }
+
     /** The list the book sent, shown by the app, with no pages, the chapter on screen marked. */
     @Test
     fun contentsShowsTheBooksListAndAnEntryGoesBackToThePage() {

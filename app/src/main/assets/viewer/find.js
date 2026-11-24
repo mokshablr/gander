@@ -133,8 +133,9 @@ var vwFind = (function () {
           }
         } else if (child.nodeType === 1) {
           var tag = child.tagName;
+          // KaTeX's MathML copy of a formula is there for screen readers, beside the one drawn
           if (tag === "SCRIPT" || tag === "STYLE" || tag === "NOSCRIPT" || tag === "TEMPLATE" ||
-              child.hidden) continue;
+              child.hidden || child.classList.contains("katex-mathml")) continue;
           var block = BLOCK.test(tag);
           if (block) separate();
           if (tag === "PRE") inPre++;

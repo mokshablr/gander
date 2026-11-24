@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Markdown files draw their formulas, where the TeX showed as written (#83, thanks @26heij).
+  A formula can sit between `$$` or `\[ \]` on lines of its own, between `$` or `\( \)` within
+  a line, or in a `math` code block, as GitHub, Obsidian and ChatGPT write them. A price written
+  with a dollar sign stays text.
 - A file opened from a folder you added in Gander shows in Recent files, where only files opened
   with Open a file did (#82, thanks @BenjaminSk-04). Removing the folder takes its files out of
   Recent files, and removing one from Recent files leaves it in its folder. A photo opened from

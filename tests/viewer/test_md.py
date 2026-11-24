@@ -1,6 +1,7 @@
 """md.html: Markdown through marked, then DOMPurify, then into the DOM."""
 
 import base64
+from pathlib import Path
 
 import pytest
 
@@ -304,3 +305,125 @@ def test_the_card_is_all_that_shows_where_marked_parses_but_cannot_run(viewer, p
     said = status_text(page)
     assert "too old to show Markdown files" in said
     assert "is not a function" not in said
+
+
+# ---------------------------------------------------------------
+# Formulas, issue #83
+# ---------------------------------------------------------------
+
+def wait_until_drawn(page):
+    page.wait_for_function("() => document.getElementById('vw-status').style.display === 'none'")
+
+
+FORMULAS = r'''# Notes
+
+$$p(x) = \frac{1}{\sqrt{2\pi}\,\sigma}\exp\!\left(-\frac{(x-\mu)^2}{2\sigma^2}\right)$$
+
+$$
+\mathbf{x} \sim \mathcal{N}(\boldsymbol{\mu}, \boldsymbol{\Sigma})
+$$
+
+\[
+\boxed{P = \tfrac{3}{4}}
+\]
+
+Inline $E = mc^2$ and \(a^2 + b^2\) in a sentence, and $$\int_0^1 x\,dx$$ set apart.
+
+```math
+\sum_{i=1}^n i = \frac{n(n+1)}{2}
+```
+'''
+
+
+def test_each_way_of_writing_a_formula_is_drawn(viewer, page, made):
+    viewer("md.html", made("formulas.md", FORMULAS))
+    wait_until_drawn(page)
+    drawn = page.locator("#content .vw-math").evaluate_all(
+        "els => els.map(el => [!!el.querySelector('.katex'), !!el.querySelector('.katex-display')])"
+    )
+    assert drawn == [
+        [True, True], [True, True], [True, True],
+        [True, False], [True, False], [True, True],
+        [True, True],
+    ]
+    assert page.locator("#content .katex-error").count() == 0
+    assert "$" not in page.inner_text("#content")
+    assert page.inner_text("#content h1") == "Notes"
+
+
+def test_prices_code_and_escaped_dollars_stay_text(viewer, page, made):
+    text = (
+        "It costs $5 and $10, or $5-$10 on sale, and \\$x\\$ is escaped.\n\n"
+        "Set `$PATH` and `$x$` in code.\n\n"
+        "```sh\necho $HOME $x$\n```\n"
+    )
+    viewer("md.html", made("prices.md", text))
+    wait_until_drawn(page)
+    assert page.locator("#content .vw-math").count() == 0
+    said = page.inner_text("#content")
+    assert "It costs $5 and $10, or $5-$10 on sale, and $x$ is escaped." in said
+    assert page.text_content("#content pre code") == "echo $HOME $x$\n"
+
+
+def test_a_file_without_formulas_never_loads_katex(viewer, page):
+    viewer("md.html", "notes.md")
+    wait_until_drawn(page)
+    assert page.evaluate("typeof katex") == "undefined"
+    assert page.locator("script[src*=katex], link[href*=katex]").count() == 0
+
+
+@pytest.mark.parametrize("name", ["licences.md", "file_types.md"])
+def test_the_pages_gander_ships_in_markdown_have_no_formulas(viewer, page, made, name):
+    """The About dialog opens these in this viewer, so a $ in them must stay a $."""
+    text = (Path(__file__).parents[2] / "app/src/main/assets" / name).read_text()
+    viewer("md.html", made(name, text))
+    wait_until_drawn(page)
+    assert page.locator("#content .vw-math").count() == 0
+
+
+def test_a_formula_katex_cannot_read_shows_its_tex_and_the_rest_still_draws(viewer, page, made):
+    viewer("md.html", made("broken.md", "$$\\frac{1}{$$\n\nAfter it, $x^2$.\n"))
+    wait_until_drawn(page)
+    assert page.locator("#content .katex-error").count() == 1
+    assert "\\frac{1}{" in page.inner_text("#content .katex-error")
+    assert page.locator("#content p .katex").count() == 1
+
+
+def test_the_page_still_shows_when_katex_cannot_load(viewer, page, made):
+    page.route("**/lib/katex/katex.min.js", lambda route: route.abort())
+    viewer("md.html", made("offline.md", "# Title\n\n$$x^2$$\n"))
+    wait_until_drawn(page)
+    assert page.inner_text("#content h1") == "Title"
+    assert page.inner_text("#content .vw-math") == "x^2"
+
+
+def test_a_file_cannot_draw_a_formula_thousands_of_screens_wide(viewer, page, made):
+    viewer("md.html", made("wide.md", "$$\\rule{100000em}{1em}\\hspace{100000em}$$\n"))
+    wait_until_drawn(page)
+    width = page.locator("#content .katex").evaluate("el => el.scrollWidth")
+    assert width < 2000
+
+
+def test_formulas_read_left_to_right_in_a_right_to_left_document(viewer, page, made):
+    viewer("md.html", made("rtl-math.md", ARABIC_PROSE + "\nالمعادلة $x + y = z$ بالعربية.\n"))
+    wait_until_drawn(page)
+    assert page.locator("#content").get_attribute("dir") == "rtl"
+    assert page.locator("#content .vw-math").evaluate("el => getComputedStyle(el).direction") == "ltr"
+
+
+def test_find_counts_a_word_in_a_formula_once(viewer, page, made, port):
+    """KaTeX keeps a MathML copy of each formula for screen readers, which find leaves out."""
+    viewer("md.html", made("find-math.md", "$$P(\\text{solved}) = 1$$\n\nIt was solved.\n"))
+    wait_until_drawn(page)
+    channel = port()
+    channel.query("solved")
+    channel.wait_for_count(1, 2)
+
+
+@pytest.mark.parametrize("opener", ["\\[a\n", "\\(a "])
+def test_formula_openers_that_never_close_cannot_stall_the_page(viewer, page, made, opener):
+    """Looked for to the end of the file each time, these took time growing with its square."""
+    viewer("md.html", made("unclosed.md", opener * 40000))
+    page.wait_for_function(
+        "() => document.getElementById('vw-status').style.display === 'none'", timeout=5000
+    )

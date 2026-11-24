@@ -26,6 +26,8 @@ commit.
 | `xlsx.full.min.js` | SheetJS Community Edition | 0.20.3 | Apache-2.0 | https://git.sheetjs.com/sheetjs/sheetjs |
 | `marked.umd.js` | marked | 18.1.1 | MIT | https://github.com/markedjs/marked |
 | `purify.min.js` | DOMPurify | 3.4.17 | Apache-2.0 or MPL-2.0 dual | https://github.com/cure53/DOMPurify |
+| `katex/katex.min.js`, `katex/katex.min.css` | KaTeX | 0.19.1 | MIT | https://github.com/KaTeX/KaTeX |
+| `katex/fonts/` (12 of 20 files) | KaTeX fonts | 0.19.1 | SIL OFL 1.1 | https://github.com/KaTeX/katex-fonts |
 | `pptx/pptxjs.js` | PPTXjs | 1.21.1, with two changes (below) | MIT | https://github.com/meshesha/PPTXjs |
 | `pptx/divs2slides.js` | divs2slides (PPTXjs) | 1.3.2 | MIT | https://github.com/meshesha/PPTXjs |
 | `pptx/filereader.js` | FileReader.js (PPTXjs bundle) | 0.99 | MIT | https://github.com/meshesha/PPTXjs |
@@ -95,7 +97,7 @@ defined".
 
 Neither library publishes a minimum, so both numbers are measurements, and a
 measurement is of one file. `VendoredLibsTest` pins the SHA-256 of every file the
-two pages load, JSZip and DOMPurify included, and fails when a refetch changes one,
+two pages load, JSZip, DOMPurify and KaTeX included, and fails when a refetch changes one,
 which the newest-in-the-major fetches of marked and DOMPurify make likely. Measure
 the new file before updating its fingerprint:
 
@@ -108,7 +110,26 @@ one that counts: its check for a reference link runs on any text with a bracket 
 as plain as "see [1]", which is why its floor is 93 rather than the 84 its syntax
 alone would give. JSZip
 and DOMPurify parse as ES2015 and reach for newer names only behind `typeof` checks,
-so neither sets a floor today.
+so neither sets a floor today, and KaTeX parses from Chromium 51.
+
+## KaTeX
+
+KaTeX draws the formulas in a Markdown file (issue #83). `md-math.js` loads it only for a file
+that has one, so other Markdown pays nothing for it at runtime.
+
+Twelve of its twenty fonts ship: Main, Math, AMS, Caligraphic and the four Size fonts, which
+cover common notation, the stretched brackets and the roots. Fraktur, script, sans-serif and
+typewriter letters (`\mathfrak`, `\mathscr`, `\mathsf`, `\mathtt`) fall back to the page's
+own font. Shipping the other eight costs 124 KB more.
+
+The fonts are under the SIL OFL 1.1, as each file's own licence field says, although the
+katex-fonts repository's LICENSE file is MIT. They derive from the MathJax fonts, so
+`licences.md` follows the files and carries the OFL.
+
+Temml, which hands TeX to the WebView's own MathML, was measured and not taken. Android ships
+no font with an OpenType MATH table, so brackets don't stretch and scripts sit wrong without
+one, and a math font subset to cover common notation is 240 KB, as much as KaTeX's fonts. It
+also needs Chromium 109, where KaTeX parses from 51.
 
 ## Before upgrading docx-preview
 

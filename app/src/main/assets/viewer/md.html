@@ -53,6 +53,8 @@
   @media (prefers-color-scheme: light) { #content img[data-vw-only="dark"] { display: none; } }
   @media (prefers-color-scheme: dark) { #content img[data-vw-only="light"] { display: none; } }
   #content hr { border: 0; border-top: 2px solid #d0d7de; }
+  /* A formula wider than the screen scrolls on its own, as a code block does */
+  #content .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.2em 0; }
   @media (prefers-color-scheme: dark) {
     body { background: var(--vw-ground); }
     #content { color: #e6edf3; }
@@ -73,6 +75,7 @@
 <article id="content" data-vw-find></article>
 <script src="app.js"></script>
 <script src="find.js"></script>
+<script src="md-math.js"></script>
 <script src="md.js"></script>
 </body>
 </html>

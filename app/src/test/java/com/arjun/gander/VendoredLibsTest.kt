@@ -56,6 +56,7 @@ class VendoredLibsTest {
             "jszip3.min.js" to "acc7e41455a80765b5fd9c7ee1b8078a6d160bbbca455aeae854de65c947d59e",
             "marked.umd.js" to "b82b9334406d8bdd16b6236c08de1cb65b2a859873ca9503d9cc0b292ca3c12a",
             "purify.min.js" to "cd37898f9782adf54820c413191b5691803f0f137c799d6edcfd38523b4c2c31",
+            "katex/katex.min.js" to "fa140498b8cfc8302cbe5e7cb1bdbc1f952bc38b3fa258ede09e73edbf9a74bc",
         )
     }
 
@@ -81,7 +82,7 @@ class VendoredLibsTest {
         val expected = listOf(
             "pdf.min.mjs", "pdf.worker.min.mjs", "jszip3.min.js",
             "docx-preview.min.js", "xlsx.full.min.js", "marked.umd.js",
-            "purify.min.js",
+            "purify.min.js", "katex/katex.min.js", "katex/katex.min.css",
             "pptx/pptxjs.js", "pptx/divs2slides.js", "pptx/filereader.js",
             "pptx/jquery.min.js", "pptx/jszip2.min.js", "pptx/d3.min.js",
             "pptx/nv.d3.min.js", "pptx/pptxjs.css", "pptx/nv.d3.min.css",
@@ -135,8 +136,8 @@ class VendoredLibsTest {
     // ---------------------------------------------------------------
 
     /**
-     * docx.html loads docx-preview and JSZip, md.html marked and DOMPurify, and
-     * the floors in WebViewFloor.kt were measured on exactly these four files.
+     * docx.html loads docx-preview and JSZip, md.html marked, DOMPurify and KaTeX,
+     * and the floors in WebViewFloor.kt were measured on exactly these five files.
      * The fetch script takes the newest marked 18 and DOMPurify 3, so a refetch
      * can hand over a library that needs a newer engine than its floor says, and
      * a reader on that engine is back to an error naming a missing part instead

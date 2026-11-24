@@ -55,6 +55,18 @@ get xlsx.full.min.js    "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.f
 get marked.umd.js       "https://cdn.jsdelivr.net/npm/marked@18/lib/marked.umd.js"
 get purify.min.js       "https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"
 
+# KaTeX draws a Markdown file's formulas. Only the fonts common notation needs are kept, to
+# save 124 KB: Fraktur, script, sans-serif and typewriter letters fall back to the page's font.
+KATEX="https://cdn.jsdelivr.net/npm/katex@0.19.1/dist"
+rm -rf "$LIB/katex"
+mkdir -p "$LIB/katex/fonts"
+get katex/katex.min.js  "$KATEX/katex.min.js"
+get katex/katex.min.css "$KATEX/katex.min.css"
+for f in Main-Regular Main-Bold Main-Italic Main-BoldItalic Math-Italic Math-BoldItalic \
+         AMS-Regular Caligraphic-Regular Size1-Regular Size2-Regular Size3-Regular Size4-Regular; do
+  get "katex/fonts/KaTeX_$f.woff2" "$KATEX/fonts/KaTeX_$f.woff2"
+done
+
 P="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master"
 get pptx/jquery.min.js  "$P/js/jquery-1.11.3.min.js"
 get pptx/jszip2.min.js  "$P/js/jszip.min.js"

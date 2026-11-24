@@ -5,6 +5,7 @@
 if (!vwWebViewTooOld("Markdown files")) {
   vwFetchDoc("text")
     .then(function (txt) {
+      marked.use(vwMath.extension);
       var html = marked.parse(txt, { gfm: true, breaks: false });
       var content = document.getElementById("content");
       content.innerHTML = DOMPurify.sanitize(html);
@@ -14,8 +15,10 @@ if (!vwWebViewTooOld("Markdown files")) {
       content.querySelectorAll("pre, code").forEach(function (el) {
         if (!el.hasAttribute("dir") && !el.parentElement.closest("pre[dir], code[dir]")) el.dir = "ltr";
       });
-      content.dir = vwMostlyRightToLeft(proseText(content)) ? "rtl" : "ltr";
-      vwStatusDone();
+      return vwMath.draw(content).then(function () {
+        content.dir = vwMostlyRightToLeft(proseText(content)) ? "rtl" : "ltr";
+        vwStatusDone();
+      });
     })
     .catch(function (e) { vwError("Could not render this Markdown file", String(e)); });
 }

@@ -76,7 +76,7 @@ It cannot phone home because it does not even hold the INTERNET permission.
 | | GIF (animated), animated WebP and PNG, SVG, AVIF, ICO, BMP | WebView |
 | Video | MP4, M4V, MOV, MKV, WebM, 3GP, AVI, FLV, MPEG-TS | Media3 ExoPlayer |
 | Audio | MP3, M4A, AAC, FLAC, WAV, OGG, Opus, AMR | Media3 ExoPlayer |
-| Markdown | `.md` rendered as formatted HTML | marked + DOMPurify, offline |
+| Markdown | `.md` rendered as formatted HTML, formulas included | marked + DOMPurify + KaTeX, offline |
 | Text and code | `.txt` `.json` `.xml` logs, subtitles (`.srt` `.vtt`), `.m3u` playlists, `.nfo`, most source files | Text viewer |
 | Archives | `.zip` | Listed like a folder, entries opened in place |
 | 3D models | STL `.stl`, binary and text | Gander's own WebGL viewer, offline |
@@ -234,7 +234,7 @@ guards each constraint.
 Vendored viewer libraries and their licenses: pdf.js (Apache-2.0), JSZip (MIT),
 docx-preview (Apache-2.0), SheetJS CE (Apache-2.0), PPTXjs + divs2slides (MIT),
 jQuery 1.11 (MIT), D3 3.x + NVD3 (BSD/Apache), marked (MIT), DOMPurify
-(Apache-2.0/MPL). The app ships no native libraries.
+(Apache-2.0/MPL), KaTeX (MIT, its fonts OFL-1.1). The app ships no native libraries.
 
 ## Roadmap
 

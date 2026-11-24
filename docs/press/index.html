@@ -9,14 +9,15 @@
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://arjun.maniyani.com/gander/press/">
 
-<!-- RE-STAMPED for 2.0 on 26 September 2026. The places that carry a version or a figure:
+<!-- RE-STAMPED for 2.11 on 24 November 2026. The places that carry a version or a figure:
      the JSON-LD softwareVersion and dateModified, the "Current release" line under the title,
      the exfiltration table caption, the facts table (version, versionCode, release date, byte
-     size, release count, reach), the "all of this is in" note, the two Gander-2.0.apk filenames
-     and the release SHA-256 in the verification commands, and the Background paragraph. Reach is
-     stamped "read 26 Sep 2026" and appears twice. When the next release ships, walk that list.
-     Re-dated 29 September 2026 for the Play launch: dateModified, the updated line, both reach
-     figures (now "read 29 Sep 2026", with the Show HN) and the Background paragraph.
+     size, release count, formats, reach), the "all of this is in" note, the two Gander-2.11.apk
+     filenames and the release SHA-256 in the verification commands, and the Background paragraph.
+     Current reach is stamped "read 24 Nov 2026" in the facts table and the Background paragraph;
+     the Background's pre-Play GitHub figures stay "read 29 Sep 2026" as history. When the next
+     release ships, walk that list, and re-check the exfiltration table and the note under it
+     against the new source: Print, added after 2.0, had to join that note.
 
      The competitor table under #permissions was re-read on 26 September 2026 and is current. It is
      not hand-read: it comes from google-play-scraper's permissions() against the US store, English,
@@ -222,7 +223,7 @@ html[data-play="live"] .when-pending{display:none}
 <script type="application/ld+json">
 {"@context":"https://schema.org","@graph":[
  {"@type":"AboutPage","@id":"https://arjun.maniyani.com/gander/press/#page",
-  "name":"Gander press kit","inLanguage":"en","dateModified":"2026-09-29",
+  "name":"Gander press kit","inLanguage":"en","dateModified":"2026-11-24",
   "mainEntity":{"@id":"https://arjun.maniyani.com/gander/#app"},
   "author":{"@id":"https://arjun.maniyani.com/#me"}},
  {"@type":"Person","@id":"https://arjun.maniyani.com/#me","name":"Arjun Maniyani",
@@ -231,7 +232,7 @@ html[data-play="live"] .when-pending{display:none}
  {"@type":"MobileApplication","@id":"https://arjun.maniyani.com/gander/#app",
   "name":"Gander","applicationCategory":"UtilitiesApplication",
   "operatingSystem":"Android 8.0+","permissions":"None",
-  "softwareVersion":"2.0","fileSize":"5MB","isAccessibleForFree":true,
+  "softwareVersion":"2.11","fileSize":"5MB","isAccessibleForFree":true,
   "license":"https://opensource.org/licenses/MIT",
   "codeRepository":"https://github.com/mokshablr/gander",
   "url":"https://arjun.maniyani.com/gander/",
@@ -256,8 +257,8 @@ html[data-play="live"] .when-pending{display:none}
   <p class="stand">An Android file viewer that opens PDF, Word, Excel, PowerPoint, photos,
   video, audio and Markdown, and renders all of it on the device. It requests no Android
   permissions at all.</p>
-  <p class="updated">Page updated 29 September 2026 &middot; On Google Play since 29 September 2026
-  &middot; Current release 2.0, 26 September 2026 &middot; Nothing here is under embargo</p>
+  <p class="updated">Page updated 24 November 2026 &middot; On Google Play since 29 September 2026
+  &middot; Current release 2.11, 24 November 2026 &middot; Nothing here is under embargo</p>
 </header>
 
 <nav class="toc" aria-label="Sections">
@@ -302,17 +303,17 @@ html[data-play="live"] .when-pending{display:none}
     <tbody>
       <tr><th scope="row" class="k">Name</th><td>Gander</td></tr>
       <tr><th scope="row" class="k">What it is</th><td>An offline file viewer for Android. A viewer, not an editor.</td></tr>
-      <tr><th scope="row" class="k">Current release</th><td>2.0, released 26 September 2026. The GitHub APK is versionCode 21; the Play build carries 22, one above, so that Play offers an update rather than "Installed" to anyone who sideloaded the same version. <a href="https://github.com/mokshablr/gander/releases">All releases and changelogs</a></td></tr>
-      <tr><th scope="row" class="k">Formats</th><td>PDF; Word (.docx and Word 97-2003 .doc); OpenDocument text (.odt); Rich Text (.rtf); Excel (.xlsx, .xls, .xlsm, .xlsb, .csv, .ods); PowerPoint (.pptx); JPG, PNG, WebP, HEIC, BMP, GIF, SVG, AVIF; MP4, MKV, WebM, MOV; MP3, M4A, FLAC, WAV, OGG, Opus; Markdown, plain text and source code; zip archives (.zip); 3D models (.stl)</td></tr>
+      <tr><th scope="row" class="k">Current release</th><td>2.11, released 24 November 2026. The GitHub APK is versionCode 43; the Play build carries 44, one above, so that Play offers an update rather than "Installed" to anyone who sideloaded the same version. <a href="https://github.com/mokshablr/gander/releases">All releases and changelogs</a></td></tr>
+      <tr><th scope="row" class="k">Formats</th><td>PDF; Word (.docx, .docm, .dotx and Word 97-2003 .doc); OpenDocument text (.odt); Rich Text (.rtf); EPUB books without DRM (.epub); Excel (.xlsx, .xls, .xlsm, .xlsb, .xltx, .csv, .ods); PowerPoint (.pptx, .ppsx, .pptm, .potx); JPG, PNG, WebP, HEIC, BMP, GIF, SVG, AVIF, ICO; MP4, M4V, MOV, MKV, WebM, 3GP, AVI, FLV, MPEG-TS; MP3, M4A, AAC, FLAC, WAV, OGG, Opus, AMR; Markdown, plain text, subtitles (.srt, .vtt) and source code; zip archives (.zip); 3D models (.stl)</td></tr>
       <tr><th scope="row" class="k">Permissions</th><td>None</td></tr>
       <tr><th scope="row" class="k">Network</th><td>No <code>INTERNET</code> permission. No ads, trackers, analytics, crash reporting or accounts.</td></tr>
       <tr><th scope="row" class="k">Price</th><td>Free. No in-app purchases, no subscription.</td></tr>
       <tr><th scope="row" class="k">Licence</th><td>MIT</td></tr>
-      <tr><th scope="row" class="k">Download size</th><td>5,270,449 bytes for 2.0, so about 5 MB. One build for every processor, no native libraries.</td></tr>
+      <tr><th scope="row" class="k">Download size</th><td>5,384,590 bytes for 2.11, so about 5 MB. One build for every processor, no native libraries.</td></tr>
       <tr><th scope="row" class="k">Requires</th><td>Android 8.0 or newer (minSdk 26). Full PDF rendering needs Android System WebView 125 or newer. Below that, from Android 9, PDFs open in a simple view: pictures of the pages, without search or text selection.</td></tr>
       <tr><th scope="row" class="k">Developer</th><td>Arjun Maniyani, working alone, in India</td></tr>
-      <tr><th scope="row" class="k">First release</th><td>19 July 2026. Twenty releases to date.</td></tr>
-      <tr><th scope="row" class="k">Reach</th><td>13,879 APK downloads and 1,093 GitHub stars <span class="asof">(read 29 Sep 2026)</span>. Its <a href="https://news.ycombinator.com/item?id=49119425">Show HN</a> reached the Hacker News front page on 31 July 2026, with 211 points.</td></tr>
+      <tr><th scope="row" class="k">First release</th><td>19 July 2026. Thirty-one releases to date.</td></tr>
+      <tr><th scope="row" class="k">Reach</th><td>10,000+ downloads on Google Play, 31,018 APK downloads from GitHub and 1,433 GitHub stars <span class="asof">(read 24 Nov 2026)</span>. Its <a href="https://news.ycombinator.com/item?id=49119425">Show HN</a> reached the Hacker News front page on 31 July 2026, with 211 points.</td></tr>
       <tr><th scope="row" class="k">Source</th><td><a href="https://github.com/mokshablr/gander">github.com/mokshablr/gander</a></td></tr>
       <tr><th scope="row" class="k">Site</th><td><a href="https://arjun.maniyani.com/gander/">arjun.maniyani.com/gander</a></td></tr>
       <tr><th scope="row" class="k">Privacy policy</th><td><a href="../privacy.html">arjun.maniyani.com/gander/privacy.html</a></td></tr>
@@ -439,7 +440,7 @@ html[data-play="live"] .when-pending{display:none}
 </section>
 <section>
   <h2 id="features">What it does, beyond opening files</h2>
-  <p class="note">Useful if you are writing more than a paragraph. All of this is in 2.0.</p>
+  <p class="note">Useful if you are writing more than a paragraph. All of this is in 2.11.</p>
   <ul>
     <li><strong>Find in document</strong>, inside PDF, Word, Excel, PowerPoint, Markdown, text and
       code, with match-by-match navigation.</li>
@@ -493,7 +494,7 @@ html[data-play="live"] .when-pending{display:none}
   Verge</a> and others, and it is the correct first question to ask anyone making this claim.</p>
   <p>Here is what Gander does about each leg of it. All four are checkable in the source.</p>
   <div class="scroll" role="region" aria-label="How Gander closes the permission-less exfiltration route" tabindex="0"><table>
-    <caption>Verified against 2.0. File and symbol names are given so you can go and look.</caption>
+    <caption>Verified against 2.11. File and symbol names are given so you can go and look.</caption>
     <thead><tr><th scope="col">The route</th><th scope="col">What Gander does</th></tr></thead>
     <tbody>
       <tr><th scope="row" class="k">Hand a URL to the browser</th>
@@ -517,8 +518,8 @@ html[data-play="live"] .when-pending{display:none}
         newer the package list is not visible to it.</td></tr>
     </tbody>
   </table></div>
-  <p class="note">A document can only leave Gander through the share sheet or &ldquo;save a
-  copy&rdquo;. Both take a tap, and the user picks where the file goes.</p>
+  <p class="note">A document can only leave Gander through the share sheet, &ldquo;save a
+  copy&rdquo; or Print. Each takes a tap, and the user picks where the file goes.</p>
 </section>
 <section>
   <h2 id="how">How it works, for the technical write-up</h2>
@@ -553,7 +554,7 @@ html[data-play="live"] .when-pending{display:none}
 
   <h3>1. The permissions claim</h3>
   <p>Against a downloaded APK rather than against this page:</p>
-  <span class="fp">$ aapt2 dump permissions Gander-2.0.apk
+  <span class="fp">$ aapt2 dump permissions Gander-2.11.apk
 <span class="dim">package: com.arjun.gander
 permission: com.arjun.gander.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 uses-permission: name='com.arjun.gander.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'</span></span>
@@ -570,7 +571,7 @@ uses-permission: name='com.arjun.gander.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
   release build, and I would like to know.</p>
 
   <h3>2. The signature</h3>
-  <span class="fp">$ apksigner verify --print-certs -v Gander-2.0.apk
+  <span class="fp">$ apksigner verify --print-certs -v Gander-2.11.apk
 <span class="dim">Verifies
 Number of signers: 1
 V2 Signer: certificate DN: CN=Gander, OU=Personal, O=Arjun
@@ -584,8 +585,8 @@ CA:7C:15:9F:22:A7:E2:4B</span>
   <span class="mono">5b5cf64a94237cd5f0e085760038bc1cebdf18daba5cb3eaca7c159f22a7e24b</span></p>
 
   <h3>3. The binary</h3>
-  <p>Every GitHub release publishes its APK's own SHA-256 in the release body. For 2.0:</p>
-  <span class="fp wrapme">235b1b9bd8f272adedacc74e949e1df4077cc687401343a6edd1113a230595b4  Gander-2.0.apk</span>
+  <p>Every GitHub release publishes its APK's own SHA-256 in the release body. For 2.11:</p>
+  <span class="fp wrapme">be89adfe511e400f1adfdb06bae79da600709c00b25fd966fb49f50883e309e3  Gander-2.11.apk</span>
 
   <h3>What these checks do not prove</h3>
   <p>They prove the APK you have is the one I signed, and that it declares no Android permission.
@@ -682,13 +683,14 @@ CA:7C:15:9F:22:A7:E2:4B</span>
 </section>
 <section>
   <h2 id="background">Background</h2>
-  <p>First public release 19 July 2026, and twenty releases to date, the current one being 2.0 on
-  26 September 2026. Until it went live on Google Play on 29 September 2026 it was distributed only
-  as a GitHub APK, which is how it reached 13,879 downloads and 1,093 stars
+  <p>First public release 19 July 2026, and thirty-one releases to date, the current one being 2.11
+  on 24 November 2026. Eight weeks after going live on Google Play it had passed 10,000 downloads
+  there <span class="asof">(read 24 Nov 2026)</span>. Until it went live on Google Play on 29 September
+  2026 it was distributed only as a GitHub APK, which is how it reached 13,879 downloads and 1,093 stars
   <span class="asof">(read 29 Sep 2026)</span> without a store listing. Google Play requires a
   personal developer account to run a closed test of at least twelve people for fourteen continuous
   days before it can publish; that test ran through August and September 2026, and the tester group
-  now has 77 members.</p>
+  had 77 members by launch.</p>
   <p class="note">It is written by one person, Arjun Maniyani, in India, alongside a job. If you
   want the why in his own words rather than mine, ask him; it is not written down here because
   putting words in his mouth is the one thing this page will not do.</p>

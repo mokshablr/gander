@@ -41,6 +41,9 @@ internal class FakeDocumentsProvider : ContentProvider() {
     private val labels = mutableMapOf<String, String>()
     private val contents = mutableMapOf<String, ByteArray>()
 
+    /** How many times a folder's children have been asked for. */
+    var childReads = 0
+
     /** Entries taken away, which a query for no longer finds. */
     private val gone = mutableSetOf<String>()
 
@@ -87,6 +90,7 @@ internal class FakeDocumentsProvider : ContentProvider() {
             return null
         }
 
+        if (isChildren) childReads++
         val rows = if (isChildren) {
             folders[docId].orEmpty()
         } else {

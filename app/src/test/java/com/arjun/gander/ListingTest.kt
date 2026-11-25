@@ -318,6 +318,33 @@ class ListingTest {
     }
 
     @Test
+    fun sortByTypeGroupsByExtensionThenName() {
+        val (_, files) = orderChildren(
+            listOf(file("b.fb2"), file("README"), file("c.EPUB"), file("a.pdf"), file("a.epub"), file("A.fb2")),
+            sortOrder = Settings.SortOrder.TYPE
+        )
+        // No extension first, then epub, fb2 and pdf, each by name, whatever the case of either
+        assertThat(files.map { it.name })
+            .containsExactly("README", "a.epub", "c.EPUB", "A.fb2", "b.fb2", "a.pdf").inOrder()
+    }
+
+    @Test
+    fun directoriesStayAlphabeticalUnderType() {
+        val (dirs, _) = orderChildren(listOf(dir("Zeta.d"), dir("Alpha.z")), sortOrder = Settings.SortOrder.TYPE)
+        assertThat(dirs.map { it.name }).containsExactly("Alpha.z", "Zeta.d").inOrder()
+    }
+
+    @Test
+    fun aSearchFindsANameWhateverItsCaseOrAccents() {
+        assertThat(nameMatches("Résumé 2026.PDF", foldForSearch("resume"))).isTrue()
+        assertThat(nameMatches("Ёлка.epub", foldForSearch("елка"))).isTrue()
+        assertThat(nameMatches("Толстой - Война и мир (1869).fb2", foldForSearch("ВОЙНА"))).isTrue()
+        assertThat(nameMatches("notes.txt", foldForSearch("Notes.T"))).isTrue()
+        assertThat(nameMatches("notes.txt", foldForSearch("note s"))).isFalse()
+        assertThat(nameMatches("notes.txt", foldForSearch(""))).isTrue()
+    }
+
+    @Test
     fun supportedFilterTypesCoversAllElevenFormats() {
         val expectedBadges = listOf("PDF", "DOC", "XLS", "PPT", "IMG", "VID", "AUD", "MD", "TXT", "3D", "ZIP")
         assertThat(SUPPORTED_FILTER_TYPES.map { it.badge }).containsExactlyElementsIn(expectedBadges).inOrder()

@@ -35,6 +35,9 @@ object Settings {
     enum class SortOrder(val labelRes: Int) {
         NAME_AZ(R.string.sort_name_az),
         NAME_ZA(R.string.sort_name_za),
+
+        /** By extension, then by name, so a folder's files of one format sit together. Issue #77. */
+        TYPE(R.string.sort_type),
         NEWEST(R.string.sort_newest),
         OLDEST(R.string.sort_oldest),
         LARGEST(R.string.sort_largest),

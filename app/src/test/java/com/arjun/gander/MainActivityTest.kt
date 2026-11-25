@@ -79,9 +79,8 @@ class MainActivityTest {
         shadowOf(context.mainLooper).idleFor(Duration.ofSeconds(10))
     }
 
-    /** Runs everything submitted to it on the calling thread. */
-    private fun directExecutor(): ExecutorService {
-        val direct = Executor { it.run() }
+    /** Runs everything submitted to it on the calling thread, or as [direct] says. */
+    private fun directExecutor(direct: Executor = Executor { it.run() }): ExecutorService {
         return object : ExecutorService, Executor by direct {
             override fun shutdown() = Unit
             override fun shutdownNow() = emptyList<Runnable>()
@@ -1017,6 +1016,168 @@ class MainActivityTest {
         assertThat(second.rowTitles()).contains("doc1.pdf")
         assertThat(second.rowTitles()).doesNotContain("notes.txt")
         assertThat(second.rowTitles()).doesNotContain("sheet.xlsx")
+    }
+
+    // ---------------------------------------------------------------
+    // Searching a folder by name (#80)
+    // ---------------------------------------------------------------
+
+    private fun ActivityController<MainActivity>.searchBar(): View = get().findViewById(R.id.folderSearchBar)
+
+    private fun ActivityController<MainActivity>.searchBox(): android.widget.EditText =
+        get().findViewById(R.id.folderSearchInput)
+
+    private fun ActivityController<MainActivity>.search(typed: String) {
+        bar().menu.performIdentifierAction(R.id.action_search, 0)
+        searchBox().setText(typed)
+        shadowOf(context.mainLooper).idle()
+    }
+
+    @Test
+    fun searchNarrowsAFoldersRowsByNameAndReadsTheFolderOnce() {
+        val books = FakeDocumentsProvider.install()
+            .folder(
+                "root", "Books",
+                ChildDoc("d1", "Tolstoy", MIME_DIR, 0, 0),
+                ChildDoc("d2", "Pushkin", MIME_DIR, 0, 0),
+                ChildDoc("f1", "Tolstoy - War and Peace (1869).fb2", "application/octet-stream", 10, 0),
+                ChildDoc("f2", "Chekhov - Stories.epub", "application/epub+zip", 10, 0),
+                ChildDoc("f3", "Résumé.pdf", "application/pdf", 10, 0),
+            )
+        context.contentResolver.takePersistableUriPermission(
+            FakeDocumentsProvider.treeUri(), Intent.FLAG_GRANT_READ_URI_PERMISSION
+        )
+        val controller = home()
+        assertThat(controller.bar().menu.findItem(R.id.action_search).isVisible).isFalse()
+        controller.clickRow("Books")
+        assertThat(controller.bar().menu.findItem(R.id.action_search).isVisible).isTrue()
+        assertThat(controller.searchBar().visibility).isEqualTo(View.GONE)
+        val reads = books.childReads
+
+        controller.search("tols")
+
+        // Folders and files alike, and the button gives way to the bar it opened
+        assertThat(controller.rowTitles()).containsExactly("Tolstoy", "Tolstoy - War and Peace (1869).fb2").inOrder()
+        assertThat(controller.searchBar().visibility).isEqualTo(View.VISIBLE)
+        assertThat(controller.bar().menu.findItem(R.id.action_search).isVisible).isFalse()
+        controller.searchBox().setText("resume")
+        shadowOf(context.mainLooper).idle()
+        assertThat(controller.rowTitles()).containsExactly("Résumé.pdf")
+        // Each letter narrows what was read, rather than asking the provider again
+        assertThat(books.childReads).isEqualTo(reads)
+
+        controller.searchBox().setText("dostoevsky")
+        shadowOf(context.mainLooper).idle()
+        val rv = controller.list()
+        val adapter = rv.adapter!!
+        assertThat(adapter.itemCount).isEqualTo(1)
+        val holder = adapter.createViewHolder(rv, adapter.getItemViewType(0))
+        adapter.bindViewHolder(holder, 0)
+        assertThat(holder.itemView.findViewById<TextView>(R.id.hintText)?.text?.toString())
+            .isEqualTo(context.getString(R.string.search_empty, "dostoevsky"))
+    }
+
+    /** A fresh read overtaken by a letter typed is done by the letter's render, not dropped. */
+    @Test
+    fun aLetterTypedBeforeAFreshReadDrawsReadsTheFolderAgain() {
+        val books = FakeDocumentsProvider.install()
+            .folder("root", "Books", ChildDoc("f1", "old notes.txt", "text/plain", 10, 0))
+        context.contentResolver.takePersistableUriPermission(
+            FakeDocumentsProvider.treeUri(), Intent.FLAG_GRANT_READ_URI_PERMISSION
+        )
+        val held = ArrayDeque<Runnable>()
+        var holding = false
+        val controller = home()
+        controller.get().loader = directExecutor { if (holding) held += it else it.run() }
+        controller.clickRow("Books")
+        // A file arrives while a document is open, and the reader types as soon as they are back
+        books.folder(
+            "root", "Books",
+            ChildDoc("f1", "old notes.txt", "text/plain", 10, 0),
+            ChildDoc("f2", "new notes.txt", "text/plain", 10, 0),
+        )
+        holding = true
+        controller.pause().resume()
+        controller.search("notes")
+        holding = false
+        while (held.isNotEmpty()) held.removeFirst().run()
+        shadowOf(context.mainLooper).idle()
+
+        assertThat(controller.rowTitles()).containsExactly("new notes.txt", "old notes.txt").inOrder()
+    }
+
+    @Test
+    fun backClosesTheSearchBeforeLeavingTheFolder() {
+        grantedFolder()
+        val controller = home()
+        controller.clickRow("Documents")
+        controller.search("zeta")
+        assertThat(controller.rowTitles()).containsExactly("zeta.pdf")
+
+        controller.get().onBackPressedDispatcher.onBackPressed()
+        shadowOf(context.mainLooper).idle()
+
+        assertThat(controller.barTitle()).isEqualTo("Documents")
+        assertThat(controller.searchBar().visibility).isEqualTo(View.GONE)
+        assertThat(controller.searchBox().text.toString()).isEmpty()
+        assertThat(controller.rowTitles()).containsExactly("Leases", "alpha.pdf", "zeta.pdf").inOrder()
+        assertThat(controller.bar().menu.findItem(R.id.action_search).isVisible).isTrue()
+
+        controller.get().onBackPressedDispatcher.onBackPressed()
+        shadowOf(context.mainLooper).idle()
+        assertThat(controller.list().visibility).isEqualTo(View.VISIBLE)
+        assertThat(controller.bar().menu.findItem(R.id.action_search).isVisible).isFalse()
+    }
+
+    @Test
+    fun goingIntoAFolderLeavesTheSearchBehind() {
+        grantedFolder()
+        val controller = home()
+        controller.clickRow("Documents")
+        controller.search("lea")
+        controller.clickRow("Leases")
+
+        assertThat(controller.barTitle()).isEqualTo("Leases")
+        assertThat(controller.searchBar().visibility).isEqualTo(View.GONE)
+        assertThat(controller.searchBox().text.toString()).isEmpty()
+    }
+
+    @Test
+    fun aSearchSurvivesARotation() {
+        grantedFolder()
+        val controller = home()
+        controller.clickRow("Documents")
+        controller.search("alp")
+
+        val state = Bundle()
+        controller.saveInstanceState(state)
+        val second = home(state)
+
+        assertThat(second.searchBar().visibility).isEqualTo(View.VISIBLE)
+        assertThat(second.searchBox().text.toString()).isEqualTo("alp")
+        assertThat(second.rowTitles()).containsExactly("alpha.pdf")
+    }
+
+    /** A name changed while photos are picked could hide one that is picked, so the box holds still. */
+    @Test
+    fun theSearchHoldsStillWhilePhotosArePicked() {
+        grantedPhotos()
+        val controller = home()
+        controller.clickRow("DCIM")
+        controller.search(".jpg")
+        assertThat(controller.rowTitles()).containsExactly("a.jpg", "b.jpg").inOrder()
+
+        assertThat(controller.holdRow("a.jpg")).isTrue()
+        assertThat(controller.searchBar().visibility).isEqualTo(View.VISIBLE)
+        assertThat(controller.searchBox().isEnabled).isFalse()
+        assertThat(controller.get().findViewById<View>(R.id.folderSearchClose).visibility).isEqualTo(View.INVISIBLE)
+
+        // Back ends the picking first, and the search is still there
+        controller.get().onBackPressedDispatcher.onBackPressed()
+        shadowOf(context.mainLooper).idle()
+        assertThat(controller.barTitle()).isEqualTo("DCIM")
+        assertThat(controller.searchBox().isEnabled).isTrue()
+        assertThat(controller.rowTitles()).containsExactly("a.jpg", "b.jpg").inOrder()
     }
 
     // ---------------------------------------------------------------

@@ -15,6 +15,8 @@ import android.text.format.DateUtils
 import android.text.format.Formatter
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -58,6 +60,13 @@ class MainActivity : AppCompatActivity() {
 
     private val stack = ArrayDeque<Crumb>()
     private val activeFilters = mutableSetOf<String>()
+
+    /**
+     * What the folder's search holds, issue #80, and null while its bar is closed. It narrows the
+     * folder on screen only: going into another folder closes it, since what was typed was a
+     * name in this one.
+     */
+    private var query: String? = null
     private val adapter = RowAdapter()
     private lateinit var toolbar: MaterialToolbar
     private lateinit var lockup: View
@@ -65,6 +74,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var list: RecyclerView
     private lateinit var welcome: View
     private lateinit var fab: ExtendedFloatingActionButton
+    private lateinit var searchBar: View
+    private lateinit var searchInput: EditText
+    private lateinit var searchClose: View
 
     /**
      * A row taken off the screen whose removal waits for its Undo bar to go, issue #39.
@@ -131,15 +143,35 @@ class MainActivity : AppCompatActivity() {
     private var renderToken = 0
 
     /**
+     * Whether a render that was to read the folder afresh was overtaken before it drew. The next
+     * one reads it instead, or a letter typed straight after returning from a document would
+     * narrow the listing from before it.
+     */
+    private var readOwed = false
+
+    /**
      * Display names for granted trees, which cost a query each and never change while
      * the grant lasts. Read and written only on [loader], so it needs no synchronising.
      */
     private val treeLabels = mutableMapOf<String, String>()
 
+    /**
+     * The folder last read and what was in it, so that each letter typed in a search narrows the
+     * rows without asking the provider for the whole folder again. Only [render] with `reread`
+     * false uses it; every other render reads the folder afresh. Confined to [loader], like
+     * [treeLabels].
+     */
+    private var listed: Pair<Crumb, List<ChildDoc>>? = null
+
     private val backCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
-            // Out of picking photos first, which leaves the reader in the folder
+            // Out of picking photos first, which leaves the reader in the folder, then out of
+            // a search, which leaves the whole folder
             if (picked != null) return stopPicking()
+            if (query != null) {
+                closeSearch()
+                return render(reread = false)
+            }
             stack.removeLast()
             if (stack.isEmpty()) {
                 activeFilters.clear()
@@ -190,6 +222,7 @@ class MainActivity : AppCompatActivity() {
         if (installedFromPlay()) toolbar.menu.findItem(R.id.action_play).setTitle(R.string.rate_app)
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                R.id.action_search -> { openSearch(); true }
                 R.id.action_sort -> { showSortDialog(); true }
                 R.id.action_filter -> { showFilterDialog(); true }
                 R.id.action_select -> { pick(emptySet()); true }
@@ -252,8 +285,13 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.openFileButton).setOnClickListener(openFile)
         findViewById<View>(R.id.addFolderButton).setOnClickListener { openTree.launch(null) }
 
+        setUpSearch()
         restoreStack(savedInstanceState)
         restoreFilters(savedInstanceState)
+        savedInstanceState?.getString(STATE_QUERY)?.let { saved ->
+            query = saved
+            searchInput.setText(saved)
+        }
         picked = savedInstanceState?.getStringArrayList(STATE_PICKED)?.let(::LinkedHashSet)
         adapter.pick(picked)
         bin.restore(savedInstanceState)
@@ -283,6 +321,7 @@ class MainActivity : AppCompatActivity() {
         outState.putStringArrayList(STATE_DOC_IDS, ArrayList(stack.map { it.docId }))
         outState.putStringArrayList(STATE_LABELS, ArrayList(stack.map { it.label }))
         outState.putStringArrayList(STATE_ACTIVE_FILTERS, ArrayList(activeFilters))
+        query?.let { outState.putString(STATE_QUERY, it) }
         picked?.let { outState.putStringArrayList(STATE_PICKED, ArrayList(it)) }
         bin.save(outState)
     }
@@ -505,7 +544,7 @@ class MainActivity : AppCompatActivity() {
      * cleared in the meantime, so returning from a document leaves the old list on
      * screen until the new one is ready rather than blinking through empty.
      */
-    private fun render() {
+    private fun render(reread: Boolean = true, fromTop: Boolean = false) {
         val here = stack.lastOrNull()
         backCallback.isEnabled = here != null
         drawBar()
@@ -521,6 +560,9 @@ class MainActivity : AppCompatActivity() {
         // Read here, on the main thread, which is the only one that changes it
         val hidden = pending?.uri
         val filters = activeFilters.toSet()
+        val named = query.orEmpty()
+        val read = reread || readOwed
+        readOwed = read
 
         loader.execute {
             // Checked here as well as after, because loader is a single thread: without
@@ -528,16 +570,19 @@ class MainActivity : AppCompatActivity() {
             // wait for the whole of the first, which on the slow provider this exists
             // for is the wait it was meant to remove.
             if (token != renderToken) return@execute
-            val screen = if (here == null) homeRows(hidden) else folderRows(here, filters)
+            val screen = if (here == null) homeRows(hidden) else folderRows(here, filters, named, read)
             main.post {
                 main.removeCallbacks(announce)
                 if (token != renderToken || isDestroyed) return@post
+                readOwed = false
                 progress.visibility = View.GONE
                 // Inside the token guard, so a slow load that finishes after the reader has
                 // moved on cannot put the welcome block back over a folder they are in.
                 welcome.visibility = if (screen.welcome) View.VISIBLE else View.GONE
                 list.visibility = if (screen.welcome) View.GONE else View.VISIBLE
                 adapter.submit(screen.rows)
+                // A search narrows from the top of the list, where its first match is
+                if (fromTop) list.scrollToPosition(0)
                 pickableIn = here.takeIf { screen.canPick }
                 // A photo picked and since gone from the folder is picked no longer, and with
                 // no photo left to pick there is nothing to go on picking
@@ -578,6 +623,14 @@ class MainActivity : AppCompatActivity() {
             getString(if (picking != null) R.string.stop_selecting else R.string.back)
 
         val inFolder = here != null
+        // The search bar stays up while photos are picked, so the reader can see what narrowed
+        // the rows, but it cannot be changed then: a picked photo the new name hid would either
+        // be deleted unseen or quietly unpicked. Its close button keeps its room, so the box
+        // doesn't stretch to the edge as picking starts.
+        searchBar.visibility = if (inFolder && query != null) View.VISIBLE else View.GONE
+        searchInput.isEnabled = picking == null
+        searchClose.visibility = if (picking == null) View.VISIBLE else View.INVISIBLE
+        toolbar.menu.findItem(R.id.action_search)?.isVisible = inFolder && picking == null && query == null
         toolbar.menu.findItem(R.id.action_sort)?.isVisible = inFolder && picking == null
         toolbar.menu.findItem(R.id.action_filter)?.isVisible = inFolder && picking == null
         toolbar.menu.findItem(R.id.action_select)?.apply {
@@ -615,6 +668,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Starts picking photos to delete together, with [start] picked. */
     private fun pick(start: Set<String>) {
+        hideKeyboard()
         picked = LinkedHashSet(start)
         adapter.pick(picked)
         fab.hide()
@@ -792,10 +846,7 @@ class MainActivity : AppCompatActivity() {
             rows += Row.Item(
                 "DIR", DIR_COLOR, label, null,
                 onClick = {
-                    stack.addLast(
-                        Crumb(perm.uri, DocumentsContract.getTreeDocumentId(perm.uri), label)
-                    )
-                    render()
+                    enter(Crumb(perm.uri, DocumentsContract.getTreeDocumentId(perm.uri), label))
                 },
                 onRemove = { kept ->
                     askToRemove(
@@ -830,26 +881,23 @@ class MainActivity : AppCompatActivity() {
         return Screen(rows)
     }
 
-    private fun folderRows(crumb: Crumb, filters: Set<String>): Screen {
-        val children = childrenOf(contentResolver, crumb.treeUri, crumb.docId).orEmpty()
+    private fun folderRows(crumb: Crumb, filters: Set<String>, named: String, reread: Boolean): Screen {
+        val children = listed?.takeIf { !reread && it.first == crumb }?.second
+            ?: childrenOf(contentResolver, crumb.treeUri, crumb.docId).orEmpty().also { listed = crumb to it }
 
         val sortOrder = Settings.sortOrder(this)
-        val (dirs, files) = orderChildren(children, sortOrder)
+        val (allDirs, files) = orderChildren(children, sortOrder)
+        val folded = foldForSearch(named)
+        val dirs = allDirs.filter { nameMatches(it.name, folded) }
 
-        val filteredFiles = if (filters.isEmpty()) {
-            files
-        } else {
-            files.filter { f ->
-                val (badge, _) = badgeFor(f.name, f.mime)
-                badge in filters
-            }
+        val filteredFiles = files.filter { f ->
+            nameMatches(f.name, folded) && (filters.isEmpty() || badgeFor(f.name, f.mime).first in filters)
         }
 
         val rows = mutableListOf<Row>()
         dirs.forEach { d ->
             rows += Row.Item("DIR", DIR_COLOR, d.name, null, onClick = {
-                stack.addLast(Crumb(crumb.treeUri, d.docId, d.name))
-                render()
+                enter(Crumb(crumb.treeUri, d.docId, d.name))
             })
         }
         filteredFiles.forEach { f ->
@@ -873,10 +921,10 @@ class MainActivity : AppCompatActivity() {
             )
         }
         if (rows.isEmpty()) {
-            val emptyMsg = if (filters.isNotEmpty()) {
-                getString(R.string.filter_empty)
-            } else {
-                getString(R.string.empty_folder)
+            val emptyMsg = when {
+                named.isNotEmpty() -> getString(R.string.search_empty, named)
+                filters.isNotEmpty() -> getString(R.string.filter_empty)
+                else -> getString(R.string.empty_folder)
             }
             rows += Row.Hint(emptyMsg)
         }
@@ -922,6 +970,60 @@ class MainActivity : AppCompatActivity() {
         // single stop rather than a container TalkBack walks into.
         grid.contentDescription = getString(R.string.what_it_opens)
         ViewCompat.setScreenReaderFocusable(grid, true)
+    }
+
+    /** Goes into a folder, leaving any search behind in the one it was typed in. */
+    private fun enter(crumb: Crumb) {
+        closeSearch()
+        stack.addLast(crumb)
+        render()
+    }
+
+    /** Wires the folder's search bar, which [drawBar] shows while [query] is not null. */
+    private fun setUpSearch() {
+        searchBar = findViewById(R.id.folderSearchBar)
+        searchInput = findViewById(R.id.folderSearchInput)
+        searchClose = findViewById(R.id.folderSearchClose)
+        searchInput.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                val typed = s?.toString().orEmpty()
+                // Closing the bar empties the box, and restoring one fills it, neither of which is typing
+                if (query == null || typed == query) return
+                query = typed
+                render(reread = false, fromTop = true)
+            }
+        })
+        // The rows narrow as each letter is typed, so the keyboard's search key only puts it away
+        searchInput.setOnEditorActionListener { _, _, _ -> hideKeyboard(); true }
+        searchClose.setOnClickListener {
+            closeSearch()
+            render(reread = false)
+        }
+    }
+
+    private fun openSearch() {
+        query = ""
+        drawBar()
+        searchInput.requestFocus()
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
+            .showSoftInput(searchInput, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    /** Closes the search bar and forgets what was in it. The caller redraws. */
+    private fun closeSearch() {
+        if (query == null) return
+        hideKeyboard()
+        query = null
+        searchInput.text.clear()
+        searchInput.clearFocus()
+        drawBar()
+    }
+
+    private fun hideKeyboard() {
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
+            .hideSoftInputFromWindow(searchInput.windowToken, 0)
     }
 
     private fun showSortDialog() {
@@ -1012,6 +1114,7 @@ class MainActivity : AppCompatActivity() {
         const val STATE_LABELS = "stack.labels"
         const val STATE_ACTIVE_FILTERS = "active_filters"
         const val STATE_PICKED = "picked"
+        const val STATE_QUERY = "folder_query"
 
         /** A button that can't be pressed, as Material dims one: 38 parts in a hundred. */
         const val DISABLED_ALPHA = 97

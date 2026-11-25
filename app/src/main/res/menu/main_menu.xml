@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
-    <!-- Folder actions: visible only when browsing inside a folder -->
+    <!-- Folder actions: visible only when browsing inside a folder. Search opens the bar
+         under the toolbar that narrows the folder's rows by name, issue #80. -->
+    <item
+        android:id="@+id/action_search"
+        android:icon="@drawable/ic_search"
+        android:title="@string/search_folder"
+        android:visible="false"
+        app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_sort"
         android:title="@string/sort_by"

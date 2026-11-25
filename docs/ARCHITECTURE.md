@@ -7,7 +7,7 @@ How Gander is put together, for anyone about to change it: the parts, how a file
 One Android module in Kotlin, minSdk 26, target and compile SDK 36, R8 on with resource shrinking. It requests no permissions, has no network access and ships no native libraries. The release APK is about 5 MB, one build for every processor. There is no backend.
 
 - `GanderApp` starts the WebView on a background thread as the process starts, best effort, so the first document opens sooner.
-- `MainActivity` is the launcher: recent files (`Recents`, each read under a persisted SAF grant: a picked file's own, or its added folder's), added folders (tree grants) browsed with DocumentsContract child queries, sort and filter (`Settings`, `Listing`), thumbnails off the main thread (`Thumbs`, and `PdfThumbs` for PDFs), swipe to remove with Undo (`SwipeToRemove`), a first-run explainer with the Open with tip, and About with the licences and a File types page, each copied from assets to the cache and opened in the viewer.
+- `MainActivity` is the launcher: recent files (`Recents`, each read under a persisted SAF grant: a picked file's own, or its added folder's), added folders (tree grants) browsed with DocumentsContract child queries, sort, filter and search by name (`Settings`, `Listing`), thumbnails off the main thread (`Thumbs`, and `PdfThumbs` for PDFs), swipe to remove with Undo (`SwipeToRemove`), a first-run explainer with the Open with tip, and About with the licences and a File types page, each copied from assets to the cache and opened in the viewer.
 - `ViewerActivity` shows one file. It is exported for other apps' VIEW and SEND intents. Gander's own screens open it as `InternalViewer`, a non-exported subclass, so it can tell the two apart.
 
 ## What the viewer accepts

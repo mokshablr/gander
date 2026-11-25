@@ -10,6 +10,12 @@
   with Open a file did (#82, thanks @BenjaminSk-04). Removing the folder takes its files out of
   Recent files, and removing one from Recent files leaves it in its folder. A photo opened from
   Recent files this way swipes to its folder's other photos, as it does from the folder.
+- A folder you added in Gander can be searched by name: tap the search button at the top and
+  type, and the list keeps the files and folders whose names hold what you typed, whatever its
+  case or accents (#80, thanks @BenjaminSk-04). The search looks in the folder you are in, not
+  the folders inside it, and Back closes it.
+- A folder can be sorted by Type, from Sort by in its menu, which puts its files together by
+  extension and then by name (#77, thanks @XZY123lol for passing it on from dam108 on 4PDA).
 
 ## 2.11 (2026-11-24)
 

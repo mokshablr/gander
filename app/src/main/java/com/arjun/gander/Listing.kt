@@ -169,7 +169,7 @@ internal fun childrenOf(resolver: ContentResolver, tree: Uri, folder: String): L
  * hidden by convention, and a folder full of them reads as noise.
  *
  * Folders have no file size reported by the document provider, so size orders
- * keep directories alphabetically (A to Z).
+ * keep directories alphabetically (A to Z), and so does Type, since a folder has none.
  *
  * sortedWith and not sortedBy, for the reason homeRows gives: the selector runs
  * on every comparison, so lowercase() there allocated some sixteen thousand
@@ -187,6 +187,9 @@ internal fun orderChildren(
         .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
     val sizeCmp = compareBy<ChildDoc> { it.size }
         .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+    // A name with no extension sorts first, under the empty string
+    val typeCmp = compareBy(String.CASE_INSENSITIVE_ORDER) { c: ChildDoc -> c.name.substringAfterLast('.', "") }
+        .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
 
     val dirComparator = when (sortOrder) {
         Settings.SortOrder.NAME_ZA -> nameCmp.reversed()
@@ -198,6 +201,7 @@ internal fun orderChildren(
     val fileComparator = when (sortOrder) {
         Settings.SortOrder.NAME_AZ -> nameCmp
         Settings.SortOrder.NAME_ZA -> nameCmp.reversed()
+        Settings.SortOrder.TYPE -> typeCmp
         Settings.SortOrder.NEWEST -> dateCmp.reversed()
         Settings.SortOrder.OLDEST -> dateCmp
         Settings.SortOrder.LARGEST -> sizeCmp.reversed()
@@ -206,6 +210,24 @@ internal fun orderChildren(
 
     return dirs.sortedWith(dirComparator) to files.sortedWith(fileComparator)
 }
+
+/**
+ * Whether a name holds what was typed in a folder's search, issue #80.
+ *
+ * Case and accents are set aside on both sides, so "resume" finds "Résumé.pdf" and "елка" finds
+ * "Ёлка.epub": a name is typed from memory, often on a keyboard without the accented letter.
+ * [query] is folded already, by [foldForSearch], since it is the same for every row.
+ */
+internal fun nameMatches(name: String, query: String): Boolean =
+    query.isEmpty() || foldForSearch(name).contains(query)
+
+/** Lower case, with the combining marks that a decomposition splits off taken away. */
+internal fun foldForSearch(text: String): String =
+    java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFD)
+        .replace(COMBINING_MARKS, "")
+        .lowercase(java.util.Locale.ROOT)
+
+private val COMBINING_MARKS = Regex("\\p{Mn}+")
 
 internal data class SupportedFilterType(
     val badge: String,

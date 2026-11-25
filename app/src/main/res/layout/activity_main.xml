@@ -65,6 +65,43 @@
             </LinearLayout>
         </FrameLayout>
 
+        <!-- A folder's search, issue #80: the viewer's search bar without its match buttons, since
+             here the matches are the list. A bar of its own rather than a field in the toolbar,
+             so the toolbar can still say how many photos are picked while a search narrows the
+             rows. Every control is at least 48dp each way. -->
+        <LinearLayout
+            android:id="@+id/folderSearchBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="?attr/colorSurface"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingEnd="4dp"
+            android:visibility="gone">
+
+            <EditText
+                android:id="@+id/folderSearchInput"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="@string/search_folder"
+                android:imeOptions="actionSearch"
+                android:importantForAutofill="no"
+                android:inputType="text|textNoSuggestions"
+                android:maxLines="1"
+                android:minHeight="48dp"
+                android:saveEnabled="false" />
+
+            <ImageButton
+                android:id="@+id/folderSearchClose"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/close_search"
+                android:src="@drawable/ic_close" />
+        </LinearLayout>
+
         <!-- Sits between the toolbar and the list while a folder is being read, the
              same shape the viewer uses for a long save. Only appears if the read takes
              long enough to be worth mentioning; see RENDER_PROGRESS_DELAY_MS. -->

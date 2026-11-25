@@ -266,6 +266,7 @@
     <string name="filter">Filter</string>
     <string name="sort_name_az">Name (A to Z)</string>
     <string name="sort_name_za">Name (Z to A)</string>
+    <string name="sort_type">Type</string>
     <string name="sort_newest">Newest first</string>
     <string name="sort_oldest">Oldest first</string>
     <string name="sort_largest">Largest first</string>
@@ -284,4 +285,7 @@
     <string name="filter_txt">Text and code</string>
     <string name="filter_model">3D models</string>
     <string name="filter_archive">Archives</string>
+    <!-- Searching a folder's names, issue #80 -->
+    <string name="search_folder">Search this folder</string>
+    <string name="search_empty">Nothing here has “%1$s” in its name.</string>
 </resources>

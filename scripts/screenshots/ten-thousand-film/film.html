@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gander: ten thousand</title>
+<style>
+  /* The typeface and the engine are the brand film's, next door. Nothing is copied here. */
+  @font-face { font-family: Jost; src: url(../brand-film/fonts/Jost.ttf); font-weight: 100 900; font-style: normal; font-display: block; }
+  @font-face { font-family: Jost; src: url(../brand-film/fonts/Jost-Italic.ttf); font-weight: 100 900; font-style: italic; font-display: block; }
+  html, body { margin: 0; height: 100%; background: #0d0b07; overflow: hidden; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #stage { display: block; width: min(100vw, calc((100vh - 56px) * 4 / 5)); aspect-ratio: 4 / 5; }
+  #ui { width: min(100vw, calc((100vh - 56px) * 4 / 5)); height: 56px; display: flex; gap: 16px; align-items: center;
+        color: #cfc5b2; font: 13px ui-monospace, Menlo, monospace; box-sizing: border-box; padding: 0 12px; }
+  #scrub { flex: 1; accent-color: #e2795f; }
+  body.tall #stage, body.tall #ui { width: min(100vw, calc((100vh - 56px) * 9 / 16)); }
+  body.tall #stage { aspect-ratio: 9 / 16; }
+  body.render #ui { display: none; }
+  body.render #stage { width: 100vw; height: 100vh; }
+  text { font-kerning: normal; text-rendering: geometricPrecision; }
+</style>
+</head>
+<body>
+<svg id="stage" viewBox="0 0 1080 1350" xmlns="http://www.w3.org/2000/svg"></svg>
+<div id="ui"><input id="scrub" type="range" min="0" max="60" step="0.0166667" value="0"><span id="time"></span></div>
+<script src="../brand-film/src/core.js"></script>
+<script src="../brand-film/src/style.js"></script>
+<script src="../brand-film/src/parts.js"></script>
+<script src="../brand-film/src/goose.js"></script>
+<script src="src/stage.js"></script>
+<script src="src/props.js"></script>
+<script src="src/world.js"></script>
+<script>window.F.scenes = [];</script>
+<script src="src/scenes/film.js"></script>
+<script src="src/scenes/end.js"></script>
+<script src="../brand-film/src/main.js"></script>
+</body>
+</html>

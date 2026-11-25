@@ -25,6 +25,8 @@
     ax: 0, ay: 0,     // where the top of the neck is
     tilt: 0,          // degrees; positive lifts the beak
     bend: 0,          // pushes the middle of the neck sideways, in pixels, toward the beak if positive
+    rise: 0.38,       // how far the neck keeps going straight up out of its base, as a share of its length
+    curl: 0.38,       // and how far out from the head it is already coming straight into it
     open: 0,          // 0..1 beak
     blink: 0,         // 0..1 eyelid
     brow: 0,          // 0..1 the scowl that goes with a honk
@@ -76,8 +78,8 @@
         const th = (p.tilt * Math.abs(f) * Math.PI) / 180;
         const L = Math.hypot(B[0], B[1]);
         const down = [-Math.sin(th), Math.cos(th)]; // the head's own "down", after tilt
-        const c2 = [down[0] * L * 0.38 - p.bend * 0.6, down[1] * L * 0.38];
-        const c1 = [B[0] - p.bend, B[1] - L * 0.38];
+        const c2 = [down[0] * L * p.curl - p.bend * 0.6, down[1] * L * p.curl];
+        const c1 = [B[0] - p.bend, B[1] - L * p.rise];
         const N = 26, left = [], right = [];
         for (let i = 0; i <= N; i++) {
           const s = i / N;

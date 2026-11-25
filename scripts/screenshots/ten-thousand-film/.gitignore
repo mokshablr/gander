@@ -1,0 +1,6 @@
+# Rendered frames and stills, as in brand-film next door. The generator here is the source.
+out/
+
+# The narrator runs from its own venv, as the brand film does. Its model lives next door.
+.venv/
+models

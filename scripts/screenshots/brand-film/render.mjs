@@ -12,6 +12,7 @@
 //   node render.mjs --check                 prove that a frame depends on nothing but its time
 //   node render.mjs --cues                  write out/cues.json, the timeline the soundtrack is cut to
 //   node render.mjs --tall --scale 2 --keyframes 60            the phone cut, 1080x1920, for Instagram
+//   node render.mjs --film ../ten-thousand-film/film.html --size 1080x1350      a film beside this one, in its own frame
 //
 // Options: --fps 60  --workers 6  --crf 14  --out path.mp4  --keep (leave the frames behind)
 
@@ -33,10 +34,15 @@ const SCALE = Number(opt("scale", 1));
 const WORKERS = Number(opt("workers", 6));
 const CRF = String(opt("crf", 14));
 const TALL = Boolean(opt("tall"));
-const VW = TALL ? 1080 : 1920, VH = TALL ? 1920 : 1080;
-const OUT = resolve(String(opt("out", join(HERE, "out", TALL ? "gander-film-tall.mp4" : "gander-film.mp4"))));
+// A second film drawn with this engine is rendered by this same script: --film names its
+// page and --size its frame, and its frames go into the out/ beside that page. Without
+// them this is the film in this directory, wide or tall, as before.
+const FILM = opt("film") ? resolve(String(opt("film"))) : join(HERE, "film.html");
+const THERE = dirname(FILM);
+const [VW, VH] = opt("size") ? String(opt("size")).split("x").map(Number) : TALL ? [1080, 1920] : [1920, 1080];
+const OUT = resolve(String(opt("out", join(THERE, "out", TALL ? "gander-film-tall.mp4" : "gander-film.mp4"))));
 const CHROME = process.env.CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const PAGE = pathToFileURL(join(HERE, "film.html")).href + "?render" + (TALL ? "&tall" : "") + (opt("nograin") ? "&nograin" : "") + (opt("nofx") ? "&nofx" : "");
+const PAGE = pathToFileURL(FILM).href + "?render" + (TALL ? "&tall" : "") + (opt("nograin") ? "&nograin" : "") + (opt("nofx") ? "&nofx" : "");
 
 if (!existsSync(join(HERE, "fonts", "Jost.ttf"))) {
   console.error("fonts/Jost.ttf is missing. See README.md: the film will not render in a fallback face.");
@@ -149,7 +155,7 @@ const { proc, profile, cdp } = await launch();
 let failed = null;
 try {
   if (opt("stills")) {
-    const dir = join(HERE, "out", "stills");
+    const dir = join(THERE, "out", "stills");
     mkdirSync(dir, { recursive: true });
     const tab = await openTab(cdp, SCALE);
     for (const t of String(opt("stills")).split(",").map(Number)) {
@@ -160,8 +166,8 @@ try {
   } else if (opt("cues")) {
     const tab = await openTab(cdp, 1);
     const json = await tab.evaluate("JSON.stringify({ fps: F.FPS, duration: F.DUR, cues: F.cues.slice().sort((a, b) => a.t - b.t) }, null, 1)");
-    mkdirSync(join(HERE, "out"), { recursive: true });
-    writeFileSync(join(HERE, "out", "cues.json"), json + "\n");
+    mkdirSync(join(THERE, "out"), { recursive: true });
+    writeFileSync(join(THERE, "out", "cues.json"), json + "\n");
     console.log(`${JSON.parse(json).cues.length} cues in out/cues.json`);
   } else if (opt("check")) {
     // Two tabs, each loaded fresh, draw the same times in opposite orders. If any frame
@@ -192,9 +198,9 @@ try {
     if (differs.length) console.log(`${differs.length - bad.length} frames differ only by rasteriser noise (a few pixels, a level or two)`);
     if (bad.length) {
       // Keep both drawings of the first frame that differs, so the difference can be looked at.
-      mkdirSync(join(HERE, "out"), { recursive: true });
-      copyFileSync(name("a", bad[0]), join(HERE, "out", "check-forwards.png"));
-      copyFileSync(name("b", bad[0]), join(HERE, "out", "check-backwards.png"));
+      mkdirSync(join(THERE, "out"), { recursive: true });
+      copyFileSync(name("a", bad[0]), join(THERE, "out", "check-forwards.png"));
+      copyFileSync(name("b", bad[0]), join(THERE, "out", "check-backwards.png"));
     }
     rmSync(dir, { recursive: true, force: true });
     if (bad.length) throw new Error(`${bad.length} of ${times.length} frames depend on the order they were drawn in:\n  ${bad.map((i) => times[i]).join(" ")}\n  the first is in out/check-forwards.png and out/check-backwards.png`);
@@ -205,7 +211,7 @@ try {
     const dir = mktemp("gander-sheet-");
     const tab = await openTab(cdp, Number(opt("sheetscale", 0.25)));
     for (let i = 0; i < n; i++) writeFileSync(join(dir, `${String(i).padStart(3, "0")}.png`), await tab.shot(a + ((b - a) * i) / Math.max(1, n - 1)));
-    const out = join(HERE, "out", `sheet-${a}-${b}.png`);
+    const out = join(THERE, "out", `sheet-${a}-${b}.png`);
     mkdirSync(dirname(out), { recursive: true });
     await run("ffmpeg", ["-y", "-loglevel", "error", "-framerate", "1", "-i", join(dir, "%03d.png"), "-vf", `tile=${cols}x${Math.ceil(n / cols)}:padding=6:color=0x222222`, "-frames:v", "1", out]);
     rmSync(dir, { recursive: true, force: true });

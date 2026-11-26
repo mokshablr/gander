@@ -25,20 +25,6 @@ internal fun thumbShown(range: Int, extent: Int, wasShown: Boolean): Boolean = w
 }
 
 /**
- * How tall the thumb is: proportional to how much of the document is on
- * screen, with a floor.
- *
- * Proportional alone is two pixels on a 357-page document; a fixed height says
- * nothing about how much is left in a short one. Never taller than the track,
- * which a very short document would otherwise ask for.
- */
-internal fun thumbHeight(trackHeight: Int, extent: Int, range: Int, floor: Int): Int {
-    if (range <= 0) return floor.coerceAtMost(trackHeight)
-    return maxOf(floor, (trackHeight.toLong() * extent / range).toInt())
-        .coerceAtMost(trackHeight)
-}
-
-/**
  * Where the top of the thumb sits, as a pixel offset down the track, for a
  * document scrolled to [offset]. Zero when there is nothing to scroll.
  */

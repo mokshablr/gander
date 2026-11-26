@@ -23,8 +23,8 @@
          731dp phone. The same as a dialog's inset at its sides. -->
     <dimen name="field_box_inset">24dp</dimen>
 
-    <!-- The scroll thumb's floor, and so its height in the layout: proportional alone
-         is two pixels on a 357-page document. syncFastScroll reads the same value, so
-         the two cannot drift. -->
-    <dimen name="fast_scroll_thumb_min">48dp</dimen>
+    <!-- The scroll thumb's height, on every document: a touch target's height, and the
+         most of the screen's edge it takes from the back gesture. syncFastScroll reads the
+         same value as the layout, so the two cannot drift. -->
+    <dimen name="fast_scroll_thumb_height">48dp</dimen>
 </resources>

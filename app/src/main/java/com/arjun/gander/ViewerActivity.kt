@@ -1390,8 +1390,10 @@ open class ViewerActivity : AppCompatActivity() {
 
         val trackHeight = track.height
         if (trackHeight <= 0) return
-        val floor = resources.getDimensionPixelSize(R.dimen.fast_scroll_thumb_min)
-        val height = thumbHeight(trackHeight, extent, range, floor)
+        // One height whatever the document's length or zoom, so the strip of edge the thumb
+        // keeps from the back gesture is always this small.
+        val height = resources.getDimensionPixelSize(R.dimen.fast_scroll_thumb_height)
+            .coerceAtMost(trackHeight)
         if (thumb.layoutParams.height != height) {
             thumb.layoutParams = thumb.layoutParams.also { it.height = height }
         }

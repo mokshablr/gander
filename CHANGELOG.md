@@ -16,6 +16,10 @@
   the folders inside it, and Back closes it.
 - A folder can be sorted by Type, from Sort by in its menu, which puts its files together by
   extension and then by name (#77, thanks @XZY123lol for passing it on from dam108 on 4PDA).
+- The scroll thumb at the side of a document is one size on every document, so a back swipe
+  from that edge is stopped only where the thumb sits (#84, thanks @ravig0swami). It was as tall
+  as the share of the document on screen, half the screen or more on a short PDF, and grew and shrank
+  as a spreadsheet was zoomed.
 
 ## 2.11 (2026-11-24)
 

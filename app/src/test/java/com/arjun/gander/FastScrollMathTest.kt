@@ -14,7 +14,7 @@ class FastScrollMathTest {
     private companion object {
         const val EXTENT = 2000 // one screenful
         const val TRACK = 1800 // the track beside it
-        const val FLOOR = 96 // R.dimen.fast_scroll_thumb_min, near enough
+        const val THUMB = 144 // R.dimen.fast_scroll_thumb_height, at 3x
     }
 
     // ---------------------------------------------------------------
@@ -59,60 +59,26 @@ class FastScrollMathTest {
     }
 
     // ---------------------------------------------------------------
-    // thumbHeight
-    // ---------------------------------------------------------------
-
-    @Test
-    fun theThumbIsProportionalToWhatIsOnScreen() {
-        // a quarter of the document visible gives a quarter of the track
-        assertThat(thumbHeight(TRACK, EXTENT, EXTENT * 4, FLOOR)).isEqualTo(TRACK / 4)
-    }
-
-    /**
-     * A 357-page rulebook is proportionally about two pixels of thumb, which
-     * cannot be grabbed. The floor is what makes it a target.
-     */
-    @Test
-    fun aVeryLongDocumentStillGetsAGrabbableThumb() {
-        assertThat(thumbHeight(TRACK, EXTENT, EXTENT * 900, FLOOR)).isEqualTo(FLOOR)
-    }
-
-    @Test
-    fun theThumbNeverOutgrowsItsTrack() {
-        assertThat(thumbHeight(TRACK, EXTENT, EXTENT, FLOOR)).isEqualTo(TRACK)
-        // and not even when the floor alone would exceed it
-        assertThat(thumbHeight(50, EXTENT, EXTENT * 900, FLOOR)).isEqualTo(50)
-    }
-
-    @Test
-    fun aDocumentWithNoMeasuredHeightFallsBackToTheFloor() {
-        assertThat(thumbHeight(TRACK, EXTENT, 0, FLOOR)).isEqualTo(FLOOR)
-    }
-
-    // ---------------------------------------------------------------
     // thumbOffset
     // ---------------------------------------------------------------
 
     @Test
     fun theThumbSitsAtTheTopOfAnUnscrolledDocument() {
-        val h = thumbHeight(TRACK, EXTENT, EXTENT * 4, FLOOR)
-        assertThat(thumbOffset(TRACK, h, 0, EXTENT * 4, EXTENT)).isEqualTo(0f)
+        assertThat(thumbOffset(TRACK, THUMB, 0, EXTENT * 4, EXTENT)).isEqualTo(0f)
     }
 
     @Test
     fun theThumbReachesTheFootOfTheTrackAtTheEnd() {
         val range = EXTENT * 4
-        val h = thumbHeight(TRACK, EXTENT, range, FLOOR)
-        val atEnd = thumbOffset(TRACK, h, range - EXTENT, range, EXTENT)
-        assertThat(atEnd).isWithin(0.01f).of((TRACK - h).toFloat())
+        val atEnd = thumbOffset(TRACK, THUMB, range - EXTENT, range, EXTENT)
+        assertThat(atEnd).isWithin(0.01f).of((TRACK - THUMB).toFloat())
     }
 
     @Test
     fun halfwayDownIsHalfwayAlong() {
         val range = EXTENT * 4
-        val h = thumbHeight(TRACK, EXTENT, range, FLOOR)
-        val half = thumbOffset(TRACK, h, (range - EXTENT) / 2, range, EXTENT)
-        assertThat(half).isWithin(1f).of((TRACK - h) / 2f)
+        val half = thumbOffset(TRACK, THUMB, (range - EXTENT) / 2, range, EXTENT)
+        assertThat(half).isWithin(1f).of((TRACK - THUMB) / 2f)
     }
 
     @Test
@@ -127,7 +93,7 @@ class FastScrollMathTest {
     @Test
     fun draggingTheThumbMapsBackOntoTheDocument() {
         val range = EXTENT * 10
-        val travel = (TRACK - FLOOR).toFloat()
+        val travel = (TRACK - THUMB).toFloat()
         assertThat(dragTarget(0f, travel, range, EXTENT)).isEqualTo(0)
         assertThat(dragTarget(travel, travel, range, EXTENT)).isEqualTo(range - EXTENT)
         assertThat(dragTarget(travel / 2, travel, range, EXTENT))
@@ -149,11 +115,10 @@ class FastScrollMathTest {
     @Test
     fun draggingAndDrawingAreInverses() {
         val range = EXTENT * 6
-        val h = thumbHeight(TRACK, EXTENT, range, FLOOR)
-        val travel = (TRACK - h).toFloat()
+        val travel = (TRACK - THUMB).toFloat()
         listOf(0f, travel * 0.25f, travel * 0.5f, travel).forEach { at ->
             val scrolled = dragTarget(at, travel, range, EXTENT)!!
-            assertThat(thumbOffset(TRACK, h, scrolled, range, EXTENT)).isWithin(1f).of(at)
+            assertThat(thumbOffset(TRACK, THUMB, scrolled, range, EXTENT)).isWithin(1f).of(at)
         }
     }
 }

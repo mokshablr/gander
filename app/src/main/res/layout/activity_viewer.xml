@@ -130,7 +130,7 @@
         <View
             android:id="@+id/fastScrollThumb"
             android:layout_width="6dp"
-            android:layout_height="@dimen/fast_scroll_thumb_min"
+            android:layout_height="@dimen/fast_scroll_thumb_height"
             android:layout_gravity="end|top"
             android:layout_marginEnd="10dp"
             android:background="@drawable/scroll_thumb"

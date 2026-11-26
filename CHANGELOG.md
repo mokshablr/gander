@@ -20,6 +20,9 @@
   from that edge is stopped only where the thumb sits (#84, thanks @ravig0swami). It was as tall
   as the share of the document on screen, half the screen or more on a short PDF, and grew and shrank
   as a spreadsheet was zoomed.
+- A presentation that takes a while to open shows "Rendering slides…" until its slides appear,
+  where a loading bar stood at 1% the whole time (#85, thanks @sourcetf). The bar could not move,
+  since the slides are all read in one go, so it is gone.
 
 ## 2.11 (2026-11-24)
 

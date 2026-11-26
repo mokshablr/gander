@@ -589,6 +589,36 @@ new MutationObserver(function (records, observer) {
   whatIsMissing(result);
 }).observe(document.getElementById("result"), { childList: true });
 
+/*
+ * The card goes up for a deck that will take a while to read, as it does for any other
+ * document (VW_BUSY_BYTES in app.js). PPTXjs fetches the deck itself, so the card is put up
+ * between the fetch and the reading, which PPTXjs does in one piece on the main thread.
+ *
+ * A deck's slides cost as much to read as its bytes do, so each counts as VW_SLIDE_BYTES on
+ * top of the file's size. Measured in Chromium with the CPU slowed 6x, reading took about
+ * 14 ms a slide and 175 ms a megabyte of pictures: a deck of a hundred slides of text, 130 KB,
+ * took as long as one of eight photos, 8 MB. JSZip reads a package's parts only when asked,
+ * so counting the slides here took 3 to 8 ms of that.
+ */
+var VW_SLIDE_BYTES = 80 * 1024;
+
+var vwFetchDeck = JSZipUtils.getBinaryContent;
+JSZipUtils.getBinaryContent = function (url, done) {
+  vwFetchDeck(url, function (err, content) {
+    if (err || !content) return done(err, content);
+    var slides = 0;
+    try {
+      slides = vwOpenPackage.call(new JSZip(), content).file(/^ppt\/slides\/slide\d+\.xml$/).length;
+    } catch (e) {
+      // Not a package this can count in; PPTXjs says so itself when it reads it
+    }
+    var shown = vwShowBusy(content, content.byteLength + slides * VW_SLIDE_BYTES);
+    if (shown === content) return done(err, content);
+    // In a task of its own, so that anything PPTXjs throws still reaches window.onerror
+    shown.then(function () { setTimeout(function () { done(err, content); }, 0); });
+  });
+};
+
 try {
   $("#result").pptxToHtml({
     pptxFileUrl: "/doc/file.pptx",

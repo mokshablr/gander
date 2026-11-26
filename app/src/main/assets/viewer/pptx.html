@@ -126,6 +126,13 @@
     text-align: left;
     white-space: normal;
   }
+
+  /*
+   * PPTXjs's own loading bar, left out for the card above the slides (#85). PPTXjs reads the
+   * whole deck in one piece and only then goes through the progress it noted, so the bar
+   * stood at 1% until the slides appeared. Its style is set on the element, hence !important.
+   */
+  .slides-loadnig-msg { display: none !important; }
 </style>
 <script src="lib/pptx/jquery.min.js"></script>
 <script src="lib/pptx/jszip2.min.js"></script>

@@ -169,6 +169,15 @@ def watch_the_read(page):
       return doc;
     });
   };
+  // PPTXjs fetches the deck itself and reads it as soon as FileReaderJS hands it over
+  if (window.FileReaderJS) {
+    var setupBlob = FileReaderJS.setupBlob;
+    FileReaderJS.setupBlob = function (blob, opts) {
+      var load = opts.on.load;
+      opts.on.load = function () { note(); return load.apply(this, arguments); };
+      return setupBlob.call(this, blob, opts);
+    };
+  }
 })();
 """
 
@@ -178,7 +187,8 @@ def watch_the_read(page):
     page.route("**/assets/viewer/app.js", serve)
 
 
-@pytest.mark.parametrize("html", ["xlsx.html", "docx.html", "md.html", "text.html", "prose.html"])
+@pytest.mark.parametrize(
+    "html", ["xlsx.html", "docx.html", "pptx.html", "md.html", "text.html", "prose.html"])
 def test_a_document_that_takes_a_while_to_read_shows_the_card_while_it_is_read(
         viewer, page, made, fixture_path, html):
     """
@@ -190,6 +200,7 @@ def test_a_document_that_takes_a_while_to_read_shows_the_card_while_it_is_read(
     document = {
         "xlsx.html": lambda: padded(made, fixture_path, "big.xlsx", "budget.xlsx"),
         "docx.html": lambda: padded(made, fixture_path, "big.docx", "report.docx"),
+        "pptx.html": lambda: padded(made, fixture_path, "big.pptx", "deck.pptx"),
         "md.html": lambda: made("big.md", "# Notes\n\n" + "A line of notes.\n" * 100_000),
         "text.html": lambda: made("big.txt", "A line of text.\n" * 100_000),
         "prose.html": lambda: made("big.rtf", "{\\rtf1\\ansi " + "A line of text.\\par\n" * 80_000 + "}"),
@@ -203,11 +214,41 @@ def test_a_document_that_takes_a_while_to_read_shows_the_card_while_it_is_read(
 @pytest.mark.parametrize("html, fixture", OPENING[1:])
 def test_a_small_document_is_still_read_inside_the_hold(viewer, page, html, fixture):
     """And one that reads in a moment still never shows it."""
-    if html == "pptx.html":
-        pytest.skip("the deck's library fetches it itself")
     if html == "model.html":
         pytest.skip("the model is streamed rather than fetched whole; test_model.py times its card")
     watch_the_read(page)
     viewer(html, fixture)
     page.wait_for_function("() => 'cardWhileReading' in window", timeout=20000)
     assert page.evaluate("() => window.cardWhileReading") is False
+
+
+def test_a_deck_of_many_slides_shows_the_card_while_it_is_read(viewer, page, made, fixture_path):
+    """
+    Slides cost as much to read as bytes do, so a deck of many slides and little else gets the
+    card too, though it is far under a megabyte. The extra slides are parts that pptx.js
+    counts and PPTXjs never draws, since [Content_Types].xml does not name them.
+    """
+    import io
+    import zipfile
+    out = io.BytesIO()
+    with zipfile.ZipFile(fixture_path("deck.pptx")) as src, zipfile.ZipFile(out, "w") as dst:
+        for item in src.infolist():
+            dst.writestr(item, src.read(item.filename))
+        slide = src.read("ppt/slides/slide1.xml")
+        for n in range(101, 121):
+            dst.writestr(f"ppt/slides/slide{n}.xml", slide)
+    deck = made("many.pptx", out.getvalue())
+    assert deck.stat().st_size < 200_000
+    watch_the_read(page)
+    viewer("pptx.html", deck)
+    page.wait_for_function("() => 'cardWhileReading' in window", timeout=20000)
+    assert page.evaluate("() => window.cardWhileReading") is True
+
+
+def test_pptxjs_own_loading_bar_is_not_shown(viewer, page):
+    """It stood at 1% until the slides appeared (#85), as PPTXjs reads a deck in one piece."""
+    hold_the_document(page)
+    viewer("pptx.html", "deck.pptx")
+    page.wait_for_selector(".slides-loadnig-msg", state="attached", timeout=15000)
+    assert page.evaluate(
+        "() => getComputedStyle(document.querySelector('.slides-loadnig-msg')).display") == "none"

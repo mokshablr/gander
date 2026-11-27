@@ -28,7 +28,7 @@ commit.
 | `purify.min.js` | DOMPurify | 3.4.17 | Apache-2.0 or MPL-2.0 dual | https://github.com/cure53/DOMPurify |
 | `katex/katex.min.js`, `katex/katex.min.css` | KaTeX | 0.19.1 | MIT | https://github.com/KaTeX/KaTeX |
 | `katex/fonts/` (12 of 20 files) | KaTeX fonts | 0.19.1 | SIL OFL 1.1 | https://github.com/KaTeX/katex-fonts |
-| `pptx/pptxjs.js` | PPTXjs | 1.21.1, with two changes (below) | MIT | https://github.com/meshesha/PPTXjs |
+| `pptx/pptxjs.js` | PPTXjs | 1.21.1, with three changes (below) | MIT | https://github.com/meshesha/PPTXjs |
 | `pptx/divs2slides.js` | divs2slides (PPTXjs) | 1.3.2 | MIT | https://github.com/meshesha/PPTXjs |
 | `pptx/filereader.js` | FileReader.js (PPTXjs bundle) | 0.99 | MIT | https://github.com/meshesha/PPTXjs |
 | `pptx/jquery.min.js` | jQuery | 1.11.3 | MIT | https://github.com/jquery/jquery |
@@ -215,9 +215,9 @@ prints on two sheets, or if its footer moves in print.
 is not. `drawLrTbAcross` can go once a release reads `lrTb` as horizontal text; 0.4.1,
 which is upstream's c533f38 (21 September 2026), still reads it as vertical.
 
-## PPTXjs's two changes
+## PPTXjs's three changes
 
-`pptx/pptxjs.js` is upstream's 1.21.1 with two changes, both in `scripts/pptxjs.patch`, which
+`pptx/pptxjs.js` is upstream's 1.21.1 with three changes, all in `scripts/pptxjs.patch`, which
 `fetch-viewer-libs.sh` applies after each fetch, stopping if upstream's file has moved under
 it. Everything else is still put right from outside, in `pptx.js`, as the package opens.
 
@@ -237,6 +237,13 @@ photos then needed many times its pictures' size in memory, and the viewer crash
 with little of it. Gander's version hands the bytes to `btoa` in 32 KB pieces and returns the
 same text. `test_pptx.py` checks that text against Python's base64, and opens a deck of
 photos under a small JavaScript heap.
+
+The third, marked `Gander, #86`, is in how pies are drawn. Upstream drew no doughnut chart, and
+named a pie's slices by their numbers in nv.d3's own colours. A doughnut now goes to nv.d3's
+pie with its hole, and both are named by their categories, with the XML's entities turned back
+into text. `vwSlices` gives each slice the fill the deck gives it, else the theme's accents in
+turn as Office does, and the labels the chart asks for: percentages, values, names or none.
+`test_pptx.py` checks names, fills, holes and labels on `slices.pptx`.
 
 Upstream's `js/dingbat.js` is not shipped. PPTXjs looks a Wingdings 2 or 3 bullet up in its
 global `dingbat_unicode` and throws when there is none, and many of the characters upstream's

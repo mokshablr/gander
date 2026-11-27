@@ -10304,7 +10304,8 @@
                             "data": {
                                 "chartID": "chart" + chartID,
                                 "chartType": "pieChart",
-                                "chartData": extractChartData(plotArea[key]["c:ser"])
+                                "chartData": extractChartData(plotArea[key]["c:ser"]),
+                                "slices": vwSlices(plotArea[key], warpObj)
                             }
                         };
                         break;
@@ -10314,7 +10315,21 @@
                             "data": {
                                 "chartID": "chart" + chartID,
                                 "chartType": "pie3DChart",
-                                "chartData": extractChartData(plotArea[key]["c:ser"])
+                                "chartData": extractChartData(plotArea[key]["c:ser"]),
+                                "slices": vwSlices(plotArea[key], warpObj)
+                            }
+                        };
+                        break;
+                    // Gander, #86: a doughnut is drawn as nv.d3's pie with its hole
+                    case "c:doughnutChart":
+                        chartData = {
+                            "type": "createChart",
+                            "data": {
+                                "chartID": "chart" + chartID,
+                                "chartType": "doughnutChart",
+                                "chartData": extractChartData(plotArea[key]["c:ser"]),
+                                "slices": vwSlices(plotArea[key], warpObj),
+                                "hole": parseInt(getTextByPathList(plotArea[key], ["c:holeSize", "attrs", "val"])) || 50
                             }
                         };
                         break;
@@ -10352,6 +10367,30 @@
 
             chartID++;
             return result;
+        }
+
+        // Gander, #86: what a pie or doughnut's slices are drawn in, from its first series.
+        // Each slice keeps its own fill, else takes the theme's accents in turn, as Office
+        // colours a pie with varied slices. Its labels are the ones the chart asks for, if any.
+        function vwSlices(chartNode, warpObj) {
+            var ser = chartNode["c:ser"];
+            if (ser !== undefined && ser.constructor === Array) ser = ser[0];
+            var fills = {};
+            eachElement(getTextByPathList(ser, ["c:dPt"]), function (pt) {
+                fills[getTextByPathList(pt, ["c:idx", "attrs", "val"])] = getTextByPathList(pt, ["c:spPr", "a:solidFill"]);
+                return "";
+            });
+            var count = parseInt(getTextByPathList(ser, ["c:val", "c:numRef", "c:numCache", "c:ptCount", "attrs", "val"])) || 0;
+            var colors = [];
+            for (var i = 0; i < count; i++) {
+                var color = fills[String(i)] !== undefined ? getSolidFill(fills[String(i)], undefined, undefined, warpObj) : "";
+                if (!color) color = getSchemeColorFromTheme("a:accent" + (i % 6 + 1), undefined, undefined, warpObj);
+                colors.push(color ? "#" + color : undefined);
+            }
+            var lbls = getTextByPathList(ser, ["c:dLbls"]) || chartNode["c:dLbls"];
+            var shown = function (name) { return getTextByPathList(lbls, [name, "attrs", "val"]) === "1"; };
+            var label = shown("c:showPercent") ? "percent" : shown("c:showVal") ? "value" : shown("c:showCatName") ? "key" : "";
+            return { colors: colors, label: label };
         }
 
         function genDiagram(node, warpObj, source, sType) {
@@ -13854,10 +13893,26 @@
                     break;
                 case "pieChart":
                 case "pie3DChart":
+                case "doughnutChart":
                     if (chartData.length > 0) {
                         data = chartData[0].values;
                     }
                     chart = nv.models.pieChart();
+                    // Gander, #86: each slice is named by its category, where it was its
+                    // number, and drawn in the deck's colours with the labels it asks for.
+                    // The names come as the XML has them, so "&amp;" is turned back into "&".
+                    var names = chartData.length > 0 ? chartData[0].xlabels : {};
+                    chart.x(function (p) {
+                        return names[p.x] === undefined ? p.x
+                            : new DOMParser().parseFromString("<a>" + names[p.x] + "</a>", "text/html").body.textContent;
+                    });
+                    if (d.slices) {
+                        var colors = d.slices.colors;
+                        if (colors.length > 0 && colors.every(Boolean)) chart.color(colors);
+                        chart.showLabels(d.slices.label !== "");
+                        if (d.slices.label) chart.labelType(d.slices.label);
+                    }
+                    if (chartType === "doughnutChart") chart.donut(true).donutRatio(d.hole / 100);
                     break;
                 case "areaChart":
                     data = chartData;

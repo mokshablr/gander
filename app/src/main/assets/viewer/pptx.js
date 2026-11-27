@@ -2,7 +2,7 @@
  * Two things PPTXjs takes for granted that the format does not promise, either of which
  * puts the error card up in place of every slide. Both are put right here, in the package
  * as PPTXjs opens it and before it reads a part, so the library keeps to upstream's code
- * but for its one change (docs/VENDORED.md). Upstream has not moved since 2022 and has
+ * but for Gander's few changes (docs/VENDORED.md). Upstream has not moved since 2022 and has
  * both open, as issues 42 and 32.
  *
  * docProps/app.xml is optional, and Google Slides leaves it out. PPTXjs reads it without
@@ -522,8 +522,8 @@ function bulletsHang(root) {
  * - a chart, picture, table or diagram PPTXjs threw on, or a shape with text, which the
  *   catch in lib/pptx/pptxjs.js leaves as an empty block in its place, marked with what it
  *   was, as it marks a chart that threw as nv.d3 drew it (7 decks);
- * - a chart of a type PPTXjs does not draw. It draws line, bar, pie, area and scatter
- *   charts, and leaves the box of any other, a doughnut or a radar, empty (4 decks);
+ * - a chart of a type PPTXjs does not draw. It draws line, bar, pie, doughnut, area and
+ *   scatter charts, and leaves the box of any other, a radar or a stock chart, empty;
  * - a picture in a format no browser draws, Windows' EMF and WMF or TIFF, which goes in
  *   as an image that fails to load (13 decks).
  */

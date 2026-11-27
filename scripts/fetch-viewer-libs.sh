@@ -74,7 +74,7 @@ get pptx/filereader.js  "$P/js/filereader.js"
 get pptx/d3.min.js      "$P/js/d3.min.js"
 get pptx/nv.d3.min.js   "$P/js/nv.d3.min.js"
 get pptx/pptxjs.js      "$P/js/pptxjs.js"
-# Gander's two changes to PPTXjs, for #48 and for decks of photos (docs/VENDORED.md).
+# Gander's three changes to PPTXjs, for #48, decks of photos and pies (docs/VENDORED.md).
 # patch stops this script if upstream's file has moved under it, rather than the change
 # going quietly: on a line of its own, since set -e lets a command fail unnoticed on the
 # left of &&.

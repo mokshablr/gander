@@ -664,7 +664,7 @@ def test_a_chart_that_throws_as_it_is_drawn_is_left_out_and_the_deck_drawn(viewe
 def test_a_picture_or_chart_that_never_draws_is_marked_where_it_would_be(viewer, page):
     """
     A Windows metafile is a picture no browser draws, a PNG cut short draws nothing either, and
-    PPTXjs draws no doughnut chart. None of them throws, and each was left blank. Each is
+    PPTXjs draws no radar chart. None of them throws, and each was left blank. Each is
     marked where it would be now, and the whole PNG beside them is drawn.
     """
     viewer("pptx.html", "undrawn.pptx")
@@ -680,13 +680,61 @@ def test_a_picture_or_chart_that_never_draws_is_marked_where_it_would_be(viewer,
     assert "Beside the chart" in page.text_content("#result")
 
 
-@pytest.mark.parametrize("name", ["deck.pptx", "charted.pptx"])
+# ---------------------------------------------------------------------------
+# Pies and doughnuts: see the lines marked Gander, #86 in lib/pptx/pptxjs.js
+# ---------------------------------------------------------------------------
+
+SLICES = """
+[...document.querySelectorAll("#result [id^='chart']")].map(chart => {
+  const paths = [...chart.querySelectorAll('.nv-slice path')];
+  return {
+    fills: paths.map(p => getComputedStyle(p).fill),
+    arcs: paths.map(p => (p.getAttribute('d').match(/A/g) || []).length),
+    legend: [...chart.querySelectorAll('.nv-legend-text')].map(t => t.textContent),
+    labels: [...chart.querySelectorAll('.nv-pieLabels text')].map(t => t.textContent).filter(Boolean),
+  };
+})"""
+
+
+def rgb(hex_colour):
+    return "rgb({}, {}, {})".format(*(int(hex_colour[i:i + 2], 16) for i in (0, 2, 4)))
+
+
+def test_a_pie_and_a_doughnut_are_drawn_with_their_names_and_colours(viewer, page, fixture_path):
+    """
+    PPTXjs drew no doughnut, and named a pie's slices by their numbers in nv.d3's own colours
+    (#86). The doughnut is drawn with its hole and both are named by their categories, an
+    ampersand and all. A slice with a fill of its own keeps it, and one without takes the
+    theme's accents in turn. Each shows the labels its chart asks for: percentages on the pie,
+    and none on the doughnut.
+    """
+    with zipfile.ZipFile(fixture_path("slices.pptx")) as deck:
+        theme = deck.read("ppt/theme/theme1.xml").decode()
+    accents = [re.search(rf'<a:accent{n}><a:srgbClr val="(\w{{6}})"', theme).group(1) for n in (1, 2, 3)]
+    viewer("pptx.html", "slices.pptx")
+    wait_for_deck(page, 2)
+    # nv.d3 eases each slice in over 500 ms, and the labels follow it
+    page.wait_for_function(f"() => ({SLICES}).every(c => c.fills.length === 3)"
+                           f" && ({SLICES})[0].labels.length === 3", timeout=10000)
+    pie, doughnut = page.evaluate(SLICES)
+    assert pie["legend"] == ["North", "South", "East"]
+    assert pie["fills"] == [rgb(a) for a in accents]
+    assert pie["arcs"] == [1, 1, 1]
+    assert pie["labels"] == ["60%", "30%", "10%"]
+    assert doughnut["legend"] == ["Plant & Machines", "Premises", "Vehicle"]
+    assert doughnut["fills"] == [rgb(c) for c in ("0F172A", "0891B2", "F59E0B")]
+    assert doughnut["arcs"] == [2, 2, 2]
+    assert doughnut["labels"] == []
+    assert missing(page) == []
+
+
+@pytest.mark.parametrize("name", ["deck.pptx", "charted.pptx", "slices.pptx"])
 def test_a_deck_drawn_whole_has_no_box(viewer, page, name):
     """A box goes only where something is missing: none on a deck whose pictures and chart draw."""
     viewer("pptx.html", name)
     wait_for_deck(page, 2)
     page.wait_for_function("() => [...document.querySelectorAll('#result img')].every(i => i.complete)")
-    if name == "charted.pptx":
+    if name != "deck.pptx":
         assert page.query_selector("#result [id^='chart'] svg") is not None
     assert missing(page) == []
 

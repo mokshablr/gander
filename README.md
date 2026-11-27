@@ -106,7 +106,7 @@ Word 95 files show their text without formatting, and a Windows metafile picture
 box saying it cannot be drawn.
 
 In a `.pptx`, a chart, diagram, picture, table or text that PPTXjs cannot draw, such as a
-doughnut or radar chart or an EMF or WMF picture, is left out, and a box in its place says
+radar chart or an EMF or WMF picture, is left out, and a box in its place says
 what is missing. The rest of the slide is drawn.
 
 Legacy binary `.ppt` is not supported (no open-source renderer is both faithful and small

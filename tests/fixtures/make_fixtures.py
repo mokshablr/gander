@@ -2249,11 +2249,50 @@ def charted() -> None:
     written(path)
 
 
+def slices() -> None:
+    """
+    A pie and a doughnut (#86). The pie gives its slices no colours of their own, so they take
+    the theme's accents, and asks for percentages on them. The doughnut colours each slice
+    itself, names one with an ampersand, and asks for no labels.
+    """
+    from pptx import Presentation
+    from pptx.chart.data import CategoryChartData
+    from pptx.dml.color import RGBColor
+    from pptx.enum.chart import XL_CHART_TYPE
+    from pptx.util import Inches
+
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[5])
+    slide.shapes.title.text = "A pie chart"
+    data = CategoryChartData()
+    data.categories = ["North", "South", "East"]
+    data.add_series("Visits", (6, 3, 1))
+    pie = slide.shapes.add_chart(XL_CHART_TYPE.PIE, Inches(1), Inches(2), Inches(4), Inches(3), data).chart
+    pie.plots[0].has_data_labels = True
+    pie.plots[0].data_labels.show_percentage = True
+    pie.plots[0].data_labels.show_value = False
+    slide = prs.slides.add_slide(prs.slide_layouts[5])
+    slide.shapes.title.text = "A doughnut chart"
+    data = CategoryChartData()
+    data.categories = ["Plant & Machines", "Premises", "Vehicle"]
+    data.add_series("Lakh", (23.5, 7.5, 5))
+    doughnut = slide.shapes.add_chart(XL_CHART_TYPE.DOUGHNUT, Inches(1), Inches(2), Inches(4), Inches(3), data).chart
+    for point, colour in zip(doughnut.plots[0].series[0].points, ("0F172A", "0891B2", "F59E0B")):
+        point.format.fill.solid()
+        point.format.fill.fore_color.rgb = RGBColor.from_string(colour)
+    slide.shapes.add_textbox(Inches(5.5), Inches(2), Inches(3), Inches(1)).text_frame.text = "Beside the chart"
+    fix_core_properties(prs)
+    path = OUT / "slices.pptx"
+    prs.save(str(path))
+    normalize_zip(path)
+    written(path)
+
+
 def undrawn() -> None:
     """
     Pictures and a chart that PPTXjs puts on the slide and that never draw, though nothing
     throws: a Windows metafile, which no browser draws, beside a PNG that does and a PNG cut
-    short, and a doughnut chart, a type PPTXjs does not draw. pptx.js marks each where it is
+    short, and a radar chart, a type PPTXjs does not draw. pptx.js marks each where it is
     (#48).
     """
     from PIL import Image
@@ -2284,11 +2323,11 @@ def undrawn() -> None:
     slide.shapes.add_picture(png, Inches(5.5), Inches(2), Inches(3), Inches(2))
     slide.shapes.add_picture(io.BytesIO(damaged.getvalue()), Inches(5.5), Inches(4.5), Inches(3), Inches(2))
     slide = prs.slides.add_slide(prs.slide_layouts[5])
-    slide.shapes.title.text = "A doughnut chart"
+    slide.shapes.title.text = "A radar chart"
     data = CategoryChartData()
-    data.categories = ["North", "South"]
-    data.add_series("Visits", (3, 5))
-    slide.shapes.add_chart(XL_CHART_TYPE.DOUGHNUT, Inches(1), Inches(2), Inches(4), Inches(3), data)
+    data.categories = ["North", "South", "East"]
+    data.add_series("Visits", (3, 5, 4))
+    slide.shapes.add_chart(XL_CHART_TYPE.RADAR, Inches(1), Inches(2), Inches(4), Inches(3), data)
     slide.shapes.add_textbox(Inches(5.5), Inches(2), Inches(3), Inches(1)).text_frame.text = "Beside the chart"
     fix_core_properties(prs)
     path = OUT / "undrawn.pptx"
@@ -4699,7 +4738,7 @@ def main() -> int:
                  word_measured_tables, word_tabs_beside_float, word_colours, word_lines,
                  cell_directions, xlsx, sheet_colours, sheet_layout, pptx,
                  without_app_properties, freeforms, straight_lines, wrapping, weights, inherited_bold, line_breaks, unwrapped,
-                 symbol_bullets, placed_by_design, unsized, unreadable, charted, undrawn, grounds, relatives, texts, images, audio,
+                 symbol_bullets, placed_by_design, unsized, unreadable, charted, slices, undrawn, grounds, relatives, texts, images, audio,
                  photo_formats, zips, prose, workbooks, models, epubs):
         step()
     total = sum(p.stat().st_size for p in OUT.iterdir() if p.is_file())

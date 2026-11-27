@@ -23,6 +23,9 @@
 - A presentation that takes a while to open shows "Rendering slides…" until its slides appear,
   where a loading bar stood at 1% the whole time (#85, thanks @sourcetf). The bar could not move,
   since the slides are all read in one go, so it is gone.
+- A doughnut chart in a presentation is drawn, where a box said it could not be shown (#86,
+  thanks @AdityaOak2026). Pie and doughnut charts name their slices by their categories, where
+  they were numbered from 0, in the presentation's own colours, with the labels it asks for.
 
 ## 2.11 (2026-11-24)
 

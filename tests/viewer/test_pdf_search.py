@@ -310,7 +310,8 @@ def test_going_to_a_page_draws_it(viewer, page, port):
     from helpers import canvas_widths
     p = open_and_attach(viewer, page, port, fixture="forty-pages.pdf")
     p.go_to_page(25)
-    wait_for_band(page)
+    # The jump arrives over the port, so the band could settle on pages 1 and 2 before it
+    wait_for_page(page, 24)
     assert canvas_widths(page)[24] > 300
 
 

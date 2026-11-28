@@ -15,7 +15,6 @@
   --vw-ink: #1E1B15;
   --vw-accent: #af2d18;
   --vw-accent-ink: #ffffff;
-  --vw-error: #fdecea;
   --vw-error-ink: #8c1d18;
   --vw-shadow: rgba(0, 0, 0, 0.15);
 
@@ -167,18 +166,46 @@ body {
   from, to { visibility: hidden; }
 }
 
+/*
+ * An error is the same card as every other, with its title and a stripe down its side in the
+ * error colour. It was a card filled red, which on a dark phone came out as a slab of dark red
+ * that read as an alarm rather than as a file Gander could not show, and it looked like no other
+ * card in the app: the password prompt and the unknown-format card are both this plain card.
+ */
 .vw-error {
-  background: #fdecea;
-  background: var(--vw-error);
-  color: #8c1d18;
-  color: var(--vw-error-ink);
   text-align: left;
+  border-left: 4px solid #8c1d18;
+  border-left: calc(4px * var(--vw-zoom)) solid var(--vw-error-ink);
 }
 
 .vw-error .vw-error-title {
+  color: #8c1d18;
+  color: var(--vw-error-ink);
   font-weight: 600;
   margin-bottom: 6px;
   margin-bottom: calc(6px * var(--vw-zoom));
+}
+
+/* The error card's way out, as wide as the card, like the unknown-format card's View as text */
+.vw-error .vw-elsewhere-btn {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  margin-top: calc(14px * var(--vw-zoom));
+  box-sizing: border-box;
+  min-height: 48px;
+  min-height: calc(48px * var(--vw-zoom));
+  padding: 0 16px;
+  padding: 0 calc(16px * var(--vw-zoom));
+  border: 0;
+  border-radius: 6px;
+  border-radius: calc(6px * var(--vw-zoom));
+  font: inherit;
+  font-weight: 500;
+  background: #af2d18;
+  background: var(--vw-accent);
+  color: #ffffff;
+  color: var(--vw-accent-ink);
 }
 
 .vw-error .vw-error-detail {
@@ -209,8 +236,7 @@ body {
     --vw-ink: #E7E2D9;
     --vw-accent: #FFB39E;
     --vw-accent-ink: #650B00;
-    --vw-error: #8C1D18;
-    --vw-error-ink: #F9DEDC;
+    --vw-error-ink: #F2B8B5;
     --vw-shadow: rgba(0, 0, 0, 0.5);
   }
 }

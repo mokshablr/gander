@@ -75,6 +75,12 @@ import kotlin.math.roundToInt
 open class ViewerActivity : AppCompatActivity() {
 
     companion object {
+        /** What goes from the menu when the page says its document could not be shown. */
+        private val DOCUMENT_ONLY_ACTIONS = listOf(
+            R.id.action_search, R.id.action_night_mode, R.id.action_print,
+            R.id.action_go_to_page, R.id.action_contents, R.id.action_text_size,
+        )
+
         const val EXTRA_PATH = "path"
 
         /**
@@ -174,6 +180,12 @@ open class ViewerActivity : AppCompatActivity() {
 
     /** Whether the card on show has a button for the simple view, which asks over the channel. */
     private var cardOffersSimple = false
+
+    /** Whether the page has put up its card saying the document could not be shown. */
+    private var documentFailed = false
+
+    /** Hands the file on show to another app, for that card's button. */
+    private var openElsewhere: (() -> Unit)? = null
 
     /** The simple view's renderer and the pages it serves, while a PDF is shown there. */
     @Volatile
@@ -505,6 +517,7 @@ open class ViewerActivity : AppCompatActivity() {
             shareFile(uri, ext, mime)
             true
         }
+        openElsewhere = { openInAnotherApp(uri, ext, mime) }
         toolbar.menu.findItem(R.id.action_save_copy).setOnMenuItemClickListener {
             copySource = uri
             createDocument.type = mime
@@ -533,6 +546,7 @@ open class ViewerActivity : AppCompatActivity() {
         val deletable = photoPager != null && photosListed && mayTrash(uri)
         toolbar.menu.findItem(R.id.action_delete).apply {
             isVisible = deletable
+            showDelete(this@ViewerActivity)
             setOnMenuItemClickListener {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) askToTrash(uri)
                 true
@@ -658,6 +672,7 @@ open class ViewerActivity : AppCompatActivity() {
         }
         // Delete has nothing to ask about until a photo is picked
         toolbar.menu.findItem(R.id.action_delete).apply {
+            showDelete(this@ViewerActivity)
             isEnabled = picking.isNotEmpty()
             icon?.alpha = if (picking.isEmpty()) DISABLED_ALPHA else 255
         }
@@ -728,14 +743,56 @@ open class ViewerActivity : AppCompatActivity() {
         if (!started) Toast.makeText(this, R.string.print_failed, Toast.LENGTH_SHORT).show()
     }
 
+    /**
+     * What the page's card says the document could not be shown: Search, Night mode, Print, Go to
+     * page, Contents and Text size go, as they do when the renderer goes, since each would act on a
+     * document that is not there. Share, Save a copy and Show in file manager stay, as the file
+     * itself is still there to hand on.
+     */
+    private fun onDocumentFailed() {
+        if (documentFailed) return
+        documentFailed = true
+        closeSearchBar()
+        val menu = findViewById<MaterialToolbar>(R.id.toolbar).menu
+        for (id in DOCUMENT_ONLY_ACTIONS) menu.findItem(id)?.isVisible = false
+        pageAt = 0
+        pageTotal = 0
+        pageFader.hideNow()
+        fastScrollEnabled = false
+        hideFastScrollNow()
+    }
+
+    /**
+     * Offers the file to the apps that open its type, for a file Gander could not show. Not to
+     * Gander itself, for the reason Share gives.
+     */
+    private fun openInAnotherApp(uri: Uri, ext: String, mime: String?) {
+        val outUri = outgoingUri(uri)
+        if (outUri == null) {
+            Toast.makeText(this, R.string.open_elsewhere_failed, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val view = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(outUri, mime ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "*/*")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val chooser = Intent.createChooser(view, getString(R.string.open_elsewhere))
+            .putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(ComponentName(this, ViewerActivity::class.java)))
+        runCatching { startActivity(chooser) }
+            .onFailure { Toast.makeText(this, R.string.open_elsewhere_failed, Toast.LENGTH_SHORT).show() }
+    }
+
+    /**
+     * [uri] as another app is handed it. Received content:// URIs go out with a read grant passed
+     * along; our own file:// URIs (the shared-text temp file) go through the FileProvider.
+     */
+    private fun outgoingUri(uri: Uri): Uri? =
+        if (uri.scheme == "content") uri
+        else runCatching {
+            FileProvider.getUriForFile(this, "$packageName.fileprovider", File(uri.path!!))
+        }.getOrNull()
+
     private fun shareFile(uri: Uri, ext: String, mime: String?) {
-        // Received content:// URIs go out with a read grant passed along; our own
-        // file:// URIs (the shared-text temp file) go through the FileProvider
-        val shareUri =
-            if (uri.scheme == "content") uri
-            else runCatching {
-                FileProvider.getUriForFile(this, "$packageName.fileprovider", File(uri.path!!))
-            }.getOrNull()
+        val shareUri = outgoingUri(uri)
         if (shareUri == null) {
             Toast.makeText(this, R.string.share_failed, Toast.LENGTH_SHORT).show()
             return
@@ -1508,7 +1565,9 @@ open class ViewerActivity : AppCompatActivity() {
             searchItem.isVisible = false
             return
         }
-        searchItem.isVisible = true
+        // Not on the card for a format Gander doesn't know, which has only its own words to find,
+        // until its View as text has put the file there: see onPageFinished.
+        searchItem.isVisible = kind != FileKind.UNSUPPORTED
 
         // One place that renders a count, whichever transport produced it. The
         // ordering inside it is load-bearing and is explained where it happens.
@@ -1705,6 +1764,9 @@ open class ViewerActivity : AppCompatActivity() {
                         PortMessage.SimpleView -> if (kind == FileKind.PDF && cardOffersSimple) askForSimpleView()
                         // Only a PDF shrinks its pages, and zooms its own double tap while they are
                         is PortMessage.Shrunk -> if (kind == FileKind.PDF) doubleTapZoom?.leftToPage = said.on
+                        PortMessage.Failed -> onDocumentFailed()
+                        // Only once the card that has the button is up
+                        PortMessage.OpenElsewhere -> if (documentFailed) openElsewhere?.invoke()
                         // Anything else came from the document rather than from
                         // the renderer, and is dropped without a word.
                         null -> Unit
@@ -2084,6 +2146,12 @@ open class ViewerActivity : AppCompatActivity() {
                 // The viewers that search from inside the page need a way to answer, and a
                 // paged document a way to report its pages and hear night mode
                 if (pageGetsChannel(kind)) openSearchChannel(view, kind)
+                // The unknown-format card's View as text turns the page into the text page, which
+                // the WebView's own find searches. Only a page served from Gander's own address.
+                if (kind == FileKind.UNSUPPORTED && webView === view) {
+                    val text = url.toUri().let { it.host == ASSET_HOST && it.path?.endsWith("/text.html") == true }
+                    findViewById<MaterialToolbar>(R.id.toolbar).menu.findItem(R.id.action_search)?.isVisible = text
+                }
             }
 
             /**
@@ -2407,6 +2475,8 @@ open class ViewerActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         playerScreen?.started()
+        // Delete for good is set in a folder's menu, which may have been changed while this was behind it
+        findViewById<MaterialToolbar>(R.id.toolbar)?.menu?.findItem(R.id.action_delete)?.showDelete(this)
     }
 
     /** A track may play on with the screen off: see [PlayerScreen.stopped]. */

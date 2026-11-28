@@ -46,6 +46,11 @@
         <item name="colorSurfaceInverse">@color/gander_inverse_surface</item>
         <item name="colorOnSurfaceInverse">@color/gander_inverse_on_surface</item>
         <item name="colorPrimaryInverse">@color/gander_inverse_primary</item>
+        <!-- Selection controls in the brand colour. Left alone, a single-choice dialog's radio
+             buttons, Sort by's, took the blue-grey secondary while the Filter dialog's check
+             boxes beside them took the brand colour, so two controls doing one job in one
+             menu came in two colours. -->
+        <item name="colorControlActivated">?attr/colorPrimary</item>
         <item name="android:colorBackground">@color/gander_surface</item>
         <item name="android:windowBackground">@color/gander_surface</item>
         <item name="android:textColorHighlight">@color/gander_text_highlight</item>

@@ -147,10 +147,12 @@
    * no change and the two routes agree.
    */
   html.vw-night .vw-status { background: #2D2A23; color: #E7E2D9; }
-  html.vw-night .vw-status.vw-error { background: #8C1D18; color: #F9DEDC; }
+  html.vw-night .vw-status.vw-error { border-left-color: #F2B8B5; }
+  html.vw-night .vw-error-title { color: #F2B8B5; }
+  html.vw-night .vw-elsewhere-btn { background: #FFB39E; color: #650B00; }
   html.vw-night .vw-ask-input { background: #17130A; color: #E7E2D9; border-color: #6B6250; }
-  html.vw-night .vw-ask-alert { color: #F9DEDC; }
-  html.vw-night .vw-simple-btn { background: #F9DEDC; color: #8C1D18; }
+  html.vw-night .vw-ask-alert { color: #F2B8B5; }
+  html.vw-night .vw-ask-btn, html.vw-night .vw-simple-btn { background: #FFB39E; color: #650B00; }
 
   /* Holds the filter and nothing else. Copied from how pdf.js hides the filters its
      own high-contrast mode builds, because that is the same engine resolving the same
@@ -470,6 +472,7 @@
     display: block;
     font-size: calc(13px * var(--vw-zoom));
     color: #8c1d18;
+    color: var(--vw-error-ink);
     margin-bottom: calc(10px * var(--vw-zoom));
   }
   .vw-ask-row { display: flex; gap: calc(8px * var(--vw-zoom)); }
@@ -500,11 +503,12 @@
     border-radius: calc(6px * var(--vw-zoom));
     /* The brand accent, like every other primary action in the app. */
     background: #AF2D18;
+    background: var(--vw-accent);
     color: #fff;
+    color: var(--vw-accent-ink);
   }
 
-  /* The card's button for the simple view, with plain px first because only old engines see it.
-     At night it takes the card's ink, since the accent hardly shows on the dark red card. */
+  /* The card's button for the simple view, with plain px first because only old engines see it. */
   .vw-simple-btn {
     display: block;
     width: 100%;
@@ -521,7 +525,9 @@
     border-radius: 6px;
     border-radius: calc(6px * var(--vw-zoom));
     background: #AF2D18;
+    background: var(--vw-accent);
     color: #fff;
+    color: var(--vw-accent-ink);
   }
   .vw-simple-btn:disabled { opacity: 0.6; }
   .vw-simple-caveat {
@@ -531,8 +537,11 @@
     font-size: calc(13px * var(--vw-zoom));
     opacity: 0.85;
   }
+  /* A phone in dark mode darkens the card through app.css's tokens, and the field with it, or the
+     field stays white on a dark card and the retry line, in the light theme's red, all but vanishes
+     on it: 1.6 to 1 against the card, measured on a Galaxy S24. */
   @media (prefers-color-scheme: dark) {
-    .vw-simple-btn { background: #F9DEDC; color: #8C1D18; }
+    .vw-ask-input { background: #17130A; color: #E7E2D9; border-color: #6B6250; }
   }
 </style>
 </head>

@@ -643,6 +643,7 @@ class MainActivity : AppCompatActivity() {
         }
         toolbar.menu.findItem(R.id.action_delete)?.apply {
             isVisible = picking != null
+            showDelete(this@MainActivity)
             // It has nothing to ask about until a photo is picked
             isEnabled = !picking.isNullOrEmpty()
             icon?.alpha = if (picking.isNullOrEmpty()) DISABLED_ALPHA else 255
@@ -844,7 +845,7 @@ class MainActivity : AppCompatActivity() {
         if (shownRoots.isEmpty()) rows += Row.Hint(getString(R.string.no_folders_hint))
         shownRoots.forEach { (perm, label) ->
             rows += Row.Item(
-                "DIR", DIR_COLOR, label, null,
+                FOLDER_BADGE, DIR_COLOR, label, null,
                 onClick = {
                     enter(Crumb(perm.uri, DocumentsContract.getTreeDocumentId(perm.uri), label))
                 },
@@ -873,7 +874,7 @@ class MainActivity : AppCompatActivity() {
                 }
             )
         }
-        rows += Row.Item("+", ADD_COLOR, getString(R.string.add_folder), null,
+        rows += Row.Item(ADD_BADGE, ADD_COLOR, getString(R.string.add_folder), null,
             onClick = { openTree.launch(null) })
         // The first run's tip, which goes with the welcome block: neither the button nor the
         // Add row opens a file from another app.
@@ -896,7 +897,7 @@ class MainActivity : AppCompatActivity() {
 
         val rows = mutableListOf<Row>()
         dirs.forEach { d ->
-            rows += Row.Item("DIR", DIR_COLOR, d.name, null, onClick = {
+            rows += Row.Item(FOLDER_BADGE, DIR_COLOR, d.name, null, onClick = {
                 enter(Crumb(crumb.treeUri, d.docId, d.name))
             })
         }

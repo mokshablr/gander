@@ -105,6 +105,16 @@ internal sealed interface PortMessage {
     data object SimpleView : PortMessage
 
     /**
+     * The page put up its card saying the document could not be shown, in place of the
+     * document, so the actions that work on a document have nothing left to work on. See
+     * vwError in app.js.
+     */
+    data object Failed : PortMessage
+
+    /** The reader tapped Open in another app on that card. */
+    data object OpenElsewhere : PortMessage
+
+    /**
      * Whether a PDF's pages are pinched smaller than the screen's width, which the page draws
      * itself since the WebView zooms out no further. While they are, a double tap is the page's,
      * back to the fitted width: see [DoubleTapZoom.leftToPage].
@@ -190,6 +200,8 @@ internal fun parsePortMessage(data: String?): PortMessage? {
         "reflow 1" -> return PortMessage.Reflows(true)
         "reflow 0" -> return PortMessage.Reflows(false)
         "simple" -> return PortMessage.SimpleView
+        "failed" -> return PortMessage.Failed
+        "elsewhere" -> return PortMessage.OpenElsewhere
         "shrunk 1" -> return PortMessage.Shrunk(true)
         "shrunk 0" -> return PortMessage.Shrunk(false)
     }

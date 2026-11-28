@@ -9,15 +9,10 @@
 <title>Unknown format</title>
 <link rel="stylesheet" href="app.css">
 <style>
-  .card {
-    margin: 32px 16px;
-    padding: 20px;
-    border-radius: 12px;
-    background: var(--vw-card);
-    box-shadow: 0 1px 4px var(--vw-shadow);
-    color: var(--vw-ink);
-  }
-  .card h2 { margin: 0 0 8px; font-size: 18px; }
+  /* The same card as every other one, the password prompt and the errors: app.css's .vw-status,
+     in the middle of the screen, with the text set left since it is more than a line. */
+  .card { text-align: left; }
+  .card h2 { margin: 0 0 6px; font-size: 1em; font-weight: 600; }
   .card .fname { font-weight: 600; word-break: break-all; }
   .card p { font-size: 14px; line-height: 1.5; }
   .as-text {
@@ -26,7 +21,7 @@
     margin: 18px 0 8px;
     padding: 12px 16px;
     border: 0;
-    border-radius: 8px;
+    border-radius: 6px;
     background: var(--vw-accent);
     color: var(--vw-accent-ink);
     font: 500 15px Roboto, -apple-system, "Segoe UI", sans-serif;
@@ -34,15 +29,15 @@
   .as-text:active { background: #8a2413; }
   .card .caveat { font-size: 13px; opacity: 0.75; }
 
-  /* Nothing here is a document, it is all chrome, so all of it turns over. */
+  /* Nothing here is a document, it is all chrome, so all of it turns over: the card through
+     app.css's tokens, and the pressed button here. */
   @media (prefers-color-scheme: dark) {
-    .card { background: #221F19; color: var(--vw-ink); box-shadow: 0 1px 4px var(--vw-shadow); }
     .as-text:active { background: #E09883; }
   }
 </style>
 </head>
 <body>
-<div class="card">
+<div class="card vw-status">
   <h2>Gander doesn't recognize this format</h2>
   <p class="fname" id="fname"></p>
   <p id="hint"></p>

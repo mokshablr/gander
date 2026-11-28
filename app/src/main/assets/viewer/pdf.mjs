@@ -2791,7 +2791,7 @@ function vwFailure(e) {
       return [
         "This file is not a PDF that can be read",
         "It is either damaged or not a PDF at all, whatever it happens to be " +
-        "named. Every other format Gander opens still works."
+        "named. Another app may still be able to open it."
       ];
     case "ResponseException":
       return [

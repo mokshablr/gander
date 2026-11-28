@@ -345,7 +345,7 @@ internal class ArchiveBrowser(
         val rows = mutableListOf<Row>()
         dirs.forEach { name ->
             val path = if (to.isEmpty()) name else "$to/$name"
-            rows += Row.Item("DIR", DIR_COLOR, name, null, onClick = { show(path) })
+            rows += Row.Item(FOLDER_BADGE, DIR_COLOR, name, null, onClick = { show(path) })
         }
         files.forEach { rows += fileRow(it) }
         if (rows.isEmpty()) rows += Row.Hint(activity.getString(R.string.empty_folder))

@@ -1610,6 +1610,8 @@ class ViewerActivityTest {
     fun withDeleteForGoodOnThePhotoIsDeletedOutright() {
         Settings.setDeleteForGood(context, true)
         val viewer = openedFrom(dcim(), "primary:DCIM/b.jpg")
+        val bin = viewer.get().findViewById<MaterialToolbar>(R.id.toolbar).menu.findItem(R.id.action_delete)
+        assertThat(bin.title.toString()).isEqualTo(context.getString(R.string.delete_for_good))
 
         viewer.delete("primary:DCIM/b.jpg")
 

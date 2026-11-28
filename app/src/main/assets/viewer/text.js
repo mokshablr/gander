@@ -56,7 +56,7 @@ function showPage() {
 }
 
 moreBtn.addEventListener("click", function () {
-  showPage().catch(function (e) { vwError("Could not read the rest of this file", String(e)); });
+  showPage().catch(function (e) { vwError("Could not read the rest of this file", String(e), true); });
 });
 
 vwOpenText()

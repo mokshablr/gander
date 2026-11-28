@@ -28,6 +28,16 @@
   they were numbered from 0, in the presentation's own colours, with the labels it asks for.
 - Spreadsheets have Night mode, from the menu as PDFs and Word documents have it, where a sheet went
   dark with the phone's dark theme and had no way to stay white (#87, thanks @georgimutafchiev-hub).
+- A file Gander can't show gets the same card as every other message, with an Open in another app
+  button, where it was a card filled red, and Search, Night mode and Print leave the menu since
+  there is nothing for them to act on. A file of a format Gander doesn't know has no Search until
+  View as text has shown it.
+- The line saying a PDF's password didn't work can be read on a phone in dark mode, where it was
+  dark red on the dark card, and the password field goes dark with the card.
+- Folders show a folder in place of the letters DIR, and TalkBack says "folder" after a folder's
+  name. While Delete for good is on, the Delete button shows a bin with a cross and says Delete for
+  good, so it is plain before tapping which of the two it does.
+- Sort by's choices are marked in Gander's colour, as Filter's are, where they were blue.
   A sheet keeps its own colours until Night mode is on, whatever the phone's theme.
 
 ## 2.11 (2026-11-24)

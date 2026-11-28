@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.DocumentsContract
 import android.provider.MediaStore
+import android.view.MenuItem
 import androidx.activity.ComponentActivity
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -270,4 +271,15 @@ internal fun trashWord(context: Context, gone: Int, stayed: Int, photos: Boolean
         gone == 0 -> left
         else -> context.getString(R.string.photos_trashed_some, went, left)
     }
+}
+
+/**
+ * Delete's icon and name for what it will do: the bin, or with Delete for good on, the bin with a
+ * cross and the setting's own name. The setting is a tick in a folder's menu that stays as it was
+ * left, so without this nothing at the button said which of the two a tap would ask for.
+ */
+internal fun MenuItem.showDelete(context: Context) {
+    val forGood = Settings.deleteForGood(context)
+    setIcon(if (forGood) R.drawable.ic_delete_forever else R.drawable.ic_delete)
+    setTitle(if (forGood) R.string.delete_for_good else R.string.delete_photo)
 }

@@ -81,7 +81,13 @@
     <string name="share_file">Share</string>
     <string name="show_in_file_manager">Show in file manager</string>
     <string name="no_file_manager">No app can open this folder</string>
+    <!-- What TalkBack says after a folder's name in a list, where the row's badge is a folder -->
+    <string name="folder_spoken">folder</string>
     <string name="share_failed">This file can\'t be shared</string>
+    <!-- The chooser's title for the button on the card saying Gander could not show a file. The
+         button's own words are in app.js. -->
+    <string name="open_elsewhere">Open in another app</string>
+    <string name="open_elsewhere_failed">This file can\'t be handed to another app</string>
     <string name="previous_match">Previous match</string>
     <string name="next_match">Next match</string>
     <string name="close_search">Close search</string>

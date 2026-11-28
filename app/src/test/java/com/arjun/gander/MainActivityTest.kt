@@ -1465,6 +1465,10 @@ class MainActivityTest {
         controller.holdRow("a.jpg")
         controller.clickRow("c.png")
         assertThat(toggle().isVisible).isTrue()
+        // And the bin says it is on, by its name and its cross
+        val bin = controller.bar().menu.findItem(R.id.action_delete)
+        assertThat(bin.title.toString()).isEqualTo(context.getString(R.string.delete_for_good))
+        assertThat(shadowOf(bin.icon).createdFromResId).isEqualTo(R.drawable.ic_delete_forever)
         val prompt = controller.tapBin()!!
         docs.remove("primary:DCIM/a.jpg")
         docs.remove("primary:DCIM/c.png")
@@ -1480,6 +1484,38 @@ class MainActivityTest {
         shadowOf(context.mainLooper).idle()
         assertThat(toggle().isChecked).isFalse()
         assertThat(Settings.deleteForGood(context)).isFalse()
+        controller.holdRow("b.jpg")
+        val plainBin = controller.bar().menu.findItem(R.id.action_delete)
+        assertThat(plainBin.title.toString()).isEqualTo(context.getString(R.string.delete_photo))
+        assertThat(shadowOf(plainBin.icon).createdFromResId).isEqualTo(R.drawable.ic_delete)
+    }
+
+    /** The row [title] is drawn as, bound as the list binds it. */
+    private fun ActivityController<MainActivity>.rowView(title: String): View {
+        val rv = list()
+        val adapter = rv.adapter!!
+        return (0 until adapter.itemCount).firstNotNullOf { position ->
+            val holder = adapter.createViewHolder(rv, adapter.getItemViewType(position))
+            adapter.bindViewHolder(holder, position)
+            holder.itemView.takeIf { it.findViewById<TextView>(R.id.title)?.text?.toString() == title }
+        }
+    }
+
+    /** A folder's badge is a folder, not the letters "DIR", and TalkBack says "folder" after its name. */
+    @Test
+    fun aFolderRowShowsAndSaysFolder() {
+        grantedPhotos()
+        val controller = home()
+        controller.clickRow("DCIM")
+        val trip = controller.rowView("Trip")
+        val badge = trip.findViewById<TextView>(R.id.badge)
+        assertThat(badge.text.toString()).isEmpty()
+        assertThat(shadowOf(badge.foreground).createdFromResId).isEqualTo(R.drawable.ic_badge_folder)
+        assertThat(trip.contentDescription.toString()).isEqualTo("Trip, folder")
+        // A file's badge is still its letters, and recycled rows lose the folder
+        val notes = controller.rowView("notes.pdf")
+        assertThat(notes.findViewById<TextView>(R.id.badge).foreground).isNull()
+        assertThat(notes.contentDescription.toString()).startsWith("notes.pdf, PDF")
     }
 
     /** From the menu too, for whoever doesn't hold rows down: with nothing picked yet, and a bin that asks nothing. */

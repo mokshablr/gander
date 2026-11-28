@@ -1,15 +1,26 @@
 package com.arjun.gander
 
 import android.net.Uri
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat
 import androidx.core.view.accessibility.AccessibilityViewCommand
 import androidx.recyclerview.widget.RecyclerView
+
+/** The badge a folder's row carries. */
+internal const val FOLDER_BADGE = "DIR"
+
+/** Add a folder's. */
+internal const val ADD_BADGE = "+"
+
+/** The badges drawn as a picture rather than as their letters. */
+private val BADGE_ICONS = mapOf(FOLDER_BADGE to R.drawable.ic_badge_folder, ADD_BADGE to R.drawable.ic_badge_add)
 
 /**
  * The rows of a file list: the home screen's recents and folders, and what is inside a .zip.
@@ -171,7 +182,12 @@ internal class RowAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             is Row.Item -> {
                 val badge = holder.itemView.findViewById<TextView>(R.id.badge)
                 val thumb = holder.itemView.findViewById<ImageView>(R.id.thumb)
-                badge.text = row.badge
+                // A folder and Add a folder get a picture rather than letters: "DIR" is a word from
+                // a command line, and TalkBack read it out after every folder's name
+                val icon = BADGE_ICONS[row.badge]
+                badge.text = if (icon == null) row.badge else ""
+                badge.foreground = icon?.let { ContextCompat.getDrawable(holder.itemView.context, it) }
+                badge.foregroundGravity = Gravity.CENTER
                 badge.background.mutate().setTint(row.color)
                 badge.visibility = View.VISIBLE
                 thumb.visibility = View.GONE
@@ -189,8 +205,14 @@ internal class RowAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 // The row children are not-important for accessibility, so this is
                 // the whole announcement. Keeping the badge in it matters: the badge
                 // is hidden once a thumbnail loads, and the file type would go with it
+                val spoken = when (row.badge) {
+                    FOLDER_BADGE -> holder.itemView.context.getString(R.string.folder_spoken)
+                    // Add a folder says what it does in its title
+                    ADD_BADGE -> null
+                    else -> row.badge
+                }
                 holder.itemView.contentDescription =
-                    listOfNotNull(row.title, row.badge, row.subtitle).joinToString(", ")
+                    listOfNotNull(row.title, spoken, row.subtitle).joinToString(", ")
                 bindPick(holder.itemView, row)
                 // A swipe is how a row is removed, and nothing on screen says so, nor can a
                 // screen reader make one. So TalkBack is offered Remove among the row's

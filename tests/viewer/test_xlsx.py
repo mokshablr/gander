@@ -379,8 +379,8 @@ def test_at_night_fills_turn_over_keeping_their_colour_and_text_stays_readable(v
     assert rgb(look("A2")["ink"]) == (0xE7, 0xE2, 0xD9)
 
 
-PALETTE = ["--vw-ground", "--vw-card", "--vw-ink", "--vw-accent", "--vw-accent-ink", "--vw-error",
-           "--vw-error-ink", "--vw-shadow"]
+PALETTE = ["--vw-ground", "--vw-card", "--vw-ink", "--vw-accent", "--vw-accent-ink", "--vw-error-ink",
+           "--vw-shadow"]
 
 
 def app_css_palette(dark):

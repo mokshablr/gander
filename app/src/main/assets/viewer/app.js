@@ -22,7 +22,14 @@ function vwStatusDone() {
   if (el) el.style.display = "none";
 }
 
-function vwError(title, detail) {
+/*
+ * The card saying the file could not be shown, in place of the document. Unless [kept] says some
+ * of the document is still on the page, the app is told, so that it takes away Search, Night mode,
+ * Print and the rest that would now act on nothing, and the card offers the file to another app,
+ * which may read what Gander could not. Both go over the app's channel, so a page given none says
+ * neither and has no button.
+ */
+function vwError(title, detail, kept) {
   var el = document.getElementById("vw-status");
   if (!el) {
     el = document.createElement("div");
@@ -40,6 +47,44 @@ function vwError(title, detail) {
   d.textContent = detail || "";
   el.appendChild(t);
   el.appendChild(d);
+  if (kept) return;
+  vwTellApp("failed");
+  vwOnAppPort(function () {
+    // Not if the card has gone or been written over since, by a password prompt or a later card
+    if (el.className.indexOf("vw-error") < 0 || el.querySelector(".vw-elsewhere-btn")) return;
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "vw-elsewhere-btn";
+    button.textContent = "Open in another app";
+    button.addEventListener("click", function () { vwTellApp("elsewhere"); });
+    el.appendChild(button);
+  });
+}
+
+/*
+ * The app's end of the channel, as every page that is given one gets it: in the one message the
+ * page is sent, which is the one carrying the port. The pages that search take it as well, from
+ * the same message; this is what a card can say over it whatever the page.
+ */
+var vwAppPort = null;
+var vwAppPortWaiters = [];
+window.addEventListener("message", function (e) {
+  if (!e.ports || !e.ports.length || vwAppPort) return;
+  vwAppPort = e.ports[0];
+  var waiting = vwAppPortWaiters;
+  vwAppPortWaiters = [];
+  waiting.forEach(function (then) { then(); });
+});
+
+/* Runs [then] once the page has the app's channel, at once if it has it already. */
+function vwOnAppPort(then) {
+  if (vwAppPort) then();
+  else vwAppPortWaiters.push(then);
+}
+
+/* Says [msg] to the app, once there is a channel to say it on. */
+function vwTellApp(msg) {
+  vwOnAppPort(function () { vwAppPort.postMessage(msg); });
 }
 
 /*

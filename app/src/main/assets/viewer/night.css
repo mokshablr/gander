@@ -21,5 +21,7 @@
   html.vw-night #container img[data-vw-paper] { filter: invert(1) hue-rotate(180deg); }
   /* The cards as well, as pdf.html has them, for a phone that is not set to dark */
   html.vw-night .vw-status { background: #2D2A23; color: #E7E2D9; }
-  html.vw-night .vw-status.vw-error { background: #8C1D18; color: #F9DEDC; }
+  html.vw-night .vw-status.vw-error { border-left-color: #F2B8B5; }
+  html.vw-night .vw-error-title { color: #F2B8B5; }
+  html.vw-night .vw-elsewhere-btn { background: #FFB39E; color: #650B00; }
 }

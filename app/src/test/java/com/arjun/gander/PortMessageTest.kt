@@ -147,6 +147,23 @@ class PortMessageTest {
     }
 
     // ---------------------------------------------------------------
+    // Inbound: the card saying the document could not be shown, and its button
+    // ---------------------------------------------------------------
+
+    @Test
+    fun theFailedCardAndItsButtonAreRead() {
+        assertThat(parsePortMessage("failed")).isEqualTo(PortMessage.Failed)
+        assertThat(parsePortMessage("elsewhere")).isEqualTo(PortMessage.OpenElsewhere)
+    }
+
+    @Test
+    fun onlyTheExactWordsAreRead() {
+        for (near in listOf("Failed", "failed ", "failed 1 0", "elsewhere 1", "Elsewhere", "else")) {
+            assertThat(parsePortMessage(near)).isNull()
+        }
+    }
+
+    // ---------------------------------------------------------------
     // Inbound: a PDF whose pages are pinched smaller than the screen
     // ---------------------------------------------------------------
 

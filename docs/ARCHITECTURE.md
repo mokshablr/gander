@@ -8,7 +8,7 @@ One Android module in Kotlin, minSdk 26, target and compile SDK 36, R8 on with r
 
 - `GanderApp` starts the WebView on a background thread as the process starts, best effort, so the first document opens sooner.
 - `MainActivity` is the launcher: recent files (`Recents`, each read under a persisted SAF grant: a picked file's own, or its added folder's), added folders (tree grants) browsed with DocumentsContract child queries, sort, filter and search by name (`Settings`, `Listing`), thumbnails off the main thread (`Thumbs`, and `PdfThumbs` for PDFs), swipe to remove with Undo (`SwipeToRemove`), a first-run explainer with the Open with tip, and About with the licences and a File types page, each copied from assets to the cache and opened in the viewer.
-- `ViewerActivity` shows one file. It is exported for other apps' VIEW and SEND intents. Gander's own screens open it as `InternalViewer`, a non-exported subclass, so it can tell the two apart.
+- `ViewerActivity` shows one file. It is exported for other apps' VIEW and SEND intents. Gander's own screens open it as `InternalViewer`, a non-exported subclass, so it can tell the two apart. A file from an added folder gets Next file and Previous file (`NextFile.kt`, #87): the nearest files Gander opens either side of it in the folder's sort order, photos, zips and unknown formats skipped. A step opens the other file in a viewer of its own and finishes this one, so Back goes to the folder; a video or a track steps with the player's own buttons, through `SteppingPlayer`.
 
 ## What the viewer accepts
 

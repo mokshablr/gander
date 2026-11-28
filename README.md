@@ -49,7 +49,7 @@ It cannot phone home because it does not even hold the INTERNET permission.
 - **Opens `.zip` files**: a zip lists like a folder, and each file in it opens in its usual viewer, read straight out of the archive with nothing unzipped to the phone
 - **Pinch zoom and smooth scrolling** everywhere, with deep zoom into huge photos (tiled decoding)
 - **Recent files** with thumbnail previews (image, video frame, PDF first page)
-- **Folder browsing** through one-time system grants, still without any storage permission. A folder can be searched by name, and its menu sorts its files by name, type, date or size, and filters them by kind
+- **Folder browsing** through one-time system grants, still without any storage permission. A folder can be searched by name, and its menu sorts its files by name, type, date or size, and filters them by kind. A file opened from a folder has Next file and Previous file, and a video or a track the player's own buttons, to go through the folder without going back to it
 - **Share sheet and "Open with" integration**: share a file from any app (chat, mail, browser) into Gander, or tap it in a file manager
 - **Find in document**: search inside PDF, Word, OpenDocument, Rich Text, every chapter of a book, every sheet of a workbook, slides, Markdown, text and code with match navigation
 - **Select and copy text in a PDF**, and read one with a screen reader

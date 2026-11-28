@@ -28,6 +28,11 @@
   they were numbered from 0, in the presentation's own colours, with the labels it asks for.
 - Spreadsheets have Night mode, from the menu as PDFs and Word documents have it, where a sheet went
   dark with the phone's dark theme and had no way to stay white (#87, thanks @georgimutafchiev-hub).
+- A file opened from a folder you added in Gander has Next file and Previous file in its menu, which
+  open the files either side of it in the order the folder is sorted in, without going back to the
+  folder (#87, thanks @georgimutafchiev-hub). Photos, zips and files Gander can't open are passed
+  over, and photos still swipe through their folder. A video or a track uses the player's own
+  previous and next buttons for this, which before went back to the start and did nothing.
 - Presentations, Markdown files and text files can be printed, a slide to a sheet, and Markdown
   and text come out black on white from a phone in dark mode.
 - A file Gander can't show gets the same card as every other message, with an Open in another app

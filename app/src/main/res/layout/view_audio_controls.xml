@@ -73,6 +73,12 @@
             android:gravity="center"
             android:orientation="horizontal">
 
+            <!-- The files before and after this one in its folder, as a video's controls have
+                 them; hidden for a track alone or from another app. See PlayerScreen.stepsTo. -->
+            <ImageButton
+                android:id="@id/exo_prev"
+                style="@style/ExoStyledControls.Button.Center.Previous" />
+
             <include layout="@layout/exo_player_control_rewind_button" />
 
             <ImageButton
@@ -80,6 +86,10 @@
                 style="@style/ExoStyledControls.Button.Center.PlayPause" />
 
             <include layout="@layout/exo_player_control_ffwd_button" />
+
+            <ImageButton
+                android:id="@id/exo_next"
+                style="@style/ExoStyledControls.Button.Center.Next" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

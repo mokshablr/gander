@@ -360,6 +360,10 @@ open class ViewerActivity : AppCompatActivity() {
             }
             setUpSearch(toolbar, kind)
             setUpActions(toolbar, kind, uri, name, ext, mime)
+            // A photo's folder is swiped through instead, and a zip's list has its own way back
+            if (fromGander && kind != FileKind.IMAGE && kind != FileKind.IMAGE_WEB && kind != FileKind.ARCHIVE) {
+                findNeighbours(toolbar, uri, kind)
+            }
             // A document that opens turned over opens with the parts around it dark as well
             if (loadedNight) nightChrome.show(true)
             // What the simple view can't show, under the file's name
@@ -741,6 +745,58 @@ open class ViewerActivity : AppCompatActivity() {
             checkNotNull(getSystemService(PrintManager::class.java)).print(job, adapter, null)
         }.isSuccess
         if (!started) Toast.makeText(this, R.string.print_failed, Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Next file and Previous file, once the folder has been read, for a file from a folder added
+     * in Gander. Issue #87. A document gets them in the menu, greyed at either end of the folder,
+     * and a video or a track gets the player's own buttons. Nothing is offered for a file alone
+     * in its folder, or one another app opened, which comes without its folder.
+     */
+    private fun findNeighbours(toolbar: MaterialToolbar, uri: Uri, kind: FileKind) {
+        if (!DocumentsContract.isTreeUri(uri)) return
+        offMain({ found: Neighbours? ->
+            if (found == null || !found.any) return@offMain
+            val back = found.previous?.let { doc -> { stepTo(uri, doc, forward = false) } }
+            val on = found.next?.let { doc -> { stepTo(uri, doc, forward = true) } }
+            if (kind == FileKind.PLAYER) {
+                playerScreen?.stepsTo(back, on)
+                return@offMain
+            }
+            for ((id, go) in listOf(R.id.action_next_file to on, R.id.action_previous_file to back)) {
+                toolbar.menu.findItem(id)?.apply {
+                    isVisible = true
+                    isEnabled = go != null
+                    setOnMenuItemClickListener {
+                        go?.invoke()
+                        true
+                    }
+                }
+            }
+        }) { app -> neighboursOf(app.contentResolver, uri, Settings.sortOrder(app)) }
+    }
+
+    /**
+     * Opens [to], from the same folder as [from], in a viewer of its own in place of this one, so it
+     * is read, routed and filed in Recents as any file opened from the folder is, and Back still
+     * goes to the folder. It slides in from the side it lies on.
+     */
+    private fun stepTo(from: Uri, to: ChildDoc, forward: Boolean) {
+        val target = runCatching { DocumentsContract.buildDocumentUriUsingTree(from, to.docId) }.getOrNull() ?: return
+        startActivity(
+            Intent()
+                .setClassName(this, INTERNAL_VIEWER)
+                .setData(target)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        )
+        finish()
+        // Still honoured for the start and finish just made. Its replacement, overrideActivityTransition,
+        // is set by the viewer being opened, which would then have to be told which way it came from.
+        @Suppress("DEPRECATION")
+        overridePendingTransition(
+            if (forward) R.anim.file_next_in else R.anim.file_previous_in,
+            if (forward) R.anim.file_next_out else R.anim.file_previous_out,
+        )
     }
 
     /**

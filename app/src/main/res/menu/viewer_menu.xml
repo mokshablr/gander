@@ -36,6 +36,19 @@
         android:title="@string/night_mode"
         android:visible="false"
         app:showAsAction="never" />
+    <!-- The files either side of this one in its folder, for a document opened from a folder
+         added in Gander, in the order the folder is listed in; greyed at either end. A video or a
+         track has the player's own buttons for this instead. Issue #87. -->
+    <item
+        android:id="@+id/action_next_file"
+        android:title="@string/next_file"
+        android:visible="false"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_previous_file"
+        android:title="@string/previous_file"
+        android:visible="false"
+        app:showAsAction="never" />
     <item
         android:id="@+id/action_share"
         android:icon="@drawable/ic_share"

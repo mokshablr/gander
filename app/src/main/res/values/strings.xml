@@ -86,6 +86,9 @@
     <string name="share_failed">This file can\'t be shared</string>
     <!-- The chooser's title for the button on the card saying Gander could not show a file. The
          button's own words are in app.js. -->
+    <!-- The viewer's menu, for the file after or before this one in its folder (#87) -->
+    <string name="next_file">Next file</string>
+    <string name="previous_file">Previous file</string>
     <string name="open_elsewhere">Open in another app</string>
     <string name="open_elsewhere_failed">This file can\'t be handed to another app</string>
     <string name="previous_match">Previous match</string>

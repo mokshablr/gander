@@ -15,6 +15,7 @@ import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.media3.common.AudioAttributes
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
@@ -61,6 +62,9 @@ internal class PlayerScreen(
     }
 
     private var player: ExoPlayer? = null
+
+    /** What shows the player, kept for the buttons [stepsTo] gives it. */
+    private var playerView: PlayerView? = null
 
     /** Play and pause on the lock screen, for a track. A video has none: see [stopped]. */
     @androidx.annotation.VisibleForTesting
@@ -128,15 +132,18 @@ internal class PlayerScreen(
             playerView.setShutterBackgroundColor(Color.TRANSPARENT)
             playerView.artworkDisplayMode = PlayerView.ARTWORK_DISPLAY_MODE_OFF
             playerView.controllerHideOnTouch = false
-            // One file, so there is nothing to be previous or next to.
-            playerView.setShowPreviousButton(false)
-            playerView.setShowNextButton(false)
         } else {
             cover = null
             playerView.keepScreenOn = true
             playerView.controllerShowTimeoutMs = 2500
             playerView.setBackgroundColor(Color.BLACK)
         }
+        // One file, so nothing to be previous or next to, until the folder it came from says
+        // otherwise: see stepsTo. Left to itself, a video's Previous went back to the start and
+        // its Next sat greyed, beside the play button, doing nothing.
+        playerView.setShowPreviousButton(false)
+        playerView.setShowNextButton(false)
+        this.playerView = playerView
         container.addView(
             playerView,
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
@@ -288,10 +295,58 @@ internal class PlayerScreen(
         }
     }
 
+    /**
+     * The player's Previous and Next go to the file before and after this one in its folder, issue
+     * #87, rather than to the start of the file and nowhere. Shown together once either has
+     * somewhere to go, greyed at an end of the folder as a menu's Next file is.
+     */
+    fun stepsTo(previous: (() -> Unit)?, next: (() -> Unit)?) {
+        val view = playerView ?: return
+        val exo = player ?: return
+        if (previous == null && next == null) return
+        view.player = SteppingPlayer(exo, previous, next)
+        view.setShowPreviousButton(true)
+        view.setShowNextButton(true)
+    }
+
     fun release() {
         lockScreen?.release()
         lockScreen = null
         player?.release()
         player = null
+    }
+}
+
+/**
+ * [player] as the player's view sees it, with its Previous and Next taken over: they step to
+ * another file, and are there only where there is one. The player itself is left as it is, so its
+ * lock screen controls and everything listening to it are untouched.
+ */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+internal class SteppingPlayer(
+    player: Player,
+    private val previous: (() -> Unit)?,
+    private val next: (() -> Unit)?,
+) : ForwardingPlayer(player) {
+
+    override fun getAvailableCommands(): Player.Commands {
+        val commands = super.getAvailableCommands().buildUpon()
+            .removeAll(
+                COMMAND_SEEK_TO_PREVIOUS, COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+                COMMAND_SEEK_TO_NEXT, COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+            )
+        if (previous != null) commands.add(COMMAND_SEEK_TO_PREVIOUS)
+        if (next != null) commands.add(COMMAND_SEEK_TO_NEXT)
+        return commands.build()
+    }
+
+    override fun isCommandAvailable(command: Int): Boolean = availableCommands.contains(command)
+
+    override fun seekToPrevious() {
+        previous?.invoke()
+    }
+
+    override fun seekToNext() {
+        next?.invoke()
     }
 }

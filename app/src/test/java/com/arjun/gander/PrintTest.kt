@@ -9,15 +9,18 @@ import org.junit.Test
 /** Print, issue #45: which files print, what the job is called, and the copy a PDF prints from. */
 class PrintTest {
 
+    /** A PDF, the paper documents, slides, Markdown and text; not a sheet, a book, or anything that is not pages of text. */
     @Test
-    fun onlyAPdfAndThePaperDocumentsPrint() {
+    fun theDocumentsPrintAndNothingElse() {
         val printing = FileKind.entries.filter { printRoute(it) != null }
-        assertThat(printing)
-            .containsExactly(FileKind.PDF, FileKind.PDF_SIMPLE, FileKind.DOCX, FileKind.PROSE)
+        assertThat(printing).containsExactly(
+            FileKind.PDF, FileKind.PDF_SIMPLE, FileKind.DOCX, FileKind.PROSE, FileKind.PPTX, FileKind.MD, FileKind.TEXT,
+        )
         assertThat(printRoute(FileKind.PDF)).isEqualTo(PrintRoute.FILE)
         assertThat(printRoute(FileKind.PDF_SIMPLE)).isEqualTo(PrintRoute.FILE)
-        assertThat(printRoute(FileKind.DOCX)).isEqualTo(PrintRoute.PAGE)
-        assertThat(printRoute(FileKind.PROSE)).isEqualTo(PrintRoute.PAGE)
+        for (page in listOf(FileKind.DOCX, FileKind.PROSE, FileKind.PPTX, FileKind.MD, FileKind.TEXT)) {
+            assertThat(printRoute(page)).isEqualTo(PrintRoute.PAGE)
+        }
     }
 
     /** "Save as PDF" adds .pdf itself, so a Word file would otherwise come out as letter.docx.pdf. */

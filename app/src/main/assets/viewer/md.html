@@ -50,12 +50,14 @@
   #content th, #content td { border: 1px solid #d0d7de; padding: 5px 12px; }
   #content th { background: #f6f8fa; }
   #content img { max-width: 100%; }
-  @media (prefers-color-scheme: light) { #content img[data-vw-only="dark"] { display: none; } }
-  @media (prefers-color-scheme: dark) { #content img[data-vw-only="light"] { display: none; } }
+  /* A picture the file offers for one theme only: on paper, the light one */
+  @media print, (prefers-color-scheme: light) { #content img[data-vw-only="dark"] { display: none; } }
+  @media screen and (prefers-color-scheme: dark) { #content img[data-vw-only="light"] { display: none; } }
   #content hr { border: 0; border-top: 2px solid #d0d7de; }
   /* A formula wider than the screen scrolls on its own, as a code block does */
   #content .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.2em 0; }
-  @media (prefers-color-scheme: dark) {
+  /* Screen only, so a page printed from a dark phone comes out black on white */
+  @media screen and (prefers-color-scheme: dark) {
     body { background: var(--vw-ground); }
     #content { color: #e6edf3; }
     #content h1, #content h2 { border-color: #30363d; }
@@ -65,6 +67,13 @@
     #content blockquote { border-color: #30363d; color: #9198a1; }
     #content th, #content td { border-color: #30363d; }
     #content th { background: #161b22; }
+  }
+  /* On paper nothing scrolls, so a wide code block or table wraps or runs on to the next line */
+  @media print {
+    #content { max-width: none; padding: 0; }
+    #content pre { white-space: pre-wrap; overflow: visible; }
+    #content table { display: table; overflow: visible; }
+    #content .katex-display { overflow: visible; }
   }
 </style>
 <script src="lib/marked.umd.js"></script>

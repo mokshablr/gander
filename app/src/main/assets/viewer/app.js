@@ -277,8 +277,10 @@ function vwPrintSizes(sheets) {
   var names = {};
   for (var i = 0; i < sheets.length; i++) {
     var style = sheets[i].style;
-    if (!style.width || !style.minHeight) continue;
-    var size = style.width + " " + style.minHeight;
+    // A Word page's height is a minimum, since its text may run past it; a slide's is fixed
+    var height = style.minHeight || style.height;
+    if (!style.width || !height) continue;
+    var size = style.width + " " + height;
     if (!names[size]) {
       names[size] = "vw-sheet-" + i;
       rules += "@page " + names[size] + " { size: " + size + "; } ";

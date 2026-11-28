@@ -133,6 +133,16 @@
    * stood at 1% until the slides appeared. Its style is set on the element, hence !important.
    */
   .slides-loadnig-msg { display: none !important; }
+
+  /* Print: a slide to a sheet, edge to edge, without the ground, the gaps or the shadows the
+     screen gives them. The sheet is the slide's own size, set by vwPrintSizes in pptx.js. */
+  @media print {
+    @page { margin: 0; }
+    body { background: none; }
+    #result { display: block; min-height: 0; }
+    #result .slide { margin: 0 !important; box-shadow: none; break-inside: avoid; break-after: page; }
+    #result .slide:last-child { break-after: auto; }
+  }
 </style>
 <script src="lib/pptx/jquery.min.js"></script>
 <script src="lib/pptx/jszip2.min.js"></script>

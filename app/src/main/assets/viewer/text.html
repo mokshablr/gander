@@ -40,11 +40,16 @@
   }
   .more button:active { background: #f7e4e0; }
   .more button[disabled] { opacity: 0.5; }
-  @media (prefers-color-scheme: dark) {
+  /* Screen only, so a file printed from a dark phone comes out black on white */
+  @media screen and (prefers-color-scheme: dark) {
     body { background: var(--vw-ground); }
     pre { color: #e0e0e0; }
     .more p { color: #9e9e9e; }
     .more button:active { background: #3a2620; }
+  }
+  /* What has been read so far prints; the button to read more has nothing to do on paper */
+  @media print {
+    .more { display: none !important; }
   }
 </style>
 </head>

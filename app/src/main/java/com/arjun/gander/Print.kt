@@ -20,18 +20,19 @@ import java.util.concurrent.Executors
  * How a file of this kind prints, or null if it doesn't. Issue #45.
  *
  * A PDF, in either view, goes to the printer as the file itself. The paper documents print as
- * the WebView draws them, with the print rules in their pages.
+ * the WebView draws them, with the print rules in their pages, and so do slides, a slide to a
+ * sheet, and Markdown and text files, black on white whatever the phone's theme.
  */
 internal enum class PrintRoute { FILE, PAGE }
 
 internal fun printRoute(kind: FileKind): PrintRoute? = when (kind) {
     FileKind.PDF, FileKind.PDF_SIMPLE -> PrintRoute.FILE
-    FileKind.DOCX, FileKind.PROSE -> PrintRoute.PAGE
+    FileKind.DOCX, FileKind.PROSE, FileKind.PPTX, FileKind.MD, FileKind.TEXT -> PrintRoute.PAGE
     // A book has one chapter on its page at a time, so printing the page would print that
-    // chapter and call it the book.
-    FileKind.IMAGE, FileKind.IMAGE_WEB, FileKind.PLAYER, FileKind.XLSX, FileKind.PPTX,
-    FileKind.MD, FileKind.TEXT, FileKind.MODEL, FileKind.EPUB, FileKind.ARCHIVE,
-    FileKind.UNSUPPORTED -> null
+    // chapter and call it the book. A sheet on screen has no pages: what fits on paper is set
+    // by print areas, page breaks and scaling the sheet keeps and the screen does not show.
+    FileKind.IMAGE, FileKind.IMAGE_WEB, FileKind.PLAYER, FileKind.XLSX,
+    FileKind.MODEL, FileKind.EPUB, FileKind.ARCHIVE, FileKind.UNSUPPORTED -> null
 }
 
 /**

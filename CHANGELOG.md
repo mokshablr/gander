@@ -28,6 +28,8 @@
   they were numbered from 0, in the presentation's own colours, with the labels it asks for.
 - Spreadsheets have Night mode, from the menu as PDFs and Word documents have it, where a sheet went
   dark with the phone's dark theme and had no way to stay white (#87, thanks @georgimutafchiev-hub).
+- Presentations, Markdown files and text files can be printed, a slide to a sheet, and Markdown
+  and text come out black on white from a phone in dark mode.
 - A file Gander can't show gets the same card as every other message, with an Open in another app
   button, where it was a card filled red, and Search, Night mode and Print leave the menu since
   there is nothing for them to act on. A file of a format Gander doesn't know has no Search until

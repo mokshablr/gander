@@ -635,6 +635,8 @@ var vwPoll = setInterval(function () {
   var slides = document.querySelectorAll("#result .slide");
   if (slides.length > 0) {
     vwDisarmLinks(document.getElementById("result"));
+    /* Each slide prints on a sheet of its own size, which Android's print fits to the paper */
+    vwPrintSizes(slides);
     /* Once the slides exist, because it is they that widen the layout viewport. */
     vwFitHeight();
     vwStatusDone();

@@ -57,7 +57,7 @@ It cannot phone home because it does not even hold the INTERNET permission.
 - **Night mode for PDFs, Word documents and spreadsheets**: turns the page over for reading in the dark, keeping each colour's hue, turning scans and figures over with the text, and leaving photographs exactly as they were printed
 - **Word documents in pages**: a file saved in Word shows its pages where Word ended them, each with its own page number, and a page counter and Go to page as a PDF has
 - **Share and locate**: send the open file to any app, or jump to its folder in the file manager
-- **Print**: a PDF prints exactly as it is, and a Word, OpenDocument or Rich Text file prints the way Gander shows it, through Android's own print screen
+- **Print**: a PDF prints exactly as it is, and a Word, OpenDocument or Rich Text file, a presentation, a Markdown file or a text file prints the way Gander shows it, a slide to a sheet, through Android's own print screen
 - **Private by construction**: no permissions, no INTERNET, no analytics, no accounts, nothing leaves the phone
 - **Checks its own promise**: the About screen asks Android what the app requests and shows you the answer, next to the full licence text for every bundled library
 - **Modern Android**: Material 3, dark mode, edge to edge, works on Android 8.0+

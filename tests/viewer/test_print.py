@@ -242,3 +242,47 @@ def test_a_pdf_without_one_never_does(viewer, page, port):
     channel.wait_for(r"page \d+ \d+")
     page.wait_for_timeout(300)
     assert "locked" not in channel.messages()
+
+
+@pytest.mark.parametrize("paper", ["A4", "Letter"])
+def test_a_deck_prints_a_slide_to_a_sheet(viewer, page, paper):
+    """Each on a sheet of its own size, fitted to the paper, with no ground, gap or shadow around it."""
+    viewer("pptx.html", "deck.pptx")
+    wait_until_done(page)
+    slides = page.evaluate("document.querySelectorAll('#result .slide').length")
+    assert slides > 1
+    page.emulate_media(media="print")
+    style = page.evaluate("""() => {
+        const s = getComputedStyle(document.querySelector('#result .slide'));
+        return { shadow: s.boxShadow, margin: s.marginTop, page: document.querySelector('#result .slide').style.page };
+    }""")
+    assert style == {"shadow": "none", "margin": "0px", "page": style["page"]}
+    assert style["page"].startswith("vw-sheet-")
+    assert sheets(page, paper) == slides
+
+
+@pytest.mark.parametrize("html,fixture,ink", [
+    ("md.html", "notes.md", "#content"),
+    ("text.html", "plain.txt", "#content"),
+])
+def test_markdown_and_text_print_black_on_white_from_a_dark_phone(viewer, page, html, fixture, ink):
+    page.emulate_media(color_scheme="dark")
+    viewer(html, fixture)
+    wait_until_done(page)
+    page.emulate_media(media="print", color_scheme="dark")
+    colours = page.evaluate("""(sel) => ({
+        ink: getComputedStyle(document.querySelector(sel)).color,
+        body: getComputedStyle(document.body).backgroundColor,
+    })""", ink)
+    # Paper, not the dark ground the screen gives them
+    assert colours["body"] in ("rgba(0, 0, 0, 0)", "transparent", "rgb(255, 255, 255)")
+    # Dark ink: every channel well under the middle
+    assert all(int(c) < 80 for c in colours["ink"][4:-1].split(", ")[:3])
+    assert sheets(page, "A4") >= 1
+
+
+def test_a_text_files_show_more_button_stays_off_paper(viewer, page, made):
+    viewer("text.html", made("long.txt", b"line\n" * 1_200_000))
+    page.wait_for_selector("#moreBtn", state="visible", timeout=20000)
+    page.emulate_media(media="print")
+    assert page.evaluate("getComputedStyle(document.getElementById('more')).display") == "none"

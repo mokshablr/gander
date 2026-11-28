@@ -26,6 +26,9 @@
 - A doughnut chart in a presentation is drawn, where a box said it could not be shown (#86,
   thanks @AdityaOak2026). Pie and doughnut charts name their slices by their categories, where
   they were numbered from 0, in the presentation's own colours, with the labels it asks for.
+- Spreadsheets have Night mode, from the menu as PDFs and Word documents have it, where a sheet went
+  dark with the phone's dark theme and had no way to stay white (#87, thanks @georgimutafchiev-hub).
+  A sheet keeps its own colours until Night mode is on, whatever the phone's theme.
 
 ## 2.11 (2026-11-24)
 

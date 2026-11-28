@@ -277,6 +277,27 @@ class ViewerActivityTest {
         assertThat(channels[0][0].outgoingMessages).containsExactly(bar, "i1").inOrder()
     }
 
+    /**
+     * A sheet has Night mode too (#87), where it followed the phone's theme: it opens in whatever
+     * Night mode is, and the menu turns it, over the port its search already has.
+     */
+    @Test
+    fun aSheetOpensInNightModeAndTheMenuTurnsIt() {
+        Settings.setNight(context, true)
+        val sheet = open("budget.xlsx")
+        val web = sheet.webView()!!
+        assertThat(sheet.loadedUrl()).contains("&night=1")
+        web.webViewClient.onPageFinished(web, sheet.loadedUrl())
+        val channels = shadowOf(web).createdPorts
+        assertThat(channels).hasSize(1)
+        val item = sheet.get().findViewById<MaterialToolbar>(R.id.toolbar).menu.findItem(R.id.action_night_mode)
+        assertThat(item.isVisible).isTrue()
+        assertThat(item.isChecked).isTrue()
+        sheet.get().findViewById<MaterialToolbar>(R.id.toolbar).menu.performIdentifierAction(R.id.action_night_mode, 0)
+        assertThat(channels[0][0].outgoingMessages).contains("i0")
+        assertThat(Settings.night(context)).isFalse()
+    }
+
     // ---------------------------------------------------------------
     // A PDF where pdf.js can't run
     // ---------------------------------------------------------------

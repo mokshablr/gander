@@ -1,6 +1,7 @@
 """xlsx.html: SheetJS into a table, one sheet at a time."""
 
 import base64
+import re
 
 import pytest
 
@@ -284,8 +285,8 @@ def contrast(a, b):
     return max(x, y) / min(x, y)
 
 
-def open_colours(viewer, page, name="colours.xlsx"):
-    viewer("xlsx.html", name)
+def open_colours(viewer, page, name="colours.xlsx", **params):
+    viewer("xlsx.html", name, **params)
     wait_for_sheet(page)
     wait_until_done(page)
     return lambda address: page.evaluate(LOOK, address)
@@ -356,8 +357,7 @@ def test_at_night_fills_turn_over_keeping_their_colour_and_text_stays_readable(v
     Yellow goes dark but stays yellow and clear of the ground, the dark blue heading goes light
     with dark text on it, and an unfilled cell is the night's own ground and ink.
     """
-    page.emulate_media(color_scheme="dark")
-    look = open_colours(viewer, page)
+    look = open_colours(viewer, page, night="1")
     ground = rgb(page.evaluate("() => getComputedStyle(document.body).backgroundColor"))
 
     yellow = look("A3")
@@ -379,17 +379,55 @@ def test_at_night_fills_turn_over_keeping_their_colour_and_text_stays_readable(v
     assert rgb(look("A2")["ink"]) == (0xE7, 0xE2, 0xD9)
 
 
-def test_the_night_ground_and_ink_are_app_css_s(viewer, page):
-    """xlsx-styles.js turns colours over between them, so its copies must follow app.css"""
-    page.emulate_media(color_scheme="dark")
-    open_colours(viewer, page)
-    said = page.evaluate("""() => {
+PALETTE = ["--vw-ground", "--vw-card", "--vw-ink", "--vw-accent", "--vw-accent-ink", "--vw-error",
+           "--vw-error-ink", "--vw-shadow"]
+
+
+def app_css_palette(dark):
+    """app.css's day or night palette, as the file gives it"""
+    from server import VIEWER
+    css = (VIEWER / "app.css").read_text()
+    block = css.split("@media (prefers-color-scheme: dark)")[1] if dark else css.split(":root {")[1]
+    block = block.split("}")[0]
+    return {name: re.search(re.escape(name) + r":\s*([^;]+);", block).group(1).strip().lower() for name in PALETTE}
+
+
+@pytest.mark.parametrize("night", ["0", "1"])
+def test_the_sheets_palette_is_app_css_s_by_day_and_by_night(viewer, page, night):
+    """
+    A sheet holds app.css's palette itself, the day's or the night's as Night mode says, since the
+    system's theme no longer chooses (#87). xlsx-styles.js turns colours over between the night
+    ground and ink, so its copies must follow it too.
+    """
+    page.emulate_media(color_scheme="light" if night == "1" else "dark")
+    open_colours(viewer, page, night=night)
+    said = page.evaluate("""(names) => {
       const root = getComputedStyle(document.documentElement);
-      return [root.getPropertyValue('--vw-ground').trim(), root.getPropertyValue('--vw-ink').trim(),
-              VW_SHEET_NIGHT_GROUND, VW_SHEET_NIGHT_INK];
-    }""")
-    assert said[0].upper() == "#" + said[2]
-    assert said[1].upper() == "#" + said[3]
+      return names.map(n => root.getPropertyValue(n).trim().toLowerCase());
+    }""", PALETTE)
+    assert dict(zip(PALETTE, said)) == app_css_palette(dark=night == "1")
+    if night == "1":
+        consts = page.evaluate("() => [VW_SHEET_NIGHT_GROUND, VW_SHEET_NIGHT_INK]")
+        assert [said[0], said[2]] == ["#" + c.lower() for c in consts]
+
+
+def test_a_dark_phone_shows_a_sheet_in_its_own_colours_until_night_mode_is_on(viewer, page):
+    """
+    #87: the phone's dark theme turned a sheet over with no way back to its own colours. Now only
+    Night mode does, and the app's toggle turns it over and back without a reload.
+    """
+    page.emulate_media(color_scheme="dark")
+    look = open_colours(viewer, page, night="0")
+    day = look("A3"), look("A2")
+    assert rgb(day[0]["fill"]) == (255, 255, 0)
+    assert rgb(page.evaluate("() => getComputedStyle(document.body).backgroundColor")) == (255, 255, 255)
+
+    page.evaluate("() => window.vwPageCommand('i1')")
+    assert rgb(look("A2")["ink"]) == (0xE7, 0xE2, 0xD9)
+    assert rgb(look("A3")["fill"]) != (255, 255, 0)
+
+    page.evaluate("() => window.vwPageCommand('i0')")
+    assert (look("A3"), look("A2")) == day
 
 
 def test_a_fill_far_down_a_long_sheet_shows_in_the_piece_drawn_for_it(viewer, page):

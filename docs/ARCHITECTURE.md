@@ -44,7 +44,7 @@ Shared page code: `app.js` (status and error cards, the WebView floor card, fetc
 
 ## The channel between Kotlin and a page
 
-There is no `addJavascriptInterface`. On page finished, Kotlin creates one HTML message channel and posts one end to the page, addressed to the asset origin, as `vw-search-port`. Pages that search themselves get it, and so does any paged document (PDF, simple view, Word, EPUB) for its readout and night mode.
+There is no `addJavascriptInterface`. On page finished, Kotlin creates one HTML message channel and posts one end to the page, addressed to the asset origin, as `vw-search-port`. Pages that search themselves get it, and so does any paged document (PDF, simple view, Word, EPUB) for its readout and night mode. A sheet's night mode goes the same way.
 
 - Kotlin to page (`PortCommand`): `q` plus a query, `n` next, `p` previous, `c` clear, `g` plus a page, `i1` or `i0` night mode, `t` and `b` for the title bar's height and how much of it is hidden, `e` plus the number of a contents entry to go to, `x` Back over the book.
 - Page to Kotlin (`parsePortMessage`): `page N M`, `at total done` for the search counter, `at chapter past` for a book's place, and the words `locked`, `cover 1` and `cover 0`, `reflow 1` and `reflow 0`, `shrunk 1` and `shrunk 0`, and `simple`, and a PDF's outline, a Word document's headings or a book's own list as `contents` and a line for each entry of `depth place dir lang title`, which `ContentsList` shows full screen. Anything else is dropped.

@@ -719,8 +719,7 @@ def test_a_zoom_lays_the_sheet_out_again_so_its_text_stays_sharp(phone):
 # ---------------------------------------------------------------------------
 
 def test_at_night_the_gridlines_are_faint_and_the_selection_plain(viewer, page):
-    page.emulate_media(color_scheme="dark")
-    opened(viewer, page)
+    opened(viewer, page, night="1")
     ground = rgb(page.evaluate("() => getComputedStyle(document.body).backgroundColor"))
     line = rgb(page.evaluate("() => getComputedStyle(vwCellAt('D9')).borderRightColor"))
     assert 1.5 <= contrast(line, ground) <= 3

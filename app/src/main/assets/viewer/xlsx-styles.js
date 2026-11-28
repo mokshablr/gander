@@ -530,7 +530,7 @@ function vwLookRules(n, look) {
     }
     if (fill) night.push("background-color: #" + paperAtNight);
     night.push("color: #" + textAtNight);
-    out += "\n@media (prefers-color-scheme: dark) { " + rule + " { " + night.join("; ") + " } }";
+    out += "\nhtml.vw-night " + rule + " { " + night.join("; ") + " }";
   }
   return out;
 }
@@ -545,8 +545,7 @@ function vwEdgeRules(n, right, bottom, left, top) {
     day.push("border-" + side[0] + ": " + e.w + "px " + e.st + " #" + colour);
     night.push("border-" + side[0] + "-color: #" + vwSheetNight(colour));
   });
-  return rule + " { " + day.join("; ") + " }\n@media (prefers-color-scheme: dark) { " + rule + " { " +
-    night.join("; ") + " } }";
+  return rule + " { " + day.join("; ") + " }\nhtml.vw-night " + rule + " { " + night.join("; ") + " }";
 }
 
 /* A column's number from its letters, A being 0 */

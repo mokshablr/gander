@@ -412,10 +412,13 @@ class FileKindTest {
         assertThat(FileKind.entries.filter { it.paged }).containsExactly(PDF, PDF_SIMPLE, DOCX, EPUB)
     }
 
-    /** Night mode is for paper. A book's page follows the phone's theme and has none. */
+    /**
+     * Night mode is for documents that keep their own colours: paper, and a sheet (#87). A book's
+     * page follows the phone's theme and has none.
+     */
     @Test
-    fun onlyPdfAndWordProcessorFilesTurnOverAtNight() {
-        assertThat(FileKind.entries.filter { it.turnsOver }).containsExactly(PDF, PDF_SIMPLE, DOCX, PROSE)
+    fun onlyPdfWordProcessorAndSheetFilesTurnOverAtNight() {
+        assertThat(FileKind.entries.filter { it.turnsOver }).containsExactly(PDF, PDF_SIMPLE, DOCX, PROSE, XLSX)
     }
 
     /**

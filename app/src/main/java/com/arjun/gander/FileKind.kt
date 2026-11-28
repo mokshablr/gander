@@ -54,10 +54,12 @@ enum class FileKind(val page: String) {
      * Turns its pages over for night mode, a PDF in either view: the simple view turns the whole
      * page over, photographs too, since its renderer says nothing of where they are. A Word
      * document, and a .doc, .odt or .rtf, since they are paper as Word's is and one switch should
-     * darken all of them. Not a book: its page is prose and follows the phone's theme, as a
+     * darken all of them. A spreadsheet too (#87): it keeps its own colours until the reader asks,
+     * as the others do. Not a book: its page is prose and follows the phone's theme, as a
      * Markdown file's does.
      */
-    val turnsOver: Boolean get() = this == PDF || this == PDF_SIMPLE || this == DOCX || this == PROSE
+    val turnsOver: Boolean get() =
+        this == PDF || this == PDF_SIMPLE || this == DOCX || this == PROSE || this == XLSX
 
     /**
      * Laid out at the screen's width, so larger letters rewrap rather than run off the side, and

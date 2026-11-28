@@ -54,7 +54,7 @@ It cannot phone home because it does not even hold the INTERNET permission.
 - **Find in document**: search inside PDF, Word, OpenDocument, Rich Text, every chapter of a book, every sheet of a workbook, slides, Markdown, text and code with match navigation
 - **Select and copy text in a PDF**, and read one with a screen reader
 - **Picks up where you left off**: a PDF reopens at the page you were reading and a book at the line, however you open it
-- **Night mode for PDFs and Word documents**: turns the page over for reading in the dark, keeping each colour's hue, turning scans and figures over with the text, and leaving photographs exactly as they were printed
+- **Night mode for PDFs, Word documents and spreadsheets**: turns the page over for reading in the dark, keeping each colour's hue, turning scans and figures over with the text, and leaving photographs exactly as they were printed
 - **Word documents in pages**: a file saved in Word shows its pages where Word ended them, each with its own page number, and a page counter and Go to page as a PDF has
 - **Share and locate**: send the open file to any app, or jump to its folder in the file manager
 - **Print**: a PDF prints exactly as it is, and a Word, OpenDocument or Rich Text file prints the way Gander shows it, through Android's own print screen

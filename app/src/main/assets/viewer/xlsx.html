@@ -22,6 +22,15 @@
     --vw-lit-ground: #F6DCD5;
     --vw-bar-line: #CFC5B2;
     --vw-freeze: #8F887A;
+    /* app.css's day palette, held whatever the phone's theme: a sheet goes dark with Night mode */
+    --vw-ground: #ECE8DF;
+    --vw-card: #ffffff;
+    --vw-ink: #1E1B15;
+    --vw-accent: #af2d18;
+    --vw-accent-ink: #ffffff;
+    --vw-error: #fdecea;
+    --vw-error-ink: #8c1d18;
+    --vw-shadow: rgba(0, 0, 0, 0.15);
   }
 
   /* Pinches and double taps are the page's: see xlsx.js. One finger still scrolls as ever. */
@@ -260,31 +269,38 @@
   .vw-copy { position: fixed; top: 0; left: -9999px; opacity: 0; }
 
   /*
-   * A spreadsheet has no paper to be faithful to, unlike a Word page, so the whole thing goes dark
-   * rather than just the surround, in the app's night palette. The gridlines are about 2:1 on the
-   * ground, a little more than Excel's dark sheets give theirs, to read on a phone in a dark room.
+   * Night mode, which the reader turns on, as for a Word page or a PDF (#87): a sheet keeps the
+   * colours whoever made it chose until then, whatever the phone's theme. With it the whole sheet
+   * goes dark, in app.css's night palette. The gridlines are about 2:1 on the ground, a little more
+   * than Excel's dark sheets give theirs, to read on a phone in a dark room.
    */
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --vw-gridline: #4D4636;
-      --vw-head-ground: #221F19;
-      --vw-head-ink: #B5AC9C;
-      --vw-head-line: #5A5242;
-      --vw-lit-ground: #4A2A22;
-      --vw-bar-line: #4D4636;
-      --vw-freeze: #8F887A;
-    }
-    body { background: var(--vw-ground); }
-    table.vw-t { background: var(--vw-ground); }
-    .vw-t td { color: var(--vw-ink); }
-    #tabs { background: #221F19; }
-    #tabs button { color: var(--vw-head-ink); }
-    #tabs button.active { background: var(--vw-card); color: var(--vw-ink); }
-    #cellbar { background: var(--vw-card); box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.4); }
-    .vw-art-text { background: var(--vw-ground); color: var(--vw-ink); border-color: #5A5242; }
-    .vw-art-missing { background: rgba(34, 31, 25, 0.94); border-color: #5A5242; color: var(--vw-head-ink); }
-    .vw-art-missing b { color: var(--vw-ink); }
+  html.vw-night {
+    --vw-gridline: #4D4636;
+    --vw-head-ground: #221F19;
+    --vw-head-ink: #B5AC9C;
+    --vw-head-line: #5A5242;
+    --vw-lit-ground: #4A2A22;
+    --vw-bar-line: #4D4636;
+    --vw-freeze: #8F887A;
+    --vw-ground: #17130A;
+    --vw-card: #2D2A23;
+    --vw-ink: #E7E2D9;
+    --vw-accent: #FFB39E;
+    --vw-accent-ink: #650B00;
+    --vw-error: #8C1D18;
+    --vw-error-ink: #F9DEDC;
+    --vw-shadow: rgba(0, 0, 0, 0.5);
   }
+  html.vw-night body { background: var(--vw-ground); }
+  html.vw-night table.vw-t { background: var(--vw-ground); }
+  html.vw-night .vw-t td { color: var(--vw-ink); }
+  html.vw-night #tabs { background: #221F19; }
+  html.vw-night #tabs button { color: var(--vw-head-ink); }
+  html.vw-night #tabs button.active { background: var(--vw-card); color: var(--vw-ink); }
+  html.vw-night #cellbar { background: var(--vw-card); box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.4); }
+  html.vw-night .vw-art-text { background: var(--vw-ground); color: var(--vw-ink); border-color: #5A5242; }
+  html.vw-night .vw-art-missing { background: rgba(34, 31, 25, 0.94); border-color: #5A5242; color: var(--vw-head-ink); }
+  html.vw-night .vw-art-missing b { color: var(--vw-ink); }
 </style>
 <script src="lib/xlsx.full.min.js"></script>
 </head>

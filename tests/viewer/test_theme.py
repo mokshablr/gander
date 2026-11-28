@@ -27,9 +27,11 @@ THEMED = [
     ("md.html", "notes.md"),
     ("epub.html", "harbour.epub"),
     ("docx.html", "report.docx"),
-    ("xlsx.html", "budget.xlsx"),
     ("unsupported.html", "unknown.xyz"),
 ]
+
+# A sheet, which follows Night mode rather than the system (#87).
+SHEET = ("xlsx.html", "budget.xlsx")
 
 # Pages whose ground is fixed, and dark, whatever the system says.
 FIXED_GROUND = [
@@ -49,7 +51,7 @@ PROSE = [
     ("unsupported.html", "unknown.xyz", ".card"),
 ]
 
-ALL_PAGES = THEMED + FIXED_GROUND
+ALL_PAGES = THEMED + FIXED_GROUND + [SHEET]
 
 LUMINANCE = """(selector) => {
   const el = selector ? document.querySelector(selector) : document.body;
@@ -163,6 +165,27 @@ def test_prose_stays_readable_in_both_schemes(
     assert ratio is not None, f"{selector} is not on {html}"
     assert ratio >= 4.5, \
         f"{html} text measures {ratio:.2f}:1 in {scheme}, below the 4.5 WCAG AA asks"
+
+
+# ---------------------------------------------------------------------------
+# A sheet, which goes dark with Night mode and not with the system
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_a_sheet_keeps_its_own_colours_whatever_the_system_says(viewer, page, scheme):
+    """A dark phone left a sheet no way to be white, as #87 asked for, where a Word page is."""
+    page.emulate_media(color_scheme=scheme)
+    viewer(*SHEET, night="0")
+    loaded(page)
+    assert ground(page) > 0.9, f"a sheet went dark under {scheme} with Night mode off"
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_a_sheet_goes_dark_with_night_mode_whatever_the_system_says(viewer, page, scheme):
+    page.emulate_media(color_scheme=scheme)
+    viewer(*SHEET, night="1")
+    loaded(page)
+    assert ground(page) < 0.05, f"a sheet stayed light under {scheme} with Night mode on"
 
 
 # ---------------------------------------------------------------------------

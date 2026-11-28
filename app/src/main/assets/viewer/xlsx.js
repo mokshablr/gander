@@ -1001,8 +1001,8 @@ VwLooks.prototype.barClass = function (hex) {
         "background-size: var(--vw-bar) calc(100% - 4px); background-repeat: no-repeat; background-position: 1px center";
     };
     var night = vwSheetNight(hex);
-    this.rules.push("#grid td." + name + " { " + rule(hex) + " }\n@media (prefers-color-scheme: dark) { #grid td." +
-      name + " { background-image: linear-gradient(90deg, #" + night + ", #" + vwBlend(night, VW_SHEET_NIGHT_GROUND, 0.8) + ") } }");
+    this.rules.push("#grid td." + name + " { " + rule(hex) + " }\nhtml.vw-night #grid td." +
+      name + " { background-image: linear-gradient(90deg, #" + night + ", #" + vwBlend(night, VW_SHEET_NIGHT_GROUND, 0.8) + ") }");
   }
   return this.bars[hex];
 };
@@ -1016,10 +1016,21 @@ VwLooks.prototype.inkClass = function (hex) {
   if (!this.inks[hex]) {
     var name = this.inks[hex] = "vw-k" + hex;
     this.rules.push("#grid td." + name + "." + name + " { color: #" + hex + " }\n" +
-      "@media (prefers-color-scheme: dark) { #grid td." + name + "." + name + " { color: #" + vwSheetNight(hex) + " } }");
+      "html.vw-night #grid td." + name + "." + name + " { color: #" + vwSheetNight(hex) + " }");
   }
   return this.inks[hex];
 };
+
+/*
+ * Night mode, as the app has it: from the address when the sheet opens, and over the port when
+ * the reader turns it on or off. Taken before the sheet is drawn, since the port can come first.
+ */
+if (vwParams.get("night") === "1") document.documentElement.classList.add("vw-night");
+
+function vwSheetCommand(msg) {
+  if (msg.charAt(0) === "i") document.documentElement.classList.toggle("vw-night", msg.charAt(1) === "1");
+}
+window.vwPageCommand = vwSheetCommand;
 
 vwFetchDoc("buffer")
   .then(function (buf) {
@@ -1051,7 +1062,7 @@ vwFetchDoc("buffer")
     // The colour of the workbook's own text, which a cell set in no colour of its own draws in
     if (styles.normal.ink && styles.normal.ink !== "000000") {
       styles.looks.rules.push(".vw-t td { color: #" + styles.normal.ink + " }\n" +
-        "@media (prefers-color-scheme: dark) { .vw-t td { color: #" + vwSheetNight(styles.normal.ink) + " } }");
+        "html.vw-night .vw-t td { color: #" + vwSheetNight(styles.normal.ink) + " }");
       styles.looks.flush();
     }
 
@@ -1404,6 +1415,7 @@ vwFetchDoc("buffer")
     /* Back while a cell is selected puts the selection down first, as the app asks: see PortMessage.Covered */
     window.vwPageCommand = function (msg) {
       if (msg === "x") clearSelection();
+      else vwSheetCommand(msg);
     };
 
     var addressEl = bar.querySelector(".vw-cb-address");
